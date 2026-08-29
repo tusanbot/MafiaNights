@@ -2,13 +2,13 @@ from player_repository import PlayerRepository
 
 
 class PlayerService:
-    """لایه سرویس بازیکن؛ ثبت پروفایل و نام نمایشی را یکجا مدیریت می‌کند."""
+    """لایه واحد مدیریت پروفایل و نام نمایشی بازیکن."""
 
     def __init__(self, repository=None):
         self.repo = repository or PlayerRepository()
 
     def ensure_player(self, user):
-        """اطلاعات کاربر را در DB ثبت/به‌روزرسانی و رکورد نهایی را برمی‌گرداند."""
+        """پروفایل کاربر را ایجاد/به‌روزرسانی می‌کند و ردیف نهایی را برمی‌گرداند."""
         return self.ensure_player_data(
             user_id=user.id,
             full_name=getattr(user, "full_name", None),
@@ -19,8 +19,16 @@ class PlayerService:
         self.repo.upsert(user_id, full_name, username)
         return self.repo.get(user_id)
 
+    @staticmethod
+    def _real_name(row):
+        if not row:
+            return None
+        first = (row.get("first_name") or "").strip()
+        last = (row.get("last_name") or "").strip()
+        return " ".join(p for p in (first, last) if p).strip() or None
+
     def display_name(self, user_id, fallback="❓"):
-        """نام نمایشی: Nickname، سپس نام واقعی ذخیره‌شده در پروفایل، سپس fallback."""
+        """نام نمایشی: Nickname، سپس نام واقعی، سپس username و در نهایت fallback."""
         row = self.repo.get(user_id)
         if not row:
             return fallback
@@ -29,10 +37,12 @@ class PlayerService:
         if nickname:
             return nickname
 
-        first_name = (row.get("first_name") or "").strip()
-        last_name = (row.get("last_name") or "").strip()
-        real_name = " ".join(p for p in (first_name, last_name) if p)
-        return real_name or fallback
+        real_name = self._real_name(row)
+        if real_name:
+            return real_name
+
+        username = (row.get("username") or "").strip()
+        return username or fallback
 
     def set_nickname(self, user_id, nickname):
         return self.repo.set_nickname(user_id, nickname)
@@ -44,7 +54,7 @@ class PlayerService:
         return self.repo.all_nicknames()
 
 
-# یک نمونه متمرکز برای استفاده در کل ربات
+# نمونه متمرکز برای استفاده در کل ربات
 player_service = PlayerService()
 
 
