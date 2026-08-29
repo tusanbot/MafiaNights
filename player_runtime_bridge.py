@@ -5,8 +5,6 @@ reads/writes through PlayerService. It is intentionally isolated so the large
 legacy main.py does not need a risky full-file rewrite.
 """
 
-import html
-
 from player_service import player_service, display_name, ensure_player
 
 
@@ -39,7 +37,7 @@ class DisplayPlayers(dict):
 
 
 class DisplayWaitingList(list):
-    """Legacy waiting list whose stored names are resolved dynamically."""
+    """Legacy waiting list whose names are resolved dynamically."""
 
     @staticmethod
     def _decorate(item):
@@ -76,12 +74,14 @@ def install(main_module):
     main_module.display_name = display_name
     main_module.ensure_player = ensure_player
 
-    # Preserve the legacy container APIs while making names DB-backed.
-    main_module.players = DisplayPlayers(main_module.players)
+    # Keep the original state objects' contents, but expose DB-backed names.
+    raw_players = main_module.players
+    main_module.players = DisplayPlayers(raw_players)
     main_module.waiting_list = DisplayWaitingList(main_module.waiting_list)
 
-    # Register players that were already present in the legacy state.
-    for uid, name in list(main_module.players.items()):
-        player_service.ensure_player_data(uid, full_name=name)
+    # Persist any players that already existed before the bridge was installed,
+    # without passing a nickname-resolved display value back as their real name.
+    for uid, raw_name in raw_players.items():
+        player_service.ensure_player_data(uid, full_name=raw_name)
 
     return main_module
