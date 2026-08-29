@@ -71,7 +71,16 @@ class PlayerRepository:
         row = self.get(user_id)
         if not row:
             return fallback
-        return row.get("nickname") or fallback
+
+        nickname = (row.get("nickname") or "").strip()
+        if nickname:
+            return nickname
+
+        real_name = " ".join(
+            p for p in ((row.get("first_name") or "").strip(), (row.get("last_name") or "").strip())
+            if p
+        )
+        return real_name or fallback
 
     def set_nickname(self, user_id, nickname):
         nickname = (nickname or "").strip()
