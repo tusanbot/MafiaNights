@@ -10,6 +10,11 @@ import copy
 from player_service import player_service, display_name, ensure_player
 
 
+def get_player_name(user_id, fallback="❓"):
+    """Return the canonical player display name used everywhere in the game."""
+    return display_name(user_id, fallback)
+
+
 class DisplayPlayers(dict):
     """Legacy {uid: name} mapping with DB-backed display names."""
 
@@ -26,20 +31,20 @@ class DisplayPlayers(dict):
             return default
         if user_id not in self:
             return default
-        return display_name(user_id, default if default is not None else "❓")
+        return get_player_name(user_id, default if default is not None else "❓")
 
     def __getitem__(self, user_id):
         user_id = int(user_id)
         value = super().__getitem__(user_id)
-        return display_name(user_id, value)
+        return get_player_name(user_id, value)
 
     def items(self):
         for user_id in super().keys():
-            yield user_id, display_name(user_id, super().__getitem__(user_id))
+            yield user_id, get_player_name(user_id, super().__getitem__(user_id))
 
     def values(self):
         for user_id in super().keys():
-            yield display_name(user_id, super().__getitem__(user_id))
+            yield get_player_name(user_id, super().__getitem__(user_id))
 
 
 class DisplayWaitingList(list):
@@ -52,7 +57,7 @@ class DisplayWaitingList(list):
         result = dict(item)
         uid = result.get("id")
         if uid is not None:
-            result["name"] = display_name(uid, result.get("name", "❓"))
+            result["name"] = get_player_name(uid, result.get("name", "❓"))
         return result
 
     def append(self, item):
@@ -88,7 +93,7 @@ class DisplayGroupEntries(dict):
         result = dict(value)
         uid = result.get("id")
         if uid is not None:
-            result["name"] = display_name(uid, result.get("name", "❓"))
+            result["name"] = get_player_name(uid, result.get("name", "❓"))
         return result
 
     def __getitem__(self, key):
@@ -138,7 +143,7 @@ async def _display_chat_member(original, group_id, user_id):
     member = await original(group_id, user_id)
     try:
         uid = member.user.id
-        visible_name = display_name(uid, member.user.full_name or str(uid))
+        visible_name = get_player_name(uid, member.user.full_name or str(uid))
         member = copy.copy(member)
         member.user = copy.copy(member.user)
         member.user.full_name = visible_name
@@ -154,7 +159,7 @@ async def _display_chat_administrators(original, group_id):
     for member in members:
         try:
             uid = member.user.id
-            visible_name = display_name(uid, member.user.full_name or str(uid))
+            visible_name = get_player_name(uid, member.user.full_name or str(uid))
             member = copy.copy(member)
             member.user = copy.copy(member.user)
             member.user.full_name = visible_name
@@ -167,6 +172,7 @@ async def _display_chat_administrators(original, group_id):
 def install(main_module):
     """Install the compatibility layer into the already-imported main module."""
     main_module.display_name = display_name
+    main_module.get_player_name = get_player_name
     main_module.ensure_player = ensure_player
 
     # Core player mapping.
