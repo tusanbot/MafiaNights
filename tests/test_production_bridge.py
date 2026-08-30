@@ -18,6 +18,8 @@ def test_install_attaches_shared_runtime(monkeypatch):
     monkeypatch.setattr(bridge, "PersistentGameRuntime", FakeRuntime)
     monkeypatch.setattr(bridge, "MigrationAdapter", FakeAdapter)
     monkeypatch.setattr(bridge, "install_legacy_turn_cutover", lambda main, adapter: {"next_turn": True})
+    monkeypatch.setattr(bridge, "install_legacy_lobby_cutover", lambda main, runtime: {"installed": True})
+    monkeypatch.setattr(bridge, "install_legacy_day_cutover", lambda main, runtime: {"cutover": {"start_new_day": True}})
 
     main = SimpleNamespace()
     result = bridge.install(main)
@@ -25,7 +27,9 @@ def test_install_attaches_shared_runtime(monkeypatch):
     assert main.persistent_runtime is calls["runtime"]
     assert main._migration_adapter is calls["adapter_runtime"]
     assert main._persistent_challenge_runtime is calls["runtime"].challenges
-    assert result["cutover"]["next_turn"] is True
+    assert result["turn_cutover"]["next_turn"] is True
+    assert result["lobby_cutover"]["installed"] is True
+    assert result["day_cutover"]["cutover"]["start_new_day"] is True
 
 
 def test_startup_calls_original_startup_then_recovery(monkeypatch):
