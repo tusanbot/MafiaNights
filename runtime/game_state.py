@@ -24,6 +24,9 @@ class GameState:
     def active_game(self, group_chat_id: int):
         return self.games.get_active_game(group_chat_id)
 
+    def active_games(self):
+        return self.games.list_active_games()
+
     def ensure_lobby(self, group_chat_id: int, moderator_id: Optional[int] = None,
                      scenario_id: Optional[str] = None, event_number: Optional[int] = None):
         return self.lobby.get_or_create(group_chat_id, moderator_id, scenario_id, event_number)
