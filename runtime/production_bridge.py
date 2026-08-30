@@ -11,6 +11,7 @@ from runtime.day_cutover import install_legacy_day_cutover
 from runtime.state_authority import install_legacy_state_authority
 from runtime.startup_recovery import recover_persisted_games
 from runtime.turn_cutover import install_legacy_turn_cutover
+from runtime.ephemeral_recovery import EphemeralRecoveryManager
 
 
 def install(main_module: Any) -> dict[str, Any]:
@@ -26,6 +27,8 @@ def install(main_module: Any) -> dict[str, Any]:
     lobby_cutover = install_legacy_lobby_cutover(main_module, runtime)
     day_cutover = install_legacy_day_cutover(main_module, runtime)
     state_authority = install_legacy_state_authority(main_module, runtime)
+    ephemeral_recovery = EphemeralRecoveryManager(runtime, main_module)
+    main_module._ephemeral_recovery = ephemeral_recovery
     return {
         "runtime": runtime,
         "adapter": adapter,
@@ -33,11 +36,12 @@ def install(main_module: Any) -> dict[str, Any]:
         "lobby_cutover": lobby_cutover,
         "day_cutover": day_cutover,
         "state_authority": state_authority,
+        "ephemeral_recovery": ephemeral_recovery,
     }
 
 
 async def recover_and_hydrate(main_module: Any) -> list[dict[str, Any]]:
-    """Recover active games and hydrate the legacy UI/session boundary."""
+    """Recover active games, hydrate compatibility state, then rebuild timers."""
     runtime = getattr(main_module, "persistent_runtime", None)
     if runtime is None:
         runtime = PersistentGameRuntime()
@@ -68,8 +72,20 @@ async def recover_and_hydrate(main_module: Any) -> list[dict[str, Any]]:
         main_module.game_running = game.get("status") in {"running", "paused"}
         main_module.lobby_active = game.get("status") == "lobby"
 
+        manager = getattr(main_module, "_ephemeral_recovery", None)
+        if manager is not None:
+            plans = await manager.start()
+            main_module.recovered_turn_plans = {
+                plan.group_chat_id: {
+                    "turn_id": plan.turn_id,
+                    "deadline_epoch": plan.deadline_epoch,
+                    "remaining_seconds": plan.remaining_seconds,
+                }
+                for plan in plans if plan.recoverable and plan.turn_id
+            }
+
     except Exception:
-        logging.exception("legacy state hydration failed during startup")
+        logging.exception("legacy state/timer recovery failed during startup")
 
     return results
 
