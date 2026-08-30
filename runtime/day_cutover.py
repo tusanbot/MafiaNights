@@ -9,7 +9,7 @@ into persistence.
 from __future__ import annotations
 
 import logging
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 from runtime.game_runtime import PersistentGameRuntime
 
@@ -79,7 +79,7 @@ def _replace_callback(dp: Any, function_names: tuple[str, ...], replacement_fact
     return replaced
 
 
-def install_legacy_day_cutover(legacy: Any, runtime: PersistentGameRuntime) -> dict[str, bool]:
+def install_legacy_day_cutover(legacy: Any, runtime: PersistentGameRuntime) -> dict[str, Any]:
     """Install persistent day/night transition wrappers exactly once."""
     existing = getattr(legacy, "_persistent_day_cutover", None)
     if existing is not None:
@@ -109,11 +109,7 @@ def install_legacy_day_cutover(legacy: Any, runtime: PersistentGameRuntime) -> d
         setattr(legacy, function_name, wrapper)
 
         if dp is not None:
-            _replace_callback(
-                dp,
-                (function_name,),
-                lambda _callback, _item: wrapper,
-            )
+            _replace_callback(dp, (function_name,), lambda _callback, _item: wrapper)
         return True
 
     result["start_new_day"] = make_transition("start_new_day", "day")
@@ -121,11 +117,6 @@ def install_legacy_day_cutover(legacy: Any, runtime: PersistentGameRuntime) -> d
 
     original_reset = getattr(legacy, "reset_round_data", None)
     if original_reset is not None and not getattr(original_reset, "_persistent_day_bridge", False):
-        async def reset_marker(*args, **kwargs):
-            return original_reset(*args, **kwargs)
-        # reset_round_data is intentionally not made async: legacy callers may
-        # invoke it synchronously. The persistent day transition already owns
-        # the durable reset; this wrapper only marks the compatibility boundary.
         def reset_round_data(*args, **kwargs):
             return original_reset(*args, **kwargs)
         reset_round_data._persistent_day_bridge = True
