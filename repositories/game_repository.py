@@ -33,6 +33,18 @@ class GameRepository(DatabaseRepository):
                 """), {"group_chat_id": int(group_chat_id)}).mappings().first()
             return dict(row) if row else None
 
+    def list_active_games(self):
+        """Return all games which may need runtime recovery after a process restart."""
+        with self.SessionLocal() as session:
+            rows = session.execute(
+                text("""
+                    select * from public.mafia_games
+                    where status in ('running', 'paused')
+                    order by updated_at desc
+                """)
+            ).mappings().all()
+            return [dict(row) for row in rows]
+
     def update_game(self, game_id, **fields):
         allowed = {"moderator_id", "scenario_id", "status", "current_turn_seat", "current_turn_index",
                     "state", "started_at", "finished_at"}
