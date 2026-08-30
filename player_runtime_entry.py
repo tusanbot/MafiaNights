@@ -1,6 +1,5 @@
 """Production entry point for the staged persistent-runtime cut-over."""
 
-import asyncio
 import logging
 
 import main
