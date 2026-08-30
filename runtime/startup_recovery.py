@@ -8,7 +8,7 @@ from runtime.game_runtime import PersistentGameRuntime
 
 
 async def recover_persisted_games(legacy: Any) -> list[dict[str, Any]]:
-    """Recover persisted games after bot startup and restart expired turns safely."""
+    """Recover persisted games after bot startup and mark expired turns safely."""
     runtime = getattr(legacy, "persistent_runtime", None)
     if runtime is None:
         runtime = PersistentGameRuntime()
@@ -20,8 +20,8 @@ async def recover_persisted_games(legacy: Any) -> list[dict[str, Any]]:
             if plan.get("expired") and plan.get("turn_id"):
                 runtime.recovery.finish_expired(group_id)
                 results.append({"group_chat_id": group_id, "action": "expired_turn_finished"})
-                continue
-            results.append(plan)
+            else:
+                results.append(plan)
         except Exception:
             logging.exception("startup recovery failed for group %s", group_id)
             results.append({"group_chat_id": group_id, "action": "error"})
