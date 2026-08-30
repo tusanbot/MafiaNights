@@ -20,6 +20,7 @@ def test_install_attaches_shared_runtime(monkeypatch):
     monkeypatch.setattr(bridge, "install_legacy_turn_cutover", lambda main, adapter: {"next_turn": True})
     monkeypatch.setattr(bridge, "install_legacy_lobby_cutover", lambda main, runtime: {"installed": True})
     monkeypatch.setattr(bridge, "install_legacy_day_cutover", lambda main, runtime: {"cutover": {"start_new_day": True}})
+    monkeypatch.setattr(bridge, "install_legacy_state_authority", lambda main, runtime: {"installed": True})
 
     main = SimpleNamespace()
     result = bridge.install(main)
@@ -30,6 +31,7 @@ def test_install_attaches_shared_runtime(monkeypatch):
     assert result["turn_cutover"]["next_turn"] is True
     assert result["lobby_cutover"]["installed"] is True
     assert result["day_cutover"]["cutover"]["start_new_day"] is True
+    assert result["state_authority"]["installed"] is True
 
 
 def test_startup_calls_original_startup_then_recovery(monkeypatch):
