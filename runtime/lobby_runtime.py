@@ -6,52 +6,51 @@ from runtime.game_state import GameState
 
 
 class PersistentLobbyRuntime:
-    """Adapter for migrating the legacy lobby dictionaries to persistent state.
-
-    This class is intentionally UI-agnostic. Telegram handlers can keep their
-    existing rendering code while all authoritative lobby mutations go through
-    this boundary during the migration.
-    """
+    """UI-agnostic authoritative runtime for lobby state."""
 
     def __init__(self, state: Optional[GameState] = None):
         self.state = state or GameState()
 
     def ensure(self, group_chat_id: int, moderator_id: Optional[int] = None,
                scenario_id: Optional[str] = None, event_number: Optional[int] = None):
-        return self.state.ensure_lobby(
-            group_chat_id=group_chat_id,
-            moderator_id=moderator_id,
-            scenario_id=scenario_id,
-            event_number=event_number,
-        )
+        return self.state.ensure_lobby(group_chat_id, moderator_id, scenario_id, event_number)
 
     def join(self, group_chat_id: int, player_id: int, seat: Optional[int] = None,
              moderator_id: Optional[int] = None, scenario_id: Optional[str] = None,
              event_number: Optional[int] = None, is_substitute: bool = False) -> dict[str, Any]:
         game = self.ensure(group_chat_id, moderator_id, scenario_id, event_number)
-        game_id = game["id"]
-        row_id = self.state.add_player(game_id, player_id, seat, is_substitute)
-        return {
-            "game_id": game_id,
-            "game_player_id": row_id,
-            "player_id": int(player_id),
-            "seat": seat,
-            "is_substitute": is_substitute,
-        }
+        row_id = self.state.add_player(game["id"], player_id, seat, is_substitute)
+        return {"game_id": game["id"], "game_player_id": row_id, "player_id": int(player_id),
+                "seat": seat, "is_substitute": is_substitute}
+
+    def leave(self, group_chat_id: int, player_id: int) -> bool:
+        game = self.state.active_game(group_chat_id)
+        return bool(game and self.state.lobby.leave(game["id"], player_id))
+
+    def assign_seat(self, group_chat_id: int, player_id: int, seat: int) -> bool:
+        game = self.state.active_game(group_chat_id)
+        return bool(game and self.state.lobby.assign_seat(game["id"], player_id, seat))
+
+    def clear_seat(self, group_chat_id: int, player_id: int) -> bool:
+        game = self.state.active_game(group_chat_id)
+        return bool(game and self.state.lobby.clear_seat(game["id"], player_id))
+
+    def promote_waiting(self, group_chat_id: int, seat: int):
+        game = self.state.active_game(group_chat_id)
+        return self.state.lobby.promote_waiting(game["id"], seat) if game else None
+
+    def set_status(self, group_chat_id: int, player_id: int, status: str) -> bool:
+        game = self.state.active_game(group_chat_id)
+        return bool(game and self.state.lobby.set_status(game["id"], player_id, status))
 
     def snapshot(self, group_chat_id: int) -> dict[str, Any]:
         game = self.state.active_game(group_chat_id)
         if not game:
             return {"game": None, "players": [], "seats": {}, "waiting": []}
-        snap = self.state.public_players(game["id"])
         return {
-            "game": {
-                "id": game["id"],
-                "group_chat_id": game["group_chat_id"],
-                "moderator_id": game.get("moderator_id"),
-                "scenario_id": game.get("scenario_id"),
-                "status": game.get("status"),
-            },
+            "game": {"id": game["id"], "group_chat_id": game["group_chat_id"],
+                     "moderator_id": game.get("moderator_id"), "scenario_id": game.get("scenario_id"),
+                     "status": game.get("status")},
             **self.state.lobby.snapshot(game["id"]),
         }
 
@@ -69,9 +68,6 @@ class PersistentLobbyRuntime:
         game = self.state.active_game(group_chat_id)
         if not game:
             return False
-        return self.state.persist_lobby(
-            game["id"],
-            state=state,
-            current_turn_index=current_turn_index,
-            current_turn_seat=current_turn_seat,
-        )
+        return self.state.persist_lobby(game["id"], state=state,
+                                        current_turn_index=current_turn_index,
+                                        current_turn_seat=current_turn_seat)
