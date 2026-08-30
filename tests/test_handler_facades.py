@@ -4,6 +4,9 @@ from handlers.lobby import LobbyHandler
 
 
 class StubTurnRuntime:
+    def __init__(self):
+        self.state = object()
+
     def start(self, *args, **kwargs): return (args, kwargs)
     def finish(self, *args, **kwargs): return (args, kwargs)
     def current(self, *args, **kwargs): return (args, kwargs)
@@ -18,6 +21,15 @@ class StubChallengeRuntime:
     def history(self, *args, **kwargs): return (args, kwargs)
 
 
+class StubGameRuntime:
+    def __init__(self):
+        self.calls = []
+
+    def start_first_turn(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        return {"id": "turn-1", "seat": kwargs["seat"]}
+
+
 def test_turn_handler_forwards_without_own_state():
     runtime = StubTurnRuntime()
     handler = TurnHandler(runtime)
@@ -25,6 +37,26 @@ def test_turn_handler_forwards_without_own_state():
     assert result[0] == (10, 1)
     assert result[1]["seat"] == 2
     assert result[1]["duration_seconds"] == 120
+
+
+def test_turn_handler_first_turn_uses_game_runtime_boundary():
+    turn_runtime = StubTurnRuntime()
+    game_runtime = StubGameRuntime()
+    handler = TurnHandler(turn_runtime, game_runtime)
+
+    result = handler.start_first_turn(10, seat=3, duration_seconds=120)
+
+    assert result["id"] == "turn-1"
+    assert game_runtime.calls == [
+        ((10,), {
+            "seat": 3,
+            "turn_number": 1,
+            "duration_seconds": 120,
+            "current_turn_index": 0,
+            "player_id": None,
+            "state": None,
+        })
+    ]
 
 
 def test_challenge_handler_forwards_pause_contract():
