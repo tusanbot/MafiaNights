@@ -30,6 +30,11 @@ class ChallengeService:
             status=status,
         )
 
+    def update_mode(self, challenge_id: str, mode: str) -> bool:
+        if mode not in self.ALLOWED_MODES:
+            raise ValueError(f"حالت Challenge نامعتبر است: {mode}")
+        return bool(self.repo.update_mode(challenge_id, mode))
+
     def resolve(self, challenge_id: str, status: str) -> bool:
         if status not in {"accepted", "rejected", "resolved", "cancelled"}:
             raise ValueError(f"وضعیت نهایی Challenge نامعتبر است: {status}")
