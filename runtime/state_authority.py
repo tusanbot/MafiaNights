@@ -1,8 +1,8 @@
 """Authoritative-state boundary for legacy Telegram globals.
 
 During migration, ``main.py`` still needs a number of mutable globals for
-rendering and callback compatibility.  They are treated as a derived cache,
-not as the source of truth.  This module hydrates them from PersistentGameRuntime
+rendering and callback compatibility. They are treated as a derived cache,
+not as the source of truth. This module hydrates them from PersistentGameRuntime
 before updates and captures only compatibility mutations back into persisted
 state after an update.
 """
@@ -66,6 +66,22 @@ def _normalise_order(value: Any) -> list[int]:
     return [int(x) for x in (value or [])]
 
 
+def _normalise_players_in_game(value: Any) -> dict[int, dict[str, Any]]:
+    result: dict[int, dict[str, Any]] = {}
+    for key, row in (value or {}).items():
+        if not isinstance(row, dict):
+            continue
+        try:
+            result[int(key)] = dict(row)
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
+def _serialise_players_in_game(value: Any) -> dict[str, dict[str, Any]]:
+    return {str(key): dict(row) for key, row in _normalise_players_in_game(value).items()}
+
+
 class LegacyStateAuthority:
     """Synchronize legacy compatibility state without making it authoritative."""
 
@@ -99,6 +115,7 @@ class LegacyStateAuthority:
         self.main.player_slots = _normalise_slots(slots)
         self.main.turn_order = _normalise_order(payload.get("turn_order"))
         self.main.extra_turns = _normalise_order(payload.get("extra_turns"))
+        self.main.players_in_game = _normalise_players_in_game(payload.get("players_in_game"))
 
         day = self.runtime.day_snapshot(group_id)
         self.main.day_number = int(day.get("day") or 0)
@@ -106,9 +123,7 @@ class LegacyStateAuthority:
 
         pending = snapshot.get("challenge") or []
         self.main.pending_challenges = {str(row.get("id")): row for row in pending}
-        self.main.challenge_requests = {
-            str(row.get("id")): row for row in pending
-        }
+        self.main.challenge_requests = {str(row.get("id")): row for row in pending}
         self.main.challenge_mode = bool(pending) or bool(payload.get("challenge_pause", {}).get("active"))
         pause = payload.get("challenge_pause") or {}
         pause_state = pause.get("state") or {}
@@ -140,10 +155,9 @@ class LegacyStateAuthority:
         }
         payload["turn_order"] = _normalise_order(getattr(self.main, "turn_order", []))
         payload["extra_turns"] = _normalise_order(getattr(self.main, "extra_turns", []))
+        payload["players_in_game"] = _serialise_players_in_game(getattr(self.main, "players_in_game", {}))
         payload["state_authority"] = "persistent"
 
-        # Running-game fields are captured as compatibility commands. Lobby
-        # membership itself is not reconciled here once the game has started.
         current_index = int(getattr(self.main, "current_turn_index", 0) or 0)
         current_seat = getattr(self.main, "current_turn_seat", None)
         self.runtime.state.games.update_game(
