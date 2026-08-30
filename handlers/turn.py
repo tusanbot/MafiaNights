@@ -1,7 +1,7 @@
-"""Persistent turn handler facade.
+"""Telegram-facing turn handler boundary.
 
-Telegram-facing code should call this boundary instead of mutating legacy
-turn globals directly. UI concerns (messages, keyboards, timers) stay outside.
+All authoritative turn state is delegated to PersistentTurnRuntime. Telegram
+message IDs and asyncio tasks must remain outside this class.
 """
 from __future__ import annotations
 
