@@ -16,12 +16,55 @@ The migration branch contains persistent infrastructure for:
 - Restart recovery and legacy-state hydration
 - Lobby cut-over middleware
 - Day/night cut-over compatibility bridge
+- Legacy-state authority boundary
 
 ## Current cut-over boundary
 
-`main.py` remains the legacy Telegram implementation, while `player_runtime_entry.py` is the migration production entry point. It installs the player/profile bridge, attaches one shared `PersistentGameRuntime`, installs Turn/Challenge/Lobby/Day compatibility cut-overs, and runs persistent startup recovery before polling.
+`main.py` remains the legacy Telegram implementation, while `player_runtime_entry.py` is the migration production entry point. It installs the player/profile bridge, attaches one shared `PersistentGameRuntime`, installs Turn/Challenge/Lobby/Day compatibility cut-overs plus the legacy-state authority boundary, and runs persistent startup recovery before polling.
 
 The cut-over layers deliberately preserve the existing Telegram UX. Legacy callbacks continue to render and validate the UI, while authoritative game state is written to persistence before/around the legacy transition. This avoids a risky bulk rewrite of the 138KB legacy handler module while making restart recovery possible.
+
+## State authority contract
+
+The database/persistent runtime is the source of truth. Legacy globals are classified as follows:
+
+### Persisted authoritative state
+
+- `player_slots`
+- `turn_order`
+- `current_turn_index`
+- `current_turn_seat`
+- `players_in_game`
+- `extra_turns`
+
+These values are persisted under the active game's state/current-turn columns and are rehydrated before subsequent group updates. Legacy mutations are treated as compatibility commands and captured back into persistence; they are not durable state by themselves.
+
+### Derived compatibility state
+
+- `waiting_list`
+- `pending_challenges`
+- `challenge_requests`
+- `active_challenger_seats`
+- `challenge_mode`
+- `paused_main_player`
+- `paused_main_duration`
+- `post_challenge_advance`
+- `day_number`
+- `day_phase`
+- `game_running`
+- `lobby_active`
+- `moderator_id`
+- `selected_scenario`
+
+These are rebuilt from the persistent snapshot/runtime and must not be used as independent durable truth.
+
+### Ephemeral process/UI state
+
+- Telegram message IDs (`game_message_id`, `lobby_message_id`, `current_turn_message_id`, `waiting_message_id`)
+- asyncio timer task handles (`turn_timer_task`)
+- local anti-spam timestamp (`last_next_time`)
+
+They may exist in memory but are intentionally not persisted as game truth.
 
 ## Runtime rules
 
@@ -32,7 +75,8 @@ The cut-over layers deliberately preserve the existing Telegram UX. Legacy callb
 5. Lobby persistence mirrors seat assignments, waiting-list membership, moderator, scenario and lobby metadata after legacy handlers mutate them.
 6. Turn and challenge callbacks use compatibility bridges so persistence is updated before legacy Telegram UI continues.
 7. Day/night transitions persist the phase and day number and reset the persisted turn pointer before the legacy callback executes.
-8. Do not reconcile lobby membership after the game has entered the running state; active game participants are protected from incomplete legacy lobby globals.
+8. The state-authority middleware hydrates the compatibility view before group updates and captures only the supported compatibility state after handlers; dedicated lifecycle cut-overs remain responsible for transactional lobby/turn/challenge/day operations.
+9. Do not reconcile lobby membership after the game has entered the running state; active game participants are protected from incomplete legacy lobby globals.
 
 ## Cut-over checklist
 
@@ -55,10 +99,11 @@ The cut-over layers deliberately preserve the existing Telegram UX. Legacy callb
 - [x] Legacy day/night transition compatibility bridge
 - [x] Persisted day number and phase hydration
 - [x] Persisted turn pointer reset at day/night boundary
-- [ ] Remove authoritative lobby globals
-- [ ] Remove authoritative turn globals
-- [ ] Remove authoritative challenge globals
-- [ ] Remove authoritative day globals
+- [x] Legacy global state authority boundary installed
+- [x] Authoritative/derived/ephemeral global classification documented
+- [x] Compatibility state hydration before group updates
+- [x] Compatibility mutations captured into persistent state
+- [ ] Remove legacy global containers from `main.py` entirely
 - [ ] Rebuild all ephemeral Telegram timers/messages from recovery
 - [ ] End-to-end integration tests against the real bot/DB
 
