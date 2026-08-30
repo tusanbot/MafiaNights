@@ -9,6 +9,7 @@ from runtime.migration_adapter import MigrationAdapter
 from runtime.lobby_cutover import install_legacy_lobby_cutover
 from runtime.day_cutover import install_legacy_day_cutover
 from runtime.state_authority import install_legacy_state_authority
+from runtime.legacy_global_audit import assert_not_authoritative
 from runtime.startup_recovery import recover_persisted_games
 from runtime.turn_cutover import install_legacy_turn_cutover
 from runtime.ephemeral_recovery import EphemeralRecoveryManager
@@ -27,6 +28,7 @@ def install(main_module: Any) -> dict[str, Any]:
     lobby_cutover = install_legacy_lobby_cutover(main_module, runtime)
     day_cutover = install_legacy_day_cutover(main_module, runtime)
     state_authority = install_legacy_state_authority(main_module, runtime)
+    assert_not_authoritative(main_module)
     ephemeral_recovery = EphemeralRecoveryManager(runtime, main_module)
     main_module._ephemeral_recovery = ephemeral_recovery
     return {
@@ -37,6 +39,7 @@ def install(main_module: Any) -> dict[str, Any]:
         "day_cutover": day_cutover,
         "state_authority": state_authority,
         "ephemeral_recovery": ephemeral_recovery,
+        "legacy_global_audit": main_module.LEGACY_GLOBAL_AUDIT,
     }
 
 
