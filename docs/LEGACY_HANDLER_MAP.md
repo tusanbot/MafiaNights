@@ -98,7 +98,17 @@ The state-authority middleware hydrates the legacy compatibility view before gro
 
 ## Recovery
 
-Startup/restart behavior belongs to `RecoveryCoordinator` / `RecoveryWorker`, not to legacy timer globals.
+Startup/restart behavior belongs to `RecoveryCoordinator` / `RecoveryWorker`, with `EphemeralRecoveryManager` owning the process-local timer registry and optional Telegram UI reconstruction hooks.
+
+### Restart guarantees
+
+- Active turn deadlines are reconstructed from persisted `started_at + duration_seconds`.
+- One asyncio task is scheduled per persisted active turn.
+- A timer re-checks the persisted turn ID before dispatch, so stale workers cannot advance a newer turn.
+- Expiry handling is serialized and duplicate dispatches are suppressed for the same turn.
+- Stale Telegram message IDs, timer handles and local anti-spam timestamps are cleared on restart.
+- Pending challenges are re-exposed to the compatibility layer after restart.
+- Optional `rebuild_recovered_lobby`, `rebuild_recovered_turn` and `rebuild_recovered_challenges` hooks may recreate Telegram messages without persisting message IDs as game truth.
 
 ## Cut-over rule
 
@@ -111,3 +121,4 @@ Do not delete legacy code until the corresponding target handler has equivalent 
 - Challenge: **persistent bridge installed**; legacy challenge containers remain only for compatibility/UI.
 - Day/Night: **persistence cut-over installed** through `runtime/day_cutover.py` and activated by the production bridge.
 - Global state authority: **installed** through `runtime/state_authority.py` and activated by the production bridge.
+- Restart ephemeral recovery: **installed** through `runtime/ephemeral_recovery.py` and activated by the production bridge.
