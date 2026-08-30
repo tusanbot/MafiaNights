@@ -1,6 +1,6 @@
 # Legacy handler migration map
 
-This map is the cut-over boundary for `main.py`. It intentionally separates Telegram UI concerns from authoritative game state.
+This map is the cut-over boundary for `main.py`. It separates Telegram UI concerns from authoritative game state.
 
 ## Lobby
 
@@ -15,6 +15,8 @@ Legacy responsibilities in `main.py`:
 - seat/waiting-list mutations
 
 Target boundary: `handlers/lobby.py` -> `PersistentLobbyRuntime`.
+
+Cut-over status: **installed**. `LobbyPersistenceMiddleware` hydrates the persisted lobby before group updates and mirrors legacy lobby mutations after group handlers. The existing Telegram UI remains intact while persistence becomes the durable source of truth.
 
 ## Turn
 
@@ -56,4 +58,7 @@ Do not delete legacy code until the corresponding target handler has equivalent 
 
 ## Current cut-over status
 
-The persistent Turn and Challenge facades exist, but the Telegram callback registrations in `main.py` are still legacy-owned. Do not claim Turn/Challenge cut-over complete until those registrations delegate to the persistent runtime and their legacy state mutations are removed.
+- Lobby: **persistence cut-over installed** through `runtime/lobby_cutover.py` and activated by the production bridge.
+- Turn: persistent runtime and compatibility bridge exist; full removal of legacy turn state is pending.
+- Challenge: persistent runtime and compatibility bridge exist; full removal of legacy challenge state is pending.
+- Day: persistent runtime exists; remaining legacy day callback is pending.
