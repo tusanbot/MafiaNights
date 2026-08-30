@@ -7,7 +7,6 @@ module, and runs restart recovery from the production entry point.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
