@@ -7,12 +7,7 @@ from services.challenge_service import ChallengeService
 
 
 class PersistentChallengeRuntime:
-    """Persistence boundary for challenge lifecycle.
-
-    Telegram handlers should use this runtime. Challenge state is stored in the
-    database; pause/resume metadata is kept in the game's JSON state so a bot
-    restart does not lose the interrupted main-turn context.
-    """
+    """Persistence boundary for challenge lifecycle."""
 
     def __init__(self, state: Optional[GameState] = None):
         self.state = state or GameState()
@@ -52,6 +47,35 @@ class PersistentChallengeRuntime:
         return {"id": created, "game_id": game["id"], "challenger_id": int(challenger_id),
                 "target_id": int(target_id), "mode": mode}
 
+    def request(self, group_chat_id: int, challenger_id: int, target_id: int):
+        """Persist a pending request before the target chooses before/after."""
+        return self.create(group_chat_id, challenger_id, target_id, "before")
+
+    def activate(self, group_chat_id: int, challenge_id: str, mode: str,
+                 *, pause_main_turn: bool = False,
+                 pause_state: Optional[dict[str, Any]] = None) -> bool:
+        game = self._game(group_chat_id)
+        changed = self.challenges.update_mode(challenge_id, mode)
+        if not changed:
+            return False
+        rows = self.challenges.for_game(game["id"])
+        row = next((r for r in rows if str(r.get("id")) == str(challenge_id)), None)
+        if not row:
+            return False
+        if pause_main_turn:
+            payload = dict(game.get("state") or {})
+            payload["challenge_pause"] = {
+                "active": True,
+                "challenge_id": str(challenge_id),
+                "previous_status": game.get("status"),
+                "previous_turn_index": game.get("current_turn_index"),
+                "previous_turn_seat": game.get("current_turn_seat"),
+                "state": pause_state or {},
+            }
+            self.state.games.update_game(game["id"], status="paused", state=payload)
+        self.state.games.update_game(game["id"], state=dict(game.get("state") or {}))
+        return True
+
     def resolve(self, group_chat_id: int, challenge_id: str, status: str,
                 *, resume_main_turn: bool = True) -> bool:
         game = self._game(group_chat_id)
@@ -79,3 +103,20 @@ class PersistentChallengeRuntime:
     def history(self, group_chat_id: int):
         game = self._game(group_chat_id)
         return self.challenges.for_game(game["id"])
+
+    def latest_for_players(self, group_chat_id: int, challenger_id: int,
+                           target_id: int, status: Optional[str] = None):
+        rows = self.history(group_chat_id)
+        matches = [
+            row for row in rows
+            if int(row.get("challenger_id")) == int(challenger_id)
+            and int(row.get("target_id")) == int(target_id)
+            and (status is None or row.get("status") == status)
+        ]
+        return matches[-1] if matches else None
+
+    def active(self, group_chat_id: int):
+        return [
+            row for row in self.history(group_chat_id)
+            if row.get("status") == "accepted"
+        ]
