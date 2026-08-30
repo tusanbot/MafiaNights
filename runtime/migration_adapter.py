@@ -37,16 +37,13 @@ class MigrationAdapter:
                 moderator_id=moderator_id,
                 scenario_id=scenario_id,
             )
-
         game_id = game.get("id")
         if not game_id:
             raise ValueError("شناسه بازی پایدار پیدا نشد")
-
         if moderator_id is not None:
             self.game_runtime.state.games.update_game(game_id, moderator_id=int(moderator_id))
         if scenario_id:
             self.game_runtime.state.games.update_game(game_id, scenario_id=scenario_id)
-
         slots = player_slots or {}
         legacy_players = players or {}
         for seat, player_id in sorted(slots.items()):
@@ -59,7 +56,6 @@ class MigrationAdapter:
                 )
             except Exception:
                 continue
-
         state = {
             "legacy_players": {str(k): v for k, v in legacy_players.items()},
             "player_slots": {str(k): int(v) for k, v in slots.items()},
@@ -98,7 +94,6 @@ class MigrationAdapter:
             turn_order=turn_order,
             current_turn_index=current_turn_index,
         )
-
         turn_number = max(1, int(current_turn_index) + 1)
         player_id = (player_slots or {}).get(seat)
         turn_type = "challenge" if is_challenge else "main"
@@ -110,7 +105,6 @@ class MigrationAdapter:
             "current_turn_index": int(current_turn_index),
             "legacy_compatibility": True,
         }
-
         status = str((game or {}).get("status") or "lobby").lower()
         if status == "lobby":
             return self.game_runtime.start_first_turn(
@@ -122,10 +116,8 @@ class MigrationAdapter:
                 player_id=int(player_id) if player_id is not None else None,
                 state=state,
             )
-
         if status not in {"running", "paused", "turn"}:
             raise ValueError(f"شروع نوبت در وضعیت {status} ممکن نیست")
-
         return self.game_runtime.start_turn(
             group_chat_id,
             turn_number,
@@ -137,23 +129,18 @@ class MigrationAdapter:
             state=state,
         )
 
-    def start_first_turn(self, group_chat_id: int, *, seat: int, turn_number: int = 1,
-                         duration_seconds: Optional[int] = None,
-                         current_turn_index: int = 0,
-                         player_id: Optional[int] = None,
-                         state: Optional[dict[str, Any]] = None) -> Any:
-        return self.game_runtime.start_first_turn(
-            group_chat_id,
-            seat=seat,
-            turn_number=turn_number,
-            duration_seconds=duration_seconds,
-            current_turn_index=current_turn_index,
-            player_id=player_id,
-            state=state,
-        )
-
-    def current_turn(self, group_chat_id: int) -> Any:
-        return self.turn_runtime.current(group_chat_id)
+    def finish_current_turn(self, group_chat_id: int, *, reason: str = "next") -> bool:
+        """Finish the persisted current turn before legacy next-turn UI advances."""
+        turn = self.turn_runtime.current(group_chat_id)
+        if not turn:
+            return False
+        return bool(self.turn_runtime.finish(turn["id"], {
+            "migration": "legacy_turn_bridge",
+            "finish_reason": reason,
+        }))
 
     def recover_turn(self, group_chat_id: int) -> dict[str, Any]:
         return self.turn_runtime.recover(group_chat_id)
+
+    def current_turn(self, group_chat_id: int) -> Any:
+        return self.turn_runtime.current(group_chat_id)
