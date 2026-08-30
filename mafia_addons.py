@@ -1,9 +1,4 @@
 # mafia_addons.py
-# --------------------------------------------------------
-# افزونه امکانات اضافه + ذخیره تنظیمات در فایل JSON دائمی
-# نسخهٔ کامل، با هندلرها و API مورد نیاز main.py
-# --------------------------------------------------------
-
 import json
 import os
 import copy
@@ -13,7 +8,6 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 SETTINGS_FILE = "addons_settings.json"
 LOG_TAG = "MafiaAddons"
-
 DEFAULT_GROUP_SETTINGS = {
     "security": {"control_speech": True, "delete_out_of_turn": True},
     "next": {"anti_spam": True, "allow_players_next": True, "allow_moderator_next": True},
@@ -21,10 +15,7 @@ DEFAULT_GROUP_SETTINGS = {
     "color": {"primary": True, "challenge": True, "timer_prefix": ""}
 }
 
-
 class MafiaAddons:
-    """مدیریت افزونه‌ها و تنظیمات گروهی برای ربات مافیا."""
-
     def __init__(self, bot):
         self.bot = bot
         self._all_settings = {}
@@ -97,14 +88,6 @@ class MafiaAddons:
             logging.exception("%s: خطا در register افزونه: %s", LOG_TAG, e)
 
     def _install_legacy_turn_bridge(self):
-        """Install the migration boundary after main.py has defined start_turn.
-
-        The bridge is intentionally installed at moderator selection time.  At
-        that point the legacy module is fully initialized and all subsequent
-        start_round/auto-start/start_turn calls resolve through this wrapper.
-        The old Telegram UI/timer remains temporarily intact until the next
-        migration section replaces it.
-        """
         if self._legacy_turn_bridge_installed:
             return
         try:
@@ -112,7 +95,6 @@ class MafiaAddons:
             original = getattr(legacy, "start_turn", None)
             if original is None or getattr(original, "_persistent_bridge", False):
                 return
-
             from runtime.migration_adapter import MigrationAdapter
             adapter = MigrationAdapter()
 
@@ -120,12 +102,9 @@ class MafiaAddons:
                 group_id = getattr(legacy, "group_chat_id", None)
                 if not group_id:
                     return await original(seat, duration=duration, is_challenge=is_challenge)
-
                 try:
                     await adapter.persist_legacy_turn_start(
-                        int(group_id),
-                        seat=int(seat),
-                        duration_seconds=int(duration),
+                        int(group_id), seat=int(seat), duration_seconds=int(duration),
                         is_challenge=bool(is_challenge),
                         turn_order=list(getattr(legacy, "turn_order", []) or []),
                         current_turn_index=int(getattr(legacy, "current_turn_index", 0)),
@@ -139,7 +118,6 @@ class MafiaAddons:
                     bot = getattr(legacy, "bot", self.bot)
                     await bot.send_message(int(group_id), "⚠️ ثبت پایدار نوبت انجام نشد؛ نوبت شروع نشد.")
                     return
-
                 return await original(seat, duration=duration, is_challenge=is_challenge)
 
             bridged_start_turn._persistent_bridge = True
@@ -164,7 +142,7 @@ class MafiaAddons:
         dp.register_callback_query_handler(self._back_to_addons_menu, lambda c: c.data == "panel_back")
         dp.register_callback_query_handler(self._back_to_main, lambda c: c.data == "addons_menu_back")
 
-    async def open_addons_menu(self, callback: types.CallbackQuery):
+    async def open_addons_menu(self, callback):
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton("🔐 امنیت بازی", callback_data="addons_security"))
         kb.add(InlineKeyboardButton("⏭ مدیریت نکست", callback_data="addons_next"))
@@ -174,10 +152,8 @@ class MafiaAddons:
         try:
             await callback.message.edit_text("⚙️ <b>امکانات اضافه</b>\n\nیکی از بخش‌ها را انتخاب کنید:", reply_markup=kb, parse_mode="HTML")
         except Exception:
-            try:
-                await callback.message.answer("⚙️ <b>امکانات اضافه</b>\n\nیکی از بخش‌ها را انتخاب کنید:", reply_markup=kb, parse_mode="HTML")
-            except Exception:
-                pass
+            try: await callback.message.answer("⚙️ <b>امکانات اضافه</b>\n\nیکی از بخش‌ها را انتخاب کنید:", reply_markup=kb, parse_mode="HTML")
+            except Exception: pass
 
     async def _open_menu_handler(self, callback): await self.open_addons_menu(callback)
 
@@ -244,6 +220,21 @@ class MafiaAddons:
         if not self.group_id or callback.from_user.id != self.moderator_id:
             await callback.answer("⚠️ فقط گرداننده می‌تواند این تنظیمات را تغییر دهد.", show_alert=True); return
         self.settings['color']['challenge'] = not self.settings['color'].get('challenge', True); self._all_settings[self._group_key(self.group_id)] = self.settings; self._save_to_file(); await callback.answer("✔️ وضعیت ذخیره شد."); await self._open_color_menu(callback)
+
+    # Public compatibility API expected by main.py
+    async def menu_security(self, callback): return await self._open_security_menu(callback)
+    async def menu_next(self, callback): return await self._open_next_menu(callback)
+    async def menu_auto(self, callback): return await self._open_auto_menu(callback)
+    async def menu_color(self, callback): return await self._open_color_menu(callback)
+    def toggle(self, section, key):
+        if self.group_id:
+            self.settings = self.get_group_settings(self.group_id)
+        self.settings.setdefault(section, {})
+        self.settings[section][key] = not self.settings[section].get(key, False)
+        if self.group_id:
+            self._all_settings[self._group_key(self.group_id)] = self.settings
+            self._save_to_file()
+        return self.settings[section][key]
 
     async def _back_to_addons_menu(self, callback): await self.open_addons_menu(callback)
     async def _back_to_main(self, callback): await self.open_addons_menu(callback)
