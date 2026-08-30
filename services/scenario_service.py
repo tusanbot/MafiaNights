@@ -2,11 +2,11 @@ class ScenarioService:
     def __init__(self, scenario_repository):
         self.repo = scenario_repository
 
-    async def list_active(self):
-        return await self.repo.list_active()
+    def list_active(self):
+        return self.repo.list_active()
 
-    async def get(self, scenario_id):
-        return await self.repo.get_by_id(scenario_id)
+    def get(self, name):
+        return self.repo.get_by_name(name)
 
-    async def save(self, **data):
-        return await self.repo.upsert(**data)
+    def save(self, **data):
+        return self.repo.upsert(**data)
