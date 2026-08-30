@@ -50,6 +50,15 @@ async def bridged_next_turn(legacy: Any, adapter: MigrationAdapter, callback: An
     group_id = getattr(legacy, "group_chat_id", None)
     if group_id:
         try:
+            challenge_runtime = getattr(legacy, "_persistent_challenge_runtime", None)
+            current = adapter.current_turn(int(group_id))
+            if challenge_runtime is not None and current and current.get("turn_type") == "challenge":
+                active = challenge_runtime.active(int(group_id))
+                if active:
+                    challenge_runtime.resolve(
+                        int(group_id), str(active[-1]["id"]), "resolved",
+                        resume_main_turn=(active[-1].get("mode") == "before"),
+                    )
             adapter.finish_current_turn(int(group_id), reason="next")
         except Exception:
             logging.exception("persistent current-turn completion failed")
@@ -79,8 +88,8 @@ def _replace_callback(dp: Any, function_name: str, replacement: Any) -> bool:
 
 
 def install_legacy_turn_cutover(legacy: Any, adapter: MigrationAdapter) -> dict[str, bool]:
-    """Install next-turn and timer bridges without rewriting the legacy main module."""
-    result = {"next_turn": False, "countdown": False}
+    """Install turn, timer, and challenge bridges without rewriting legacy main."""
+    result = {"next_turn": False, "countdown": False, "challenge_request": False, "challenge_response": False}
     original_countdown = getattr(legacy, "countdown", None)
     if original_countdown is not None and not getattr(original_countdown, "_persistent_bridge", False):
         async def countdown(seat, duration, message_id, is_challenge=False):
@@ -97,4 +106,12 @@ def install_legacy_turn_cutover(legacy: Any, adapter: MigrationAdapter) -> dict[
         next_turn._persistent_bridge = True
         next_turn._legacy_original = original_next
         result["next_turn"] = _replace_callback(dp, "next_turn", next_turn)
+
+    try:
+        from runtime.challenge_cutover import install_legacy_challenge_cutover
+        challenge_result = install_legacy_challenge_cutover(legacy)
+        result["challenge_request"] = bool(challenge_result.get("request"))
+        result["challenge_response"] = bool(challenge_result.get("response"))
+    except Exception:
+        logging.exception("challenge cutover installation failed")
     return result
