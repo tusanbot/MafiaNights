@@ -5,7 +5,6 @@ import time
 from typing import Any, Optional
 
 from runtime.game_state import GameState
-from runtime.turn_cutover import persistent_countdown
 
 
 class PersistentRecoveryRuntime:
@@ -23,31 +22,29 @@ class PersistentRecoveryRuntime:
             return {"recoverable": False, "reason": "no_active_game"}
         turn = self.state.turns.current(game["id"])
         if not turn:
-            return {"recoverable": True, "game": game, "turn": None, "deadline_epoch": None}
+            return {"recoverable": True, "group_chat_id": int(group_chat_id), "game": game,
+                    "turn": None, "turn_id": None, "deadline_epoch": None, "expired": False}
         started = turn.get("started_at")
-        if hasattr(started, "timestamp"):
-            started_epoch = started.timestamp()
-        else:
-            started_epoch = time.time()
+        started_epoch = started.timestamp() if hasattr(started, "timestamp") else time.time()
         duration = int(turn.get("duration_seconds") or 0)
         deadline = started_epoch + duration if duration else None
-        return {
-            "recoverable": True,
-            "game": game,
-            "turn": turn,
-            "deadline_epoch": deadline,
-            "expired": bool(deadline is not None and deadline <= time.time()),
-        }
+        return {"recoverable": True, "group_chat_id": int(group_chat_id), "game": game,
+                "turn": turn, "turn_id": turn.get("id"), "deadline_epoch": deadline,
+                "expired": bool(deadline is not None and deadline <= time.time())}
 
     def plans(self):
         return [self.plan(int(game["group_chat_id"])) for game in self.active_games()]
+
+    def recovery_plans(self):
+        return self.plans()
 
     def recover_expired(self, group_chat_id: int) -> bool:
         plan = self.plan(group_chat_id)
         if not plan.get("turn") or not plan.get("expired"):
             return False
-        turn = plan["turn"]
-        return bool(self.state.turns.finish(turn["id"], {
-            "recovery": True,
-            "finish_reason": "timer_expired_after_restart",
+        return bool(self.state.turns.finish(plan["turn"]["id"], {
+            "recovery": True, "finish_reason": "timer_expired_after_restart",
         }))
+
+    def finish_expired(self, group_chat_id: int) -> bool:
+        return self.recover_expired(group_chat_id)
