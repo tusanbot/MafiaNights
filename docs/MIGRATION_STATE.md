@@ -17,10 +17,11 @@ The migration branch contains persistent infrastructure for:
 - Lobby cut-over middleware
 - Day/night cut-over compatibility bridge
 - Legacy-state authority boundary
+- Restart-safe ephemeral recovery manager
 
 ## Current cut-over boundary
 
-`main.py` remains the legacy Telegram implementation, while `player_runtime_entry.py` is the migration production entry point. It installs the player/profile bridge, attaches one shared `PersistentGameRuntime`, installs Turn/Challenge/Lobby/Day compatibility cut-overs plus the legacy-state authority boundary, and runs persistent startup recovery before polling.
+`main.py` remains the legacy Telegram implementation, while `player_runtime_entry.py` is the migration production entry point. It installs the player/profile bridge, attaches one shared `PersistentGameRuntime`, installs Turn/Challenge/Lobby/Day compatibility cut-overs plus the legacy-state authority boundary, and runs persistent recovery before polling.
 
 The cut-over layers deliberately preserve the existing Telegram UX. Legacy callbacks continue to render and validate the UI, while authoritative game state is written to persistence before/around the legacy transition. This avoids a risky bulk rewrite of the 138KB legacy handler module while making restart recovery possible.
 
@@ -77,6 +78,10 @@ They may exist in memory but are intentionally not persisted as game truth.
 7. Day/night transitions persist the phase and day number and reset the persisted turn pointer before the legacy callback executes.
 8. The state-authority middleware hydrates the compatibility view before group updates and captures only the supported compatibility state after handlers; dedicated lifecycle cut-overs remain responsible for transactional lobby/turn/challenge/day operations.
 9. Do not reconcile lobby membership after the game has entered the running state; active game participants are protected from incomplete legacy lobby globals.
+10. `EphemeralRecoveryManager` rebuilds one asyncio timer per persisted active turn from `started_at + duration_seconds`, and re-checks the current persisted turn before expiry dispatch.
+11. Restart recovery clears stale process-local Telegram message/task handles and resets the local anti-spam timestamp.
+12. Pending challenges are re-exposed as recovery metadata; optional Telegram UI hooks can rebuild lobby/turn/challenge messages without making message IDs persistent truth.
+13. A recovered expiry is serialized by an asyncio lock and a short duplicate-dispatch guard; stale turn IDs are ignored.
 
 ## Cut-over checklist
 
@@ -103,8 +108,13 @@ They may exist in memory but are intentionally not persisted as game truth.
 - [x] Authoritative/derived/ephemeral global classification documented
 - [x] Compatibility state hydration before group updates
 - [x] Compatibility mutations captured into persistent state
+- [x] Restart-safe ephemeral recovery manager installed
+- [x] Exact persisted turn deadline recovery
+- [x] Duplicate/stale timer protection
+- [x] Challenge recovery metadata
+- [x] Optional Telegram UI recovery hooks
+- [x] Production Docker entrypoint uses `player_runtime_entry.py`
 - [ ] Remove legacy global containers from `main.py` entirely
-- [ ] Rebuild all ephemeral Telegram timers/messages from recovery
 - [ ] End-to-end integration tests against the real bot/DB
 
 ## Safety
