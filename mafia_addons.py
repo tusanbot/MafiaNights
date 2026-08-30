@@ -23,6 +23,7 @@ class MafiaAddons:
         self.moderator_id = None
         self.settings = copy.deepcopy(DEFAULT_GROUP_SETTINGS)
         self._legacy_turn_bridge_installed = False
+        self._turn_cutover_installed = False
         self._load_from_file()
 
     def _load_from_file(self):
@@ -124,8 +125,20 @@ class MafiaAddons:
             legacy.start_turn = bridged_start_turn
             self._legacy_turn_bridge_installed = True
             logging.info("%s: legacy start_turn is now persistence-backed", LOG_TAG)
+            self._install_turn_cutover(legacy, adapter)
         except Exception:
             logging.exception("%s: failed to install legacy turn bridge", LOG_TAG)
+
+    def _install_turn_cutover(self, legacy, adapter):
+        if self._turn_cutover_installed:
+            return
+        try:
+            from runtime.turn_cutover import install_legacy_turn_cutover
+            result = install_legacy_turn_cutover(legacy, adapter)
+            self._turn_cutover_installed = bool(result.get("next_turn") or result.get("countdown"))
+            logging.info("%s: turn cutover installed: %s", LOG_TAG, result)
+        except Exception:
+            logging.exception("%s: failed to install next/countdown cutover", LOG_TAG)
 
     def setup_handlers(self, dp):
         dp.register_callback_query_handler(self._open_menu_handler, lambda c: c.data == "addons_menu")
@@ -221,7 +234,6 @@ class MafiaAddons:
             await callback.answer("⚠️ فقط گرداننده می‌تواند این تنظیمات را تغییر دهد.", show_alert=True); return
         self.settings['color']['challenge'] = not self.settings['color'].get('challenge', True); self._all_settings[self._group_key(self.group_id)] = self.settings; self._save_to_file(); await callback.answer("✔️ وضعیت ذخیره شد."); await self._open_color_menu(callback)
 
-    # Public compatibility API expected by main.py
     async def menu_security(self, callback): return await self._open_security_menu(callback)
     async def menu_next(self, callback): return await self._open_next_menu(callback)
     async def menu_auto(self, callback): return await self._open_auto_menu(callback)
