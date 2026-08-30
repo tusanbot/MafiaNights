@@ -69,7 +69,37 @@ class GameRepository(DatabaseRepository):
             return result.rowcount > 0
 
     def add_player(self, game_id, player_id, seat=None, role=None, status="active", is_substitute=False):
+        """Idempotently add a player to a game.
+
+        Repeated taps cannot create duplicate game-player rows. A seat is only
+        accepted when it is free; PostgreSQL's unique constraint remains the
+        final concurrency guard.
+        """
         with self.SessionLocal() as session:
+            existing = session.execute(
+                text("""
+                    select id, seat, status, is_substitute
+                    from public.mafia_game_players
+                    where game_id = :game_id and player_id = :player_id
+                    limit 1
+                """),
+                {"game_id": game_id, "player_id": int(player_id)},
+            ).mappings().first()
+            if existing:
+                return existing["id"]
+
+            if seat is not None:
+                occupied = session.execute(
+                    text("""
+                        select 1 from public.mafia_game_players
+                        where game_id = :game_id and seat = :seat
+                        limit 1
+                    """),
+                    {"game_id": game_id, "seat": int(seat)},
+                ).first()
+                if occupied:
+                    raise ValueError("این صندلی قبلاً رزرو شده است")
+
             row = session.execute(
                 text("""
                     insert into public.mafia_game_players
