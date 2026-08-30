@@ -1,18 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Optional
 
 from repositories.game_repository import GameRepository
 
 
 class LobbyService:
-    """Authoritative lobby facade.
-
-    Handler code should use this service instead of writing directly to the
-    in-memory lobby dictionaries.  The returned records are safe to use for
-    public lobby rendering; private role data must not be exposed by this
-    service.
-    """
+    """Authoritative lobby facade backed by Supabase/PostgreSQL."""
 
     def __init__(self, repository: Optional[GameRepository] = None):
         self.repository = repository or GameRepository()
@@ -23,10 +17,8 @@ class LobbyService:
         if game:
             return game
         game_id = self.repository.create_game(
-            group_chat_id=group_chat_id,
-            moderator_id=moderator_id,
-            scenario_id=scenario_id,
-            event_number=event_number,
+            group_chat_id=group_chat_id, moderator_id=moderator_id,
+            scenario_id=scenario_id, event_number=event_number,
             state={"phase": "lobby", "waiting": [], "seat_count": 0},
         )
         return self.repository.get_active_game(group_chat_id) or {"id": game_id, "group_chat_id": group_chat_id}
@@ -40,27 +32,37 @@ class LobbyService:
     def join(self, game_id: str, player_id: int, seat: Optional[int] = None,
              is_substitute: bool = False) -> int:
         return self.repository.add_player(
-            game_id=game_id,
-            player_id=player_id,
-            seat=seat,
-            status="waiting" if seat is None else "active",
-            is_substitute=is_substitute,
+            game_id=game_id, player_id=player_id, seat=seat,
+            status="waiting" if seat is None else "active", is_substitute=is_substitute,
         )
+
+    def leave(self, game_id: str, player_id: int) -> bool:
+        return self.repository.remove_player(game_id, player_id)
+
+    def assign_seat(self, game_id: str, player_id: int, seat: int) -> bool:
+        return self.repository.set_player_seat(game_id, player_id, seat)
+
+    def clear_seat(self, game_id: str, player_id: int) -> bool:
+        return self.repository.set_player_seat(game_id, player_id, None)
+
+    def set_status(self, game_id: str, player_id: int, status: str) -> bool:
+        allowed = {"active", "waiting", "removed", "substitute", "finished"}
+        if status not in allowed:
+            raise ValueError(f"وضعیت نامعتبر: {status}")
+        return self.repository.set_player_status(game_id, player_id, status)
+
+    def promote_waiting(self, game_id: str, seat: int):
+        return self.repository.promote_waiting_player(game_id, seat)
 
     def players(self, game_id: str) -> list[dict[str, Any]]:
         rows = self.repository.list_players(game_id)
-        # Never return role to the public lobby consumer.
         return [
             {
-                "id": row.get("id"),
-                "player_id": row.get("player_id"),
-                "seat": row.get("seat"),
-                "status": row.get("status"),
+                "id": row.get("id"), "player_id": row.get("player_id"),
+                "seat": row.get("seat"), "status": row.get("status"),
                 "is_substitute": row.get("is_substitute", False),
-                "username": row.get("username"),
-                "first_name": row.get("first_name"),
-                "last_name": row.get("last_name"),
-                "nickname": row.get("nickname"),
+                "username": row.get("username"), "first_name": row.get("first_name"),
+                "last_name": row.get("last_name"), "nickname": row.get("nickname"),
             }
             for row in rows
         ]
@@ -70,5 +72,5 @@ class LobbyService:
         return {
             "players": rows,
             "seats": {str(row["seat"]): row["player_id"] for row in rows if row.get("seat") is not None},
-            "waiting": [row["player_id"] for row in rows if row.get("seat") is None],
+            "waiting": [row["player_id"] for row in rows if row.get("seat") is None and row.get("status") == "waiting"],
         }
