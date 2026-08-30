@@ -1,7 +1,8 @@
 """Restart-safe reconstruction of process-local timer/UI state.
 
 Persistence remains authoritative. This layer owns only asyncio tasks and
-compatibility metadata that can be reconstructed from persisted turns.
+compatibility metadata that can be reconstructed from persisted turns and
+challenges.
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from runtime.recovery_worker import RecoveryPlan
 
 
 class EphemeralRecoveryManager:
-    """Coordinates one restart-safe timer worker per persisted active turn."""
+    """Coordinates restart-safe timers and ephemeral Telegram compatibility state."""
 
     def __init__(self, runtime: Any, main_module: Any):
         self.runtime = runtime
@@ -27,7 +28,7 @@ class EphemeralRecoveryManager:
         self._last_expired_at = 0.0
 
     def prepare_legacy_ui(self, plans: list[RecoveryPlan]) -> None:
-        """Reset stale process-local handles and expose recovery metadata."""
+        """Reset stale handles and publish deterministic recovery metadata."""
         self.main.turn_timer_task = None
         self.main.current_turn_message_id = None
         self.main.waiting_message_id = None
@@ -39,9 +40,15 @@ class EphemeralRecoveryManager:
                 "remaining_seconds": plan.remaining_seconds,
                 "status": plan.status,
             }
-            for plan in plans
-            if plan.recoverable and plan.turn_id
+            for plan in plans if plan.recoverable and plan.turn_id
         }
+        self.main.recovered_challenges = []
+        try:
+            group_id = getattr(self.main, "ALLOWED_GROUP_ID", None)
+            if group_id is not None:
+                self.main.recovered_challenges = list(self.runtime.pending_challenges(int(group_id)))
+        except Exception:
+            logging.exception("challenge recovery snapshot failed")
         self.main.ephemeral_recovery_active = True
 
     async def _invoke_hook(self, name: str, plan: RecoveryPlan) -> bool:
@@ -66,6 +73,19 @@ class EphemeralRecoveryManager:
             logging.exception("recovery hook %s failed", name)
             return False
 
+    async def rebuild_ui(self, plans: list[RecoveryPlan]) -> None:
+        """Call optional application hooks to rebuild Telegram messages safely."""
+        for name in ("rebuild_recovered_lobby", "rebuild_recovered_turn", "rebuild_recovered_challenges"):
+            hook = getattr(self.main, name, None)
+            if not callable(hook):
+                continue
+            try:
+                result = hook(plans)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                logging.exception("ephemeral UI recovery hook %s failed", name)
+
     async def on_turn_expired(self, plan: RecoveryPlan) -> None:
         """Handle a recovered expiry exactly once for the current persisted turn."""
         async with self._expiry_lock:
@@ -87,9 +107,10 @@ class EphemeralRecoveryManager:
             self.main.recovered_turn_plans.pop(plan.group_chat_id, None)
 
     async def start(self) -> list[RecoveryPlan]:
-        """Hydrate UI metadata and rebuild timers from the DB deadline."""
+        """Hydrate UI metadata, rebuild optional UI, and schedule exact deadlines."""
         plans = self.coordinator.worker.plans()
         self.prepare_legacy_ui(plans)
+        await self.rebuild_ui(plans)
         await self.coordinator.start(self.on_turn_expired)
         return plans
 
