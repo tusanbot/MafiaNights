@@ -2,7 +2,7 @@
 
 ## Architecture
 
-The migration branch now contains persistent infrastructure for:
+The migration branch contains persistent infrastructure for:
 
 - Player/profile persistence
 - Scenario persistence
@@ -13,21 +13,23 @@ The migration branch now contains persistent infrastructure for:
 - `GameStateMachine`
 - Production bootstrap bridge
 - Restart recovery and legacy-state hydration
+- Lobby cut-over middleware
 
 ## Current cut-over boundary
 
-`main.py` remains the legacy Telegram implementation, but the production entry point is now `player_runtime_entry.py`. It installs the player/profile bridge, attaches one shared `PersistentGameRuntime`, installs the existing turn/challenge cut-over wrappers, then runs persistent startup recovery before polling.
+`main.py` remains the legacy Telegram implementation, while `player_runtime_entry.py` is the migration production entry point. It installs the player/profile bridge, attaches one shared `PersistentGameRuntime`, installs Turn/Challenge/Lobby compatibility cut-overs, and runs persistent startup recovery before polling.
 
-The migration intentionally avoids deleting legacy globals in bulk. Telegram message IDs and asyncio task handles remain ephemeral, while game/player/turn/challenge state is persisted.
+The lobby cut-over deliberately preserves the existing Telegram UX: legacy lobby callbacks still render and validate the UI, while `LobbyPersistenceMiddleware` hydrates persisted lobby state before group updates and mirrors lobby mutations to persistence after each group update. Database state therefore survives restarts without a risky bulk rewrite of the 138KB legacy handler module.
 
 ## Runtime rules
 
-1. Database state is authoritative for game/player/turn/challenge state.
-2. Telegram message IDs and asyncio task handles are ephemeral process state.
-3. Startup recovery reconstructs the persistent snapshot and marks expired turns safely.
-4. The production entry point hydrates legacy UI/session globals from the persisted game after restart.
-5. Turn and challenge callbacks use compatibility bridges so persistence is updated before legacy Telegram UI continues.
-6. Lobby handler replacement is still a separate cut-over step; the existing lobby UI has not been blindly replaced.
+1. Database state is authoritative for game/player/turn/challenge/lobby state.
+2. Telegram message IDs and asyncio timer tasks are ephemeral process state.
+3. Startup recovery reconstructs the persisted snapshot and safely finishes expired turns.
+4. Lobby hydration reconstructs seats, waiting list, moderator and scenario before the next group handler.
+5. Lobby persistence mirrors seat assignments, waiting-list membership, moderator, scenario and lobby metadata after legacy handlers mutate them.
+6. Turn and challenge callbacks use compatibility bridges so persistence is updated before legacy Telegram UI continues.
+7. Do not reconcile lobby membership after the game has entered the running state; active game participants are protected from incomplete legacy lobby globals.
 
 ## Cut-over checklist
 
@@ -42,7 +44,11 @@ The migration intentionally avoids deleting legacy globals in bulk. Telegram mes
 - [x] Turn/timer compatibility bridge installed by production entry point
 - [x] Challenge compatibility bridge installed by production entry point
 - [x] Day persistence runtime
-- [ ] Replace legacy lobby callbacks
+- [x] Lobby persistence cut-over boundary installed
+- [x] Lobby seat/waiting-list synchronization
+- [x] Lobby moderator/scenario synchronization
+- [x] Lobby restart hydration
+- [x] Duplicate-seat protection at repository boundary
 - [ ] Replace remaining legacy day callback with persistent day transition
 - [ ] Remove authoritative lobby globals
 - [ ] Remove authoritative turn globals
