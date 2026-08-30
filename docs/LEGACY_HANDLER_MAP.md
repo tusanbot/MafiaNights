@@ -53,3 +53,7 @@ Startup/restart behavior belongs to `RecoveryCoordinator` / `RecoveryWorker`, no
 ## Cut-over rule
 
 Do not delete legacy code until the corresponding target handler has equivalent authorization, state transitions, persistence, and Telegram UX coverage. During migration, legacy globals may be read for compatibility but must not be the authoritative persistence layer.
+
+## Current cut-over status
+
+The persistent Turn and Challenge facades exist, but the Telegram callback registrations in `main.py` are still legacy-owned. Do not claim Turn/Challenge cut-over complete until those registrations delegate to the persistent runtime and their legacy state mutations are removed.
