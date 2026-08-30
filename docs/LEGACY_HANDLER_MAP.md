@@ -29,12 +29,22 @@ Legacy responsibilities:
 - `start_turn`
 - `countdown`
 - `next_turn`
-- `start_night`
-- `start_new_day`
 
 Target boundary: `handlers/turn.py` -> `PersistentTurnRuntime`.
 
 Important: `current_turn_index`, `turn_order`, and active turn timing are authoritative game state and must not remain authoritative globals after cut-over. Telegram message IDs and asyncio timer tasks may remain ephemeral.
+
+## Day / Night
+
+Legacy responsibilities:
+- `start_new_day`
+- `start_night`
+- `reset_round_data`
+- day/phase updates associated with the turn transition
+
+Target boundary: `runtime/day_cutover.py` -> `PersistentDayRuntime`.
+
+Cut-over status: **installed**. Day/night callbacks persist the phase and day number before legacy Telegram UI continues. The persisted turn pointer is reset at the boundary and any active persisted turn is safely finished before the transition. Legacy day variables remain compatibility/UI state only.
 
 ## Challenge
 
@@ -61,4 +71,4 @@ Do not delete legacy code until the corresponding target handler has equivalent 
 - Lobby: **persistence cut-over installed** through `runtime/lobby_cutover.py` and activated by the production bridge.
 - Turn: persistent runtime and compatibility bridge exist; full removal of legacy turn state is pending.
 - Challenge: persistent runtime and compatibility bridge exist; full removal of legacy challenge state is pending.
-- Day: persistent runtime exists; remaining legacy day callback is pending.
+- Day/Night: **persistence cut-over installed** through `runtime/day_cutover.py` and activated by the production bridge.
