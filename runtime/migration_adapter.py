@@ -1,10 +1,4 @@
-"""Compatibility boundary for migrating the legacy Telegram turn flow.
-
-The adapter deliberately keeps the legacy UI/timer untouched for now.  It
-makes persistence authoritative at the moment a legacy turn starts, so the
-next migration step can replace the UI/timer without losing the persisted
-state contract.
-"""
+"""Compatibility boundary for migrating the legacy Telegram turn flow."""
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -35,12 +29,7 @@ class MigrationAdapter:
         turn_order: Optional[list[int]] = None,
         current_turn_index: int = 0,
     ) -> Any:
-        """Materialize the currently active legacy game in persistence.
-
-        Existing persistent games are reused.  Missing player rows are added
-        through the existing lobby repository boundary; no new persistence
-        implementation is introduced here.
-        """
+        """Materialize the active legacy game in the existing persistence layer."""
         game = self.game_runtime.state.active_game(group_chat_id)
         if not game:
             game = self.game_runtime.state.ensure_lobby(
@@ -69,9 +58,8 @@ class MigrationAdapter:
                     status="active",
                 )
             except Exception:
-                # A player may already exist, or the legacy profile may not yet
-                # be materialized.  Do not make the Telegram turn path fail for
-                # a non-authoritative migration sync error.
+                # Preserve the legacy flow if the profile/player row is not yet
+                # available. The turn itself is still persisted when possible.
                 continue
 
         state = {
@@ -102,7 +90,7 @@ class MigrationAdapter:
         moderator_id: Optional[int] = None,
         scenario_id: Optional[str] = None,
     ) -> Any:
-        """Persist a turn immediately before the legacy UI/timer starts it."""
+        """Persist a legacy turn before its existing Telegram UI/timer runs."""
         game = self.ensure_legacy_game(
             group_chat_id,
             moderator_id=moderator_id,
@@ -125,6 +113,23 @@ class MigrationAdapter:
             "legacy_compatibility": True,
         }
 
+        status = str((game or {}).get("status") or "lobby").lower()
+        if status == "lobby":
+            return self.game_runtime.start_first_turn(
+                group_chat_id,
+                seat=int(seat),
+                turn_number=turn_number,
+                duration_seconds=int(duration_seconds),
+                current_turn_index=int(current_turn_index),
+                player_id=int(player_id) if player_id is not None else None,
+                state=state,
+            )
+
+        if status not in {"running", "paused", "turn"}:
+            raise ValueError(f"شروع نوبت در وضعیت {status} ممکن نیست")
+
+        # TurnRepository accepts running/paused games; normalize an old TURN
+        # marker only through the existing state-machine boundary when needed.
         return self.game_runtime.start_turn(
             group_chat_id,
             turn_number,
@@ -136,26 +141,18 @@ class MigrationAdapter:
             state=state,
         )
 
-    def start_first_turn(
-        self,
-        group_chat_id: int,
-        *,
-        turn_number: int = 1,
-        seat: Optional[int] = None,
-        player_id: Optional[int] = None,
-        turn_type: str = "main",
-        duration_seconds: Optional[int] = None,
-        current_turn_index: Optional[int] = None,
-        state: Optional[dict[str, Any]] = None,
-    ) -> Any:
+    def start_first_turn(self, group_chat_id: int, *, seat: int, turn_number: int = 1,
+                         duration_seconds: Optional[int] = None,
+                         current_turn_index: int = 0,
+                         player_id: Optional[int] = None,
+                         state: Optional[dict[str, Any]] = None) -> Any:
         return self.game_runtime.start_first_turn(
             group_chat_id,
-            turn_number=turn_number,
             seat=seat,
-            player_id=player_id,
-            turn_type=turn_type,
+            turn_number=turn_number,
             duration_seconds=duration_seconds,
-            current_turn_index=current_turn_index or 0,
+            current_turn_index=current_turn_index,
+            player_id=player_id,
             state=state,
         )
 
