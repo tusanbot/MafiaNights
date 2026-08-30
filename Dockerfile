@@ -20,6 +20,5 @@ COPY . .
 # بررسی نصب aiogram (اختیاری، برای debug)
 RUN pip show aiogram
 
-# اجرای ربات
-CMD ["python", "main.py"]
-
+# اجرای ورودی مهاجرت که Recovery و Runtime پایدار را فعال می‌کند
+CMD ["python", "player_runtime_entry.py"]
