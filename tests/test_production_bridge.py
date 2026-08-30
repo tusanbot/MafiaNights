@@ -9,14 +9,21 @@ def test_install_attaches_shared_runtime(monkeypatch):
     class FakeRuntime:
         def __init__(self):
             self.challenges = object()
+            self.state = object()
             calls["runtime"] = self
 
     class FakeAdapter:
         def __init__(self, game_runtime=None):
             calls["adapter_runtime"] = game_runtime
 
+    class FakeEphemeralRecovery:
+        def __init__(self, runtime, main):
+            calls["recovery_runtime"] = runtime
+            calls["recovery_main"] = main
+
     monkeypatch.setattr(bridge, "PersistentGameRuntime", FakeRuntime)
     monkeypatch.setattr(bridge, "MigrationAdapter", FakeAdapter)
+    monkeypatch.setattr(bridge, "EphemeralRecoveryManager", FakeEphemeralRecovery)
     monkeypatch.setattr(bridge, "install_legacy_turn_cutover", lambda main, adapter: {"next_turn": True})
     monkeypatch.setattr(bridge, "install_legacy_lobby_cutover", lambda main, runtime: {"installed": True})
     monkeypatch.setattr(bridge, "install_legacy_day_cutover", lambda main, runtime: {"cutover": {"start_new_day": True}})
@@ -32,6 +39,8 @@ def test_install_attaches_shared_runtime(monkeypatch):
     assert result["lobby_cutover"]["installed"] is True
     assert result["day_cutover"]["cutover"]["start_new_day"] is True
     assert result["state_authority"]["installed"] is True
+    assert calls["recovery_runtime"] is calls["runtime"]
+    assert calls["recovery_main"] is main
 
 
 def test_startup_calls_original_startup_then_recovery(monkeypatch):
