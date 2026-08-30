@@ -60,7 +60,7 @@ class LobbyCutover:
 
         moderator = getattr(self.main, "moderator_id", None)
         scenario = getattr(self.main, "selected_scenario", None)
-        game = self.runtime.lobby.ensure(group_id, moderator, scenario)
+        self.runtime.lobby.ensure(group_id, moderator, scenario)
         if moderator is not None:
             self.runtime.lobby.set_moderator(group_id, int(moderator))
         if scenario:
@@ -73,9 +73,10 @@ class LobbyCutover:
             represented.add(uid)
             try:
                 self.runtime.lobby.join(group_id, uid, int(seat), moderator, scenario)
+                # join() is idempotent for an existing player, so an existing
+                # waiting player must explicitly receive the newly selected seat.
+                self.runtime.lobby.assign_seat(group_id, uid, int(seat))
             except ValueError:
-                # A DB seat conflict is authoritative; leave it for the next
-                # hydration rather than overwriting another player's seat.
                 logging.warning("lobby seat conflict group=%s seat=%s user=%s", group_id, seat, uid)
 
         for item in getattr(self.main, "waiting_list", []) or []:
@@ -83,11 +84,11 @@ class LobbyCutover:
             if uid is None:
                 continue
             represented.add(uid)
-            self.runtime.lobby.join(group_id, uid, None, moderator, scenario)
+            try:
+                self.runtime.lobby.join(group_id, uid, None, moderator, scenario)
+            except ValueError:
+                logging.warning("lobby waiting sync failed group=%s user=%s", group_id, uid)
 
-        # Only reconcile players while the game is genuinely in lobby. This
-        # avoids deleting active game participants when legacy globals are
-        # intentionally incomplete after the game starts.
         current = self.runtime.lobby.snapshot(group_id)
         for row in current.get("players", []):
             uid = row.get("player_id")
