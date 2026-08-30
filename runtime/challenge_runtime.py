@@ -73,7 +73,6 @@ class PersistentChallengeRuntime:
                 "state": pause_state or {},
             }
             self.state.games.update_game(game["id"], status="paused", state=payload)
-        self.state.games.update_game(game["id"], state=dict(game.get("state") or {}))
         return True
 
     def resolve(self, group_chat_id: int, challenge_id: str, status: str,
