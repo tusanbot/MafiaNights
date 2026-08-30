@@ -49,6 +49,48 @@ class PersistentGameRuntime:
     def start_turn(self, group_chat_id: int, turn_number: int, **kwargs):
         return self.turns.start(group_chat_id, turn_number, **kwargs)
 
+    def start_first_turn(self, group_chat_id: int, *, seat: int, turn_number: int = 1,
+                         duration_seconds: Optional[int] = None,
+                         current_turn_index: int = 0,
+                         player_id: Optional[int] = None,
+                         state: Optional[dict[str, Any]] = None):
+        """Atomically move a running game into TURN and persist its first turn.
+
+        Telegram handlers should use this entry point for the first turn instead
+        of mutating ``game_running``/``current_turn_index`` and then calling the
+        legacy timer. The transition is persisted before any Telegram worker is
+        started, making the turn recoverable after a process restart.
+        """
+        game = self.state.active_game(group_chat_id)
+        if not game:
+            raise ValueError("بازی فعالی برای این گروه وجود ندارد")
+
+        status = str(game.get("status") or "lobby").lower()
+        if status == Phase.LOBBY.value:
+            self.machine.transition(group_chat_id, Phase.RUNNING)
+        elif status not in {Phase.RUNNING.value, Phase.PAUSED.value, Phase.TURN.value}:
+            raise ValueError(f"شروع نوبت در وضعیت {status} ممکن نیست")
+
+        if player_id is None:
+            current_game = self.state.active_game(group_chat_id)
+            persisted_players = (current_game or {}).get("state") or {}
+            player_id = persisted_players.get("player_id")
+
+        turn = self.turns.start(
+            group_chat_id,
+            turn_number,
+            seat=seat,
+            player_id=player_id,
+            turn_type="main",
+            duration_seconds=duration_seconds,
+            current_turn_index=current_turn_index,
+            state=state,
+        )
+
+        if str((self.state.active_game(group_chat_id) or {}).get("status")) != Phase.TURN.value:
+            self.machine.transition(group_chat_id, Phase.TURN)
+        return turn
+
     def finish_turn(self, turn_id: str, state: Optional[dict[str, Any]] = None):
         return self.turns.finish(turn_id, state)
 
