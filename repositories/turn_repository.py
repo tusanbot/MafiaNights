@@ -19,7 +19,7 @@ class TurnRepository(DatabaseRepository):
                 ).mappings().first()
                 if not game:
                     raise ValueError("بازی پیدا نشد")
-                if game["status"] not in ("running", "paused"):
+                if game["status"] not in ("running", "paused", "turn"):
                     raise ValueError("بازی در وضعیت اجرای نوبت نیست")
 
                 row = session.execute(
