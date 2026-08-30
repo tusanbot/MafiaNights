@@ -37,14 +37,12 @@ class GameStateMachine:
         game = self.state.active_game(group_chat_id)
         if not game:
             return {"phase": Phase.FINISHED.value, "game": None, "turn": None, "challenge": None}
-
         turn = self.turns.current(group_chat_id)
         pending = self.challenges.pending(group_chat_id)
         raw_status = str(game.get("status") or "lobby").lower()
-
         if raw_status in {"finished", "ended", "cancelled"}:
             phase = Phase.FINISHED
-        elif raw_status in {"paused"}:
+        elif raw_status == "paused":
             phase = Phase.PAUSED
         elif raw_status in {"lobby", "waiting"}:
             phase = Phase.LOBBY
@@ -54,19 +52,12 @@ class GameStateMachine:
             phase = Phase.TURN
         else:
             phase = Phase.RUNNING
-
-        return {
-            "phase": phase.value,
-            "game": game,
-            "turn": turn,
-            "challenge": pending,
-        }
+        return {"phase": phase.value, "game": game, "turn": turn, "challenge": pending}
 
     def transition(self, group_chat_id: int, target: Phase) -> Transition:
         game = self.state.active_game(group_chat_id)
         if not game:
             raise ValueError("بازی فعالی برای این گروه وجود ندارد")
-
         raw_current = str(game.get("status") or "lobby").lower()
         current = Phase(raw_current) if raw_current in {p.value for p in Phase} else Phase.LOBBY
         allowed = {
@@ -79,12 +70,15 @@ class GameStateMachine:
         }
         if target not in allowed[current] and target != current:
             raise ValueError(f"انتقال نامعتبر: {current.value} -> {target.value}")
-
         self.state.games.update_game(game["id"], status=target.value)
         return Transition(target, current, game["id"])
 
     def recover(self, group_chat_id: int) -> dict[str, Any]:
-        """Recover persisted runtime information needed after process restart."""
+        """Return a restart-safe snapshot including the persisted turn recovery data."""
         turn = self.turns.recover(group_chat_id)
         snapshot = self.snapshot(group_chat_id)
         return {"snapshot": snapshot, "turn_recovery": turn}
+
+    def recover_all(self) -> list[dict[str, Any]]:
+        """Recover every persisted game that can survive a process restart."""
+        return [self.recover(int(game["group_chat_id"])) for game in self.state.active_games()]
