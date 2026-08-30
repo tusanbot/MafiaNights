@@ -7,6 +7,7 @@ from typing import Any
 from runtime.game_runtime import PersistentGameRuntime
 from runtime.migration_adapter import MigrationAdapter
 from runtime.lobby_cutover import install_legacy_lobby_cutover
+from runtime.day_cutover import install_legacy_day_cutover
 from runtime.startup_recovery import recover_persisted_games
 from runtime.turn_cutover import install_legacy_turn_cutover
 
@@ -22,8 +23,14 @@ def install(main_module: Any) -> dict[str, Any]:
 
     turn_cutover = install_legacy_turn_cutover(main_module, adapter)
     lobby_cutover = install_legacy_lobby_cutover(main_module, runtime)
-    return {"runtime": runtime, "adapter": adapter, "turn_cutover": turn_cutover,
-            "lobby_cutover": lobby_cutover}
+    day_cutover = install_legacy_day_cutover(main_module, runtime)
+    return {
+        "runtime": runtime,
+        "adapter": adapter,
+        "turn_cutover": turn_cutover,
+        "lobby_cutover": lobby_cutover,
+        "day_cutover": day_cutover,
+    }
 
 
 async def recover_and_hydrate(main_module: Any) -> list[dict[str, Any]]:
@@ -40,19 +47,24 @@ async def recover_and_hydrate(main_module: Any) -> list[dict[str, Any]]:
         return results
 
     try:
+        group_id = int(allowed_group)
         lobby_cutover = getattr(main_module, "_persistent_lobby_cutover", {}).get("cutover")
         if lobby_cutover is not None:
-            lobby_cutover.hydrate(int(allowed_group))
-        else:
-            snapshot = runtime.snapshot(int(allowed_group))
-            game = snapshot.get("game")
-            if not game:
-                return results
-            main_module.group_chat_id = int(game["group_chat_id"])
-            main_module.moderator_id = game.get("moderator_id")
-            main_module.game_running = game.get("status") in {"running", "paused"}
-            main_module.lobby_active = game.get("status") == "lobby"
-            main_module.current_turn_index = int(game.get("current_turn_index") or 0)
+            lobby_cutover.hydrate(group_id)
+
+        day_snapshot = runtime.day_snapshot(group_id)
+        main_module.day_number = int(day_snapshot.get("day") or 0)
+        main_module.day_phase = day_snapshot.get("phase")
+
+        snapshot = runtime.snapshot(group_id)
+        game = snapshot.get("game")
+        if not game:
+            return results
+        main_module.group_chat_id = int(game["group_chat_id"])
+        main_module.moderator_id = game.get("moderator_id")
+        main_module.game_running = game.get("status") in {"running", "paused"}
+        main_module.lobby_active = game.get("status") == "lobby"
+        main_module.current_turn_index = int(game.get("current_turn_index") or 0)
 
     except Exception:
         logging.exception("legacy state hydration failed during startup")
