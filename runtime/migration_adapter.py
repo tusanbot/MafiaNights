@@ -58,8 +58,6 @@ class MigrationAdapter:
                     status="active",
                 )
             except Exception:
-                # Preserve the legacy flow if the profile/player row is not yet
-                # available. The turn itself is still persisted when possible.
                 continue
 
         state = {
@@ -128,8 +126,6 @@ class MigrationAdapter:
         if status not in {"running", "paused", "turn"}:
             raise ValueError(f"شروع نوبت در وضعیت {status} ممکن نیست")
 
-        # TurnRepository accepts running/paused games; normalize an old TURN
-        # marker only through the existing state-machine boundary when needed.
         return self.game_runtime.start_turn(
             group_chat_id,
             turn_number,
