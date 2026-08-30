@@ -2,11 +2,11 @@ class ChallengeService:
     def __init__(self, challenge_repository):
         self.repo = challenge_repository
 
-    async def create(self, **data):
-        return await self.repo.create_challenge(**data)
+    def create(self, **data):
+        return self.repo.create_challenge(**data)
 
-    async def resolve(self, challenge_id, **data):
-        return await self.repo.resolve_challenge(challenge_id, **data)
+    def resolve(self, challenge_id, status):
+        return self.repo.resolve_challenge(challenge_id, status)
 
-    async def for_game(self, game_id):
-        return await self.repo.list_challenges(game_id)
+    def for_game(self, game_id):
+        return self.repo.list_challenges(game_id)
