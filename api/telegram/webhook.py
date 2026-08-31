@@ -1,4 +1,4 @@
-"""Vercel-compatible Telegram webhook entry point for MafiaNights."""
+"""Vercel-compatible WSGI Telegram webhook entry point for MafiaNights."""
 from __future__ import annotations
 
 import asyncio
@@ -10,36 +10,24 @@ _seen_updates: set[int] = set()
 _app: Any = None
 
 
-def _json_response(body: dict[str, Any], status: int = 200) -> dict[str, Any]:
-    return {"statusCode": status, "headers": {"content-type": "application/json; charset=utf-8"}, "body": json.dumps(body, ensure_ascii=False)}
+def _response(body: dict[str, Any], status: str = "200 OK") -> tuple[str, list[tuple[str, str]], bytes]:
+    payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    return status, [("Content-Type", "application/json; charset=utf-8"), ("Content-Length", str(len(payload)))], payload
 
 
-def _header(headers: Any, name: str) -> str | None:
-    if hasattr(headers, "get"):
-        return headers.get(name) or headers.get(name.lower())
-    return None
-
-
-def _authorized(headers: Any) -> bool:
+def _authorized(environ: dict[str, Any]) -> bool:
     expected = os.getenv("TELEGRAM_WEBHOOK_SECRET")
     if not expected:
         return True
-    return _header(headers, "x-telegram-bot-api-secret-token") == expected
-
-
-def _request_value(request: Any, name: str, default: Any = None) -> Any:
-    value = getattr(request, name, None)
-    if value is not None:
-        return value
-    if isinstance(request, dict):
-        return request.get(name, default)
-    return default
+    actual = environ.get("HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN")
+    return actual == expected
 
 
 def _get_application() -> Any:
     global _app
     if _app is None:
         from main_refactored_v4 import MafiaApplicationV4
+
         token = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("API_TOKEN")
         if not token:
             raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured")
@@ -49,40 +37,65 @@ def _get_application() -> Any:
 
 async def _dispatch(payload: dict[str, Any]) -> None:
     from aiogram import types
+
     app = _get_application()
     update = types.Update(**payload)
     await app.dp.process_update(update)
 
 
-def handler(request: Any) -> Any:
-    method = str(_request_value(request, "method", "GET")).upper()
+def app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
+    """WSGI application accepted by the Vercel Python runtime."""
+    method = str(environ.get("REQUEST_METHOD", "GET")).upper()
+
     if method == "GET":
-        return _json_response({"ok": True, "service": "mafia-nights-telegram"})
+        status, headers, body = _response({"ok": True, "service": "mafia-nights-telegram"})
+        start_response(status, headers)
+        return [body]
+
     if method != "POST":
-        return _json_response({"ok": False, "error": "method_not_allowed"}, 405)
-    headers = _request_value(request, "headers", {})
-    if not _authorized(headers):
-        return _json_response({"ok": False, "error": "unauthorized"}, 401)
-    raw = _request_value(request, "body", "")
-    if isinstance(raw, bytes):
-        raw = raw.decode("utf-8")
+        status, headers, body = _response({"ok": False, "error": "method_not_allowed"}, "405 Method Not Allowed")
+        start_response(status, headers)
+        return [body]
+
+    if not _authorized(environ):
+        status, headers, body = _response({"ok": False, "error": "unauthorized"}, "401 Unauthorized")
+        start_response(status, headers)
+        return [body]
+
     try:
-        payload = json.loads(raw or "{}")
-    except (TypeError, json.JSONDecodeError):
-        return _json_response({"ok": False, "error": "invalid_json"}, 400)
+        length = int(environ.get("CONTENT_LENGTH") or "0")
+    except (TypeError, ValueError):
+        length = 0
+
+    raw = environ.get("wsgi.input").read(length) if environ.get("wsgi.input") else b""
+    try:
+        payload = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw or "{}")
+    except (TypeError, UnicodeDecodeError, json.JSONDecodeError):
+        status, headers, body = _response({"ok": False, "error": "invalid_json"}, "400 Bad Request")
+        start_response(status, headers)
+        return [body]
+
     if not isinstance(payload, dict):
-        return _json_response({"ok": False, "error": "invalid_update"}, 400)
+        status, headers, body = _response({"ok": False, "error": "invalid_update"}, "400 Bad Request")
+        start_response(status, headers)
+        return [body]
+
     update_id = payload.get("update_id")
     if isinstance(update_id, int):
         if update_id in _seen_updates:
-            return _json_response({"ok": True, "duplicate": True})
+            status, headers, body = _response({"ok": True, "duplicate": True})
+            start_response(status, headers)
+            return [body]
         _seen_updates.add(update_id)
         if len(_seen_updates) > 5000:
             _seen_updates.clear()
             _seen_updates.add(update_id)
+
     asyncio.run(_dispatch(payload))
-    return _json_response({"ok": True})
+    status, headers, body = _response({"ok": True})
+    start_response(status, headers)
+    return [body]
 
 
-app = handler
-main = handler
+# Explicit alias retained for deployments/tests that import ``handler``.
+handler = app
