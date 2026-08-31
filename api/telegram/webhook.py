@@ -1,8 +1,4 @@
-"""Vercel-compatible Telegram webhook entry point.
-
-Designed for aiogram 2.25.1. The endpoint is intentionally thin: Telegram
-updates are authenticated, de-duplicated, and handed to the application.
-"""
+"""Vercel-compatible Telegram webhook entry point for MafiaNights."""
 from __future__ import annotations
 
 import asyncio
@@ -10,72 +6,93 @@ import json
 import os
 from typing import Any
 
-from main_refactored_v4 import MafiaApplicationV4
-
-
-_app: MafiaApplicationV4 | None = None
 _seen_updates: set[int] = set()
+_app: Any = None
 
 
-def _get_application() -> MafiaApplicationV4:
-    global _app
-    if _app is None:
-        token = os.getenv("API_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
-        if not token:
-            raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured")
-        _app = MafiaApplicationV4(token)
-    return _app
+def _json_response(body: dict[str, Any], status: int = 200) -> dict[str, Any]:
+    return {
+        "statusCode": status,
+        "headers": {"content-type": "application/json; charset=utf-8"},
+        "body": json.dumps(body, ensure_ascii=False),
+    }
+
+
+def _header(headers: Any, name: str) -> str | None:
+    if hasattr(headers, "get"):
+        return headers.get(name) or headers.get(name.lower())
+    return None
 
 
 def _authorized(headers: Any) -> bool:
     expected = os.getenv("TELEGRAM_WEBHOOK_SECRET")
     if not expected:
         return True
-    supplied = headers.get("x-telegram-bot-api-secret-token")
-    return supplied == expected
+    return _header(headers, "x-telegram-bot-api-secret-token") == expected
 
 
-def _response(body: dict[str, Any], status: int = 200) -> dict[str, Any]:
-    return {"statusCode": status, "headers": {"content-type": "application/json"}, "body": json.dumps(body)}
+def _request_value(request: Any, name: str, default: Any = None) -> Any:
+    value = getattr(request, name, None)
+    if value is not None:
+        return value
+    if isinstance(request, dict):
+        return request.get(name, default)
+    return default
+
+
+def _get_application() -> Any:
+    global _app
+    if _app is None:
+        from main_refactored_v4 import MafiaApplicationV4
+
+        token = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("API_TOKEN")
+        if not token:
+            raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured")
+        _app = MafiaApplicationV4(token)
+    return _app
 
 
 async def _dispatch(payload: dict[str, Any]) -> None:
+    from aiogram import types
+
     app = _get_application()
-    await app.handle_telegram_update(payload)
+    update = types.Update(**payload)
+    await app.dp.process_update(update)
 
 
 def handler(request: Any) -> Any:
-    """Vercel Python-style handler entry point.
-
-    A small synchronous wrapper is used so the project can later swap this
-    transport for another Vercel-compatible adapter without changing the core.
-    """
-    method = getattr(request, "method", None) or request.get("method", "GET")
+    """Accept one Telegram Update and dispatch it through aiogram."""
+    method = str(_request_value(request, "method", "GET")).upper()
+    if method == "GET":
+        return _json_response({"ok": True, "service": "mafia-nights-telegram"})
     if method != "POST":
-        return _response({"ok": True, "service": "mafia-nights-telegram"})
-    headers = getattr(request, "headers", None) or request.get("headers", {})
+        return _json_response({"ok": False, "error": "method_not_allowed"}, 405)
+
+    headers = _request_value(request, "headers", {})
     if not _authorized(headers):
-        return _response({"ok": False, "error": "unauthorized"}, 401)
-    raw = getattr(request, "body", None)
-    if raw is None and isinstance(request, dict):
-        raw = request.get("body", "")
+        return _json_response({"ok": False, "error": "unauthorized"}, 401)
+
+    raw = _request_value(request, "body", "")
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8")
     try:
         payload = json.loads(raw or "{}")
     except (TypeError, json.JSONDecodeError):
-        return _response({"ok": False, "error": "invalid_json"}, 400)
+        return _json_response({"ok": False, "error": "invalid_json"}, 400)
+    if not isinstance(payload, dict):
+        return _json_response({"ok": False, "error": "invalid_update"}, 400)
+
     update_id = payload.get("update_id")
     if isinstance(update_id, int):
         if update_id in _seen_updates:
-            return _response({"ok": True, "duplicate": True})
+            return _json_response({"ok": True, "duplicate": True})
         _seen_updates.add(update_id)
         if len(_seen_updates) > 5000:
             _seen_updates.clear()
             _seen_updates.add(update_id)
+
     asyncio.run(_dispatch(payload))
-    return _response({"ok": True})
+    return _json_response({"ok": True})
 
 
-# Common Vercel export spelling.
 main = handler
