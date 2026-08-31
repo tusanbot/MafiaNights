@@ -1,7 +1,13 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "routes": [
     { "src": "/api/telegram/webhook", "dest": "/api/telegram/webhook.py" },
     { "src": "/api/telegram/setup", "dest": "/api/telegram/setup.py" }
-  ]
+  ],
+  "functions": {
+    "api/telegram/*.py": {
+      "maxDuration": 30
+    }
+  }
 }
