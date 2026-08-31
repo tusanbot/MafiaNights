@@ -1,2 +1,11 @@
+[project]
+name = "mafia-nights"
+version = "0.1.0"
+description = "Mafia Nights Telegram bot"
+requires-python = ">=3.10"
+dependencies = [
+  "aiogram==2.25.1",
+]
+
 [tool.vercel]
 entrypoint = "api.telegram.webhook:app"
