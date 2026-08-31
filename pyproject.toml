@@ -11,6 +11,3 @@ dependencies = [
 override-dependencies = [
   "aiohttp==3.9.5",
 ]
-
-[tool.vercel]
-entrypoint = "api.telegram.webhook:app"
