@@ -143,7 +143,7 @@ class GameRepository(DatabaseRepository):
             if occupied:
                 raise ValueError("این صندلی قبلاً رزرو شده است")
             session.execute(
-                text("update public.mafia_game_players set seat=:seat, status='active' where id=:id"),
+                text("update public.mafia_game_players set seat=:seat, status='active', is_substitute=false where id=:id"),
                 {"id": row["id"], "seat": int(seat)})
             session.commit()
             return {"id": row["id"], "player_id": row["player_id"], "seat": int(seat)}
