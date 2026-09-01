@@ -2,7 +2,11 @@
 
 import logging
 
-import main
+# ``main.py`` was intentionally removed so Vercel would not auto-detect the
+# legacy polling entrypoint. ``main1.py`` is the preserved legacy application
+# and is the module that the persistent-runtime bridges must wrap.
+import main1 as main
+
 from player_runtime_bridge import install as install_player_bridge
 from runtime.production_bridge import install as install_persistent_bridge, startup as persistent_startup
 
