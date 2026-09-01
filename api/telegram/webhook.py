@@ -36,11 +36,18 @@ def _get_application() -> Any:
 
 
 async def _dispatch(payload: dict[str, Any]) -> None:
-    from aiogram import types
+    from aiogram import Bot, types
 
     app = _get_application()
     update = types.Update(**payload)
-    await app.dp.process_update(update)
+
+    # aiogram 2.x resolves message.answer()/bot.send_message() through
+    # the current Bot context. A custom WSGI webhook does not establish it.
+    Bot.set_current(app.bot)
+    try:
+        await app.dp.process_update(update)
+    finally:
+        Bot.set_current(None)
 
 
 def app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
