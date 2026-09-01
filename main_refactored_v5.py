@@ -1,23 +1,32 @@
 """MafiaNights production compatibility wrapper (v5).
 
-This module keeps the existing v4 implementation intact while fixing a Python
-attribute/name collision in aiogram v2 handler registration: MafiaApplication
-uses ``roles`` both as a callback handler method and as a per-group dictionary.
-
-The base constructor registers handlers before the dictionary is needed, so we
-temporarily remove the instance dictionary during registration. The bound
-handler method is then safely registered, and the dictionary is restored for
-runtime role storage.
+Loads the migration class definitions without executing the module-level app
+instances in the legacy migration files. This is required for Vercel's
+serverless webhook path, where importing v4 otherwise imports main_refactored
+and constructs an application before the compatibility shim can run.
 """
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
-from main_refactored_v4 import MafiaApplicationV4
+
+def _load_base_class() -> type:
+    source = Path(__file__).with_name("main_refactored.py").read_text(encoding="utf-8")
+    marker = "\nTOKEN = os.getenv(\"API_TOKEN\")"
+    source = source.split(marker, 1)[0]
+    namespace: dict[str, Any] = {"__name__": "mafia_nights_base_runtime"}
+    exec(compile(source, "main_refactored.py", "exec"), namespace)
+    return namespace["MafiaApplication"]
 
 
-class MafiaApplicationV5(MafiaApplicationV4):
+MafiaApplication = _load_base_class()
+
+
+class MafiaApplicationV5(MafiaApplication):
+    """Compatibility application with the roles handler/store collision fixed."""
+
     def _register_handlers(self) -> None:
         role_store: Any = getattr(self, "roles", None)
         if isinstance(role_store, dict):
