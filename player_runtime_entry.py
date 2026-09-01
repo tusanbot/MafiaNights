@@ -16,17 +16,18 @@ install_player_bridge(main)
 _bridge = install_persistent_bridge(main)
 main.player_service = player_service
 
-# Hotfixes are installed after the legacy module and both compatibility
-# bridges are initialized, so they can safely replace the broken callback
-# handlers and keep the persistent state authoritative.
+# Existing runtime callback fixes.
 from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
 
-# Lobby-flow hotfix: moderator selection is configuration only; after choosing
-# the moderator the UI must return to the game menu so scenario selection can
-# still happen before any role distribution/start action.
+# Moderator-selection fix retained for compatibility with old callback_data.
 from runtime.lobby_flow_fix import install as install_lobby_flow_fix
 install_lobby_flow_fix(main)
+
+# Full lobby UI/state flow: scenario -> moderator -> create -> lobby ->
+# join/leave/seat/reserve/management/attendance -> role distribution.
+from runtime.lobby_ui_v2 import install as install_lobby_ui_v2
+install_lobby_ui_v2(main)
 
 _original_startup = main.on_startup
 
