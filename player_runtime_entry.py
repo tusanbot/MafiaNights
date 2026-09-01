@@ -8,7 +8,6 @@ from player_runtime_bridge import install as install_player_bridge
 from runtime.production_bridge import install as install_persistent_bridge, startup as persistent_startup
 from player_service import player_service
 
-
 install_player_bridge(main)
 _bridge = install_persistent_bridge(main)
 main.player_service = player_service
@@ -22,10 +21,13 @@ install_lobby_flow_fix(main)
 from runtime.lobby_ui_v2 import install as install_lobby_ui_v2
 install_lobby_ui_v2(main)
 
-# Final lobby layer. It intentionally registers after v2 and moves its
-# handlers to the front so the new single-message lobby flow is authoritative.
 from runtime.lobby_ui_v3 import install as install_lobby_ui_v3
 install_lobby_ui_v3(main)
+
+# Exact-prefix guards must be registered last so callbacks such as
+# v3_scenario_menu are never swallowed by v3_scenario_<index>.
+from runtime.lobby_ui_v3_guards import install as install_lobby_ui_v3_guards
+install_lobby_ui_v3_guards(main)
 
 _original_startup = main.on_startup
 
