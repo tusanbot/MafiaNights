@@ -1,7 +1,6 @@
 """Production entry point for the staged persistent-runtime cut-over."""
 
 import logging
-
 import main1 as main
 
 from player_runtime_bridge import install as install_player_bridge
@@ -24,10 +23,11 @@ install_lobby_ui_v2(main)
 from runtime.lobby_ui_v3 import install as install_lobby_ui_v3
 install_lobby_ui_v3(main)
 
-# Exact-prefix guards must be registered last so callbacks such as
-# v3_scenario_menu are never swallowed by v3_scenario_<index>.
 from runtime.lobby_ui_v3_guards import install as install_lobby_ui_v3_guards
 install_lobby_ui_v3_guards(main)
+
+from runtime.lobby_management_v3 import install as install_lobby_management_v3
+install_lobby_management_v3(main)
 
 _original_startup = main.on_startup
 
@@ -38,8 +38,4 @@ async def on_startup(dp):
 
 
 if __name__ == "__main__":
-    main.executor.start_polling(
-        main.dp,
-        skip_updates=True,
-        on_startup=on_startup,
-    )
+    main.executor.start_polling(main.dp, skip_updates=True, on_startup=on_startup)
