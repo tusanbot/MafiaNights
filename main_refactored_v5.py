@@ -7,9 +7,17 @@ import types
 from pathlib import Path
 from typing import Any
 
-# Temporary single-group test configuration.
-# Keep this explicit until multi-group registration/approval is implemented.
-TEST_ACTIVE_GROUP_ID = -1002356353761
+# ==============================
+# گروه‌های مجاز اجرای ربات
+# ==============================
+# تست قبلی
+# ALLOWED_GROUP_ID = -1003080272814
+# گروه اصلی قبلی
+# ALLOWED_GROUP_ID = -1001760002160
+# گروه فعال فعلی
+ALLOWED_GROUP_ID = -1002356353761
+
+TEST_ACTIVE_GROUP_ID = ALLOWED_GROUP_ID
 
 
 def _load_base_class() -> type:
@@ -23,9 +31,9 @@ def _load_base_class() -> type:
     sys.modules[module_name] = module
     try:
         exec(compile(source, "main_refactored.py", "exec"), module.__dict__)
-        # The current migration target still uses a single hardcoded allowed
-        # group. Override it in the dynamically loaded module so the test
-        # group is active without modifying the legacy/reference file.
+        # The migration target still uses a single hardcoded allowed group.
+        # Keep the production test group explicit here so it cannot fall back
+        # to the legacy default from main_refactored.py.
         module.__dict__["ALLOWED_GROUP_ID"] = TEST_ACTIVE_GROUP_ID
         return module.__dict__["MafiaApplication"]
     except Exception:
