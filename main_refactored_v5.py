@@ -7,6 +7,10 @@ import types
 from pathlib import Path
 from typing import Any
 
+# Temporary single-group test configuration.
+# Keep this explicit until multi-group registration/approval is implemented.
+TEST_ACTIVE_GROUP_ID = -1002356353761
+
 
 def _load_base_class() -> type:
     source = Path(__file__).with_name("main_refactored.py").read_text(encoding="utf-8")
@@ -19,6 +23,10 @@ def _load_base_class() -> type:
     sys.modules[module_name] = module
     try:
         exec(compile(source, "main_refactored.py", "exec"), module.__dict__)
+        # The current migration target still uses a single hardcoded allowed
+        # group. Override it in the dynamically loaded module so the test
+        # group is active without modifying the legacy/reference file.
+        module.__dict__["ALLOWED_GROUP_ID"] = TEST_ACTIVE_GROUP_ID
         return module.__dict__["MafiaApplication"]
     except Exception:
         sys.modules.pop(module_name, None)
