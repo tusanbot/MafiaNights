@@ -24,14 +24,17 @@ def _authorized(environ: dict[str, Any]) -> bool:
 
 
 def _get_application() -> Any:
+    """Return the staged production entry, not the incomplete refactor target.
+
+    ``main_refactored.py`` is only a migration scaffold and does not define a
+    MafiaApplication class. The actual production cut-over is installed by
+    ``player_runtime_entry.py`` around the preserved legacy module ``main1``.
+    """
     global _app
     if _app is None:
-        from main_refactored_v6 import MafiaApplicationV6
+        import player_runtime_entry
 
-        token = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("API_TOKEN")
-        if not token:
-            raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured")
-        _app = MafiaApplicationV6(token)
+        _app = player_runtime_entry.main
     return _app
 
 
