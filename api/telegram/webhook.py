@@ -26,12 +26,12 @@ def _authorized(environ: dict[str, Any]) -> bool:
 def _get_application() -> Any:
     global _app
     if _app is None:
-        from main_refactored_v4 import MafiaApplicationV4
+        from main_refactored_v5 import MafiaApplicationV5
 
         token = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("API_TOKEN")
         if not token:
             raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured")
-        _app = MafiaApplicationV4(token)
+        _app = MafiaApplicationV5(token)
     return _app
 
 
@@ -97,5 +97,4 @@ def app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
     return [body]
 
 
-# Explicit alias retained for deployments/tests that import ``handler``.
 handler = app
