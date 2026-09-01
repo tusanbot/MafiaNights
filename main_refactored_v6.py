@@ -7,11 +7,10 @@ backups.
 from __future__ import annotations
 
 import os
-import sys
-import types
-from pathlib import Path
 
 from aiogram import types as aiogram_types
+
+from main_refactored import MafiaApplication
 
 # ==============================
 # گروه‌های مجاز اجرای ربات
@@ -25,31 +24,15 @@ ALLOWED_GROUP_ID = -1002356353761
 ALLOWED_GROUP_IDS = {ALLOWED_GROUP_ID}
 
 
-def _load_base_class() -> type:
-    source = Path(__file__).with_name("main_refactored.py").read_text(encoding="utf-8")
-    marker = "\nTOKEN = os.getenv(\"API_TOKEN\")"
-    source = source.split(marker, 1)[0]
-    module_name = "mafia_nights_base_runtime_v6"
-    module = types.ModuleType(module_name)
-    module.__file__ = str(Path(__file__).with_name("main_refactored.py"))
-    module.__package__ = ""
-    sys.modules[module_name] = module
-    try:
-        exec(compile(source, "main_refactored.py", "exec"), module.__dict__)
-        # Force the production group regardless of ALLOWED_GROUP_ID env var.
-        module.__dict__["ALLOWED_GROUP_ID"] = ALLOWED_GROUP_ID
-        module.__dict__["ALLOWED_GROUP_IDS"] = ALLOWED_GROUP_IDS
-        return module.__dict__["MafiaApplication"]
-    except Exception:
-        sys.modules.pop(module_name, None)
-        raise
-
-
-MafiaApplication = _load_base_class()
-
-
 class MafiaApplicationV6(MafiaApplication):
     """Production wrapper with an explicit single active group."""
+
+    def __init__(self, token: str):
+        super().__init__(token)
+        # Keep the v6 production group explicit without dynamically executing
+        # a truncated copy of main_refactored.py.
+        self.allowed_group_id = ALLOWED_GROUP_ID
+        self.allowed_group_ids = ALLOWED_GROUP_IDS
 
     def _register_handlers(self) -> None:
         role_store = getattr(self, "roles", None)
