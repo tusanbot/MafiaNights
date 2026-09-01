@@ -1,13 +1,9 @@
-"""MafiaNights production compatibility wrapper (v5).
-
-Loads the migration class definitions without executing the module-level app
-instances in the legacy migration files. This is required for Vercel's
-serverless webhook path, where importing v4 otherwise imports main_refactored
-and constructs an application before the compatibility shim can run.
-"""
+"""MafiaNights production compatibility wrapper (v5)."""
 from __future__ import annotations
 
 import os
+import sys
+import types
 from pathlib import Path
 from typing import Any
 
@@ -16,9 +12,17 @@ def _load_base_class() -> type:
     source = Path(__file__).with_name("main_refactored.py").read_text(encoding="utf-8")
     marker = "\nTOKEN = os.getenv(\"API_TOKEN\")"
     source = source.split(marker, 1)[0]
-    namespace: dict[str, Any] = {"__name__": "mafia_nights_base_runtime"}
-    exec(compile(source, "main_refactored.py", "exec"), namespace)
-    return namespace["MafiaApplication"]
+    module_name = "mafia_nights_base_runtime"
+    module = types.ModuleType(module_name)
+    module.__file__ = str(Path(__file__).with_name("main_refactored.py"))
+    module.__package__ = ""
+    sys.modules[module_name] = module
+    try:
+        exec(compile(source, "main_refactored.py", "exec"), module.__dict__)
+        return module.__dict__["MafiaApplication"]
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
 
 
 MafiaApplication = _load_base_class()
