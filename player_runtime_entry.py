@@ -22,6 +22,12 @@ main.player_service = player_service
 from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
 
+# Lobby-flow hotfix: moderator selection is configuration only; after choosing
+# the moderator the UI must return to the game menu so scenario selection can
+# still happen before any role distribution/start action.
+from runtime.lobby_flow_fix import install as install_lobby_flow_fix
+install_lobby_flow_fix(main)
+
 _original_startup = main.on_startup
 
 
