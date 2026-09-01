@@ -13,6 +13,13 @@ from runtime.production_bridge import install as install_persistent_bridge, star
 
 install_player_bridge(main)
 _bridge = install_persistent_bridge(main)
+
+# Hotfixes are installed after the legacy module and both compatibility
+# bridges are initialized, so they can safely replace the broken callback
+# handlers and keep the persistent state authoritative.
+from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
+install_game_ui_bugfixes(main)
+
 _original_startup = main.on_startup
 
 
