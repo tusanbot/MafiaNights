@@ -9,10 +9,12 @@ import main1 as main
 
 from player_runtime_bridge import install as install_player_bridge
 from runtime.production_bridge import install as install_persistent_bridge, startup as persistent_startup
+from player_service import player_service
 
 
 install_player_bridge(main)
 _bridge = install_persistent_bridge(main)
+main.player_service = player_service
 
 # Hotfixes are installed after the legacy module and both compatibility
 # bridges are initialized, so they can safely replace the broken callback
