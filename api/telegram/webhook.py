@@ -26,12 +26,12 @@ def _authorized(environ: dict[str, Any]) -> bool:
 def _get_application() -> Any:
     global _app
     if _app is None:
-        from main_refactored_v5 import MafiaApplicationV5
+        from main_refactored_v6 import MafiaApplicationV6
 
         token = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("API_TOKEN")
         if not token:
             raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured")
-        _app = MafiaApplicationV5(token)
+        _app = MafiaApplicationV6(token)
     return _app
 
 
