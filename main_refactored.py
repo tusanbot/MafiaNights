@@ -43,13 +43,16 @@ from runtime.ephemeral_recovery import EphemeralRecoveryManager
 DEFAULT_TURN_DURATION = 120
 DEFAULT_CHALLENGE_DURATION = 60
 
-# فقط این گروه اجازه اجرای بازی دارد.
-# تست قبلی:
+# ==============================
+# گروه‌های مجاز اجرای ربات
+# ==============================
+# فقط یک گروه فعال است.
+# گروه تست قبلی:
 # ALLOWED_GROUP_ID = -1003080272814
 # گروه اصلی قبلی:
 # ALLOWED_GROUP_ID = -1001760002160
 # گروه فعال فعلی:
-ALLOWED_GROUP_ID = int(os.getenv("ALLOWED_GROUP_ID", "-1002356353761"))
+ALLOWED_GROUP_ID = -1002356353761
 
 SCENARIOS_FILE = Path("scenarios.json")
 
