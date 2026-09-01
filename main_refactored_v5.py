@@ -10,11 +10,12 @@ from typing import Any
 # ==============================
 # گروه‌های مجاز اجرای ربات
 # ==============================
-# تست قبلی
+# فقط یک گروه فعال است.
+# گروه تست قبلی:
 # ALLOWED_GROUP_ID = -1003080272814
-# گروه اصلی قبلی
+# گروه اصلی قبلی:
 # ALLOWED_GROUP_ID = -1001760002160
-# گروه فعال فعلی
+# گروه فعال فعلی:
 ALLOWED_GROUP_ID = -1002356353761
 
 TEST_ACTIVE_GROUP_ID = ALLOWED_GROUP_ID
@@ -31,9 +32,6 @@ def _load_base_class() -> type:
     sys.modules[module_name] = module
     try:
         exec(compile(source, "main_refactored.py", "exec"), module.__dict__)
-        # The migration target still uses a single hardcoded allowed group.
-        # Keep the production test group explicit here so it cannot fall back
-        # to the legacy default from main_refactored.py.
         module.__dict__["ALLOWED_GROUP_ID"] = TEST_ACTIVE_GROUP_ID
         return module.__dict__["MafiaApplication"]
     except Exception:
