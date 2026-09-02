@@ -18,6 +18,14 @@ async def _safe_answer(callback: Any, text: str, show_alert: bool = False) -> No
         pass
 
 
+async def _close_challenge_buttons(callback: Any) -> None:
+    """Close the accept/reject controls immediately after a response."""
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+
 def _runtime(legacy: Any) -> PersistentChallengeRuntime:
     runtime = getattr(legacy, "_persistent_challenge_runtime", None)
     if runtime is None:
@@ -76,6 +84,10 @@ async def bridged_challenge_response(legacy: Any, callback: Any, original: Any):
         target_id = int(parts[3])
         runtime = _runtime(legacy)
         row = _find_challenge(runtime, group_id, challenger_id, target_id, "pending")
+
+        # The request is single-use. Remove its buttons before the legacy
+        # transition renders the accepted/rejected challenge state.
+        await _close_challenge_buttons(callback)
 
         if action == "accept" and row:
             pause_state = {
@@ -138,7 +150,5 @@ def install_legacy_challenge_cutover(legacy: Any) -> dict[str, bool]:
 
     result["request"] = replace("challenge_request", bridged_challenge_request)
     result["response"] = replace("handle_challenge_response", bridged_challenge_response)
-    # The legacy choice callback has historically existed in multiple forms.
-    # It remains UI-only; accepted/rejected state is persisted by the response bridge.
     result["choice"] = bool(getattr(legacy, "challenge_choice", None))
     return result
