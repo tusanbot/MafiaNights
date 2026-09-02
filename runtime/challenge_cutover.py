@@ -26,6 +26,44 @@ async def _close_challenge_buttons(callback: Any) -> None:
         pass
 
 
+async def _hydrate_player_names(legacy: Any, *user_ids: int) -> None:
+    """Fill legacy.players from Telegram when runtime state lacks a name.
+
+    Challenge callbacks carry stable Telegram user IDs, while the legacy
+    ``players`` mapping can be stale or incomplete after a restart/runtime
+    migration. Hydrating the names here keeps the existing rendering code
+    compatible without changing game state semantics.
+    """
+    players = getattr(legacy, "players", None)
+    if not isinstance(players, dict):
+        return
+    bot = getattr(legacy, "bot", None)
+    group_id = getattr(legacy, "group_chat_id", None)
+    if bot is None or not group_id:
+        return
+
+    for raw_id in user_ids:
+        try:
+            user_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        try:
+            current = players.get(user_id)
+        except Exception:
+            current = None
+        if current:
+            continue
+        try:
+            member = await bot.get_chat_member(int(group_id), user_id)
+            name = getattr(member.user, "full_name", None) or getattr(member.user, "first_name", None)
+            if name:
+                players[user_id] = name
+        except Exception:
+            # Name hydration is best-effort; the legacy handler still owns
+            # the final fallback text if Telegram cannot resolve the user.
+            continue
+
+
 def _runtime(legacy: Any) -> PersistentChallengeRuntime:
     runtime = getattr(legacy, "_persistent_challenge_runtime", None)
     if runtime is None:
@@ -61,6 +99,11 @@ async def bridged_challenge_request(legacy: Any, callback: Any, original: Any):
         challenger_id = int(callback.from_user.id)
         if not target_id or challenger_id == int(target_id):
             return await original(callback)
+
+        # Make the legacy renderer see real Telegram names even when the
+        # in-memory player map was not restored after a runtime transition.
+        await _hydrate_player_names(legacy, challenger_id, int(target_id))
+
         runtime = _runtime(legacy)
         existing = _find_challenge(runtime, group_id, challenger_id, int(target_id), "pending")
         if not existing:
@@ -82,6 +125,10 @@ async def bridged_challenge_response(legacy: Any, callback: Any, original: Any):
         timing = parts[1] if action == "accept" else None
         challenger_id = int(parts[2])
         target_id = int(parts[3])
+
+        # Hydrate names before the legacy handler builds its response text.
+        await _hydrate_player_names(legacy, challenger_id, target_id)
+
         runtime = _runtime(legacy)
         row = _find_challenge(runtime, group_id, challenger_id, target_id, "pending")
 
