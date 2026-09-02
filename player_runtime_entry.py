@@ -54,6 +54,12 @@ install_final_turn_challenge_v3(main)
 from runtime.final_turn_challenge_v4 import install as install_final_turn_challenge_v4
 install_final_turn_challenge_v4(main)
 
+# V5 is the terminal Next authority. It preserves the V4 permission model,
+# but calls the original main1 next_turn directly so stale V3 seat validation
+# cannot reject an accepted AFTER challenge.
+from runtime.final_next_authority_v5 import install as install_final_next_authority_v5
+install_final_next_authority_v5(main)
+
 # Seat selection visual polish must be installed after the authoritative lobby
 # layer so its seat_menu callback is the one users actually receive.
 from runtime.seat_emoji_patch import install as install_seat_emoji_patch
