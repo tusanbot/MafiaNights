@@ -43,15 +43,49 @@ async def _next_keyboard(main, message_id, seat):
 
 
 async def _refresh_name(main, uid):
-    # Telegram is the source of truth for the visible name. The nickname
-    # manager remains authoritative inside display_name().
     try:
         member = await main.bot.get_chat_member(main.group_chat_id, uid)
         full_name = getattr(getattr(member, "user", None), "full_name", None)
         if full_name and isinstance(getattr(main, "players", None), dict):
             main.players[uid] = full_name
+        return full_name
     except Exception:
-        pass
+        return None
+
+
+async def _is_admin(main, uid):
+    if not getattr(main, "group_chat_id", None):
+        return False
+    try:
+        admins = await main.bot.get_chat_administrators(main.group_chat_id)
+        return any(a.user.id == uid for a in admins)
+    except Exception:
+        return False
+
+
+def _active_turn_seat(main):
+    """Return the seat whose player owns the current turn, including challenges."""
+    if getattr(main, "challenge_mode", False):
+        # A challenge turn belongs to the challenger seat. The existing runtime
+        # tracks those seats explicitly, so use the sole active challenger when
+        # available. Fall back to the current normal turn only if necessary.
+        active = list(getattr(main, "active_challenger_seats", set()) or set())
+        if len(active) == 1:
+            return active[0]
+    try:
+        return main.turn_order[main.current_turn_index]
+    except Exception:
+        return None
+
+
+def _actor_can_next(main, uid, active_seat):
+    """Only the active turn owner OR the selected moderator may press Next."""
+    if uid == getattr(main, "moderator_id", None):
+        return True
+    if active_seat is None:
+        return False
+    owner_uid = (getattr(main, "player_slots", {}) or {}).get(active_seat)
+    return uid == owner_uid
 
 
 def install(main):
@@ -60,9 +94,6 @@ def install(main):
         logging.error("V4: callback registry unavailable")
         return
 
-    # Refresh the actual Telegram name before every turn. This fixes cases where
-    # the mention resolves correctly but the stored display text is just a
-    # generic placeholder such as 'بازیکن'.
     start = getattr(main, "start_turn", None)
     if start is not None and not getattr(start, "_v4_name_refresh", False):
         @wraps(start)
@@ -74,9 +105,6 @@ def install(main):
         start_turn_v4._v4_name_refresh = True
         main.start_turn = start_turn_v4
 
-    # Reject/accept must never leave the challenge button on the active turn.
-    # V3 intentionally consumes reject with CancelHandler, so catch that and
-    # restore only the normal Next button.
     item = _find(registry, "handle_challenge_response")
     if item is not None:
         original = _handler(item)
@@ -105,15 +133,11 @@ def install(main):
                     if timing == "after":
                         await _next_keyboard(main, old_turn_id, target_seat)
                     elif timing == "before":
-                        # Before-challenge starts a new turn; the old message is
-                        # obsolete and should not remain visible.
                         await _delete(main, old_turn_id)
                 return result
             response_v4._v4_response = True
             item.handler = response_v4
 
-    # Next: enforce moderator/admin, delete only the message that was clicked,
-    # and never touch the message created by the subsequent start_turn call.
     item = _find(registry, "next_turn")
     if item is not None:
         original = _handler(item)
@@ -121,39 +145,30 @@ def install(main):
             @wraps(original)
             async def next_v4(callback, _original=original):
                 uid = getattr(getattr(callback, "from_user", None), "id", None)
-                allowed = uid == getattr(main, "moderator_id", None)
-                if not allowed:
-                    try:
-                        admins = await main.bot.get_chat_administrators(main.group_chat_id)
-                        allowed = any(a.user.id == uid for a in admins)
-                    except Exception:
-                        allowed = False
-                if not allowed:
-                    await callback.answer("⛔ فقط گرداننده یا مدیر گروه می‌تواند نکست بزند.", show_alert=True)
+                active_seat = _active_turn_seat(main)
+
+                # IMPORTANT: Telegram group administrator status is NOT a Next
+                # permission. Only the configured moderator or the player who
+                # owns the active turn may advance it. This prevents an admin
+                # who is merely a player from skipping everybody else's turns.
+                if not _actor_can_next(main, uid, active_seat):
+                    await callback.answer("⛔ فقط صاحب نوبت یا گرداننده می‌تواند نکست بزند.", show_alert=True)
+                    raise CancelHandler()
+
+                try:
+                    clicked_seat = int(str(callback.data).split("_", 1)[1])
+                except Exception:
+                    await callback.answer("⚠️ نوبت نامعتبر است.", show_alert=True)
+                    raise CancelHandler()
+
+                if active_seat is not None and clicked_seat != active_seat:
+                    await callback.answer("⚠️ این نوبت دیگر فعال نیست.", show_alert=True)
                     raise CancelHandler()
 
                 clicked_id = getattr(callback.message, "message_id", None)
                 current_id = getattr(main, "current_turn_message_id", None)
                 old_id = current_id or clicked_id
 
-                # The callback is valid only if it belongs to the active turn,
-                # unless it is a challenge turn currently in progress.
-                try:
-                    clicked_seat = int(str(callback.data).split("_", 1)[1])
-                except Exception:
-                    await callback.answer("⚠️ نوبت نامعتبر است.", show_alert=True)
-                    raise CancelHandler()
-                if not getattr(main, "challenge_mode", False):
-                    try:
-                        expected = main.turn_order[main.current_turn_index]
-                    except Exception:
-                        expected = None
-                    if expected is not None and clicked_seat != expected:
-                        await callback.answer("⚠️ این نوبت دیگر فعال نیست.", show_alert=True)
-                        raise CancelHandler()
-
-                # Do not delete anything after _original returns: start_turn has
-                # already replaced current_turn_message_id with the new message.
                 await _delete(main, old_id)
                 main.current_turn_message_id = None
                 return await _original(callback)
@@ -166,4 +181,4 @@ def install(main):
             registry.insert(0, registry.pop(registry.index(item)))
 
     main._final_turn_challenge_v4 = True
-    logging.info("V4 turn/challenge lifecycle installed")
+    logging.info("V4 turn/challenge lifecycle installed: Next = active player or moderator only")
