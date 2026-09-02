@@ -7,11 +7,14 @@ from functools import wraps
 # Setup actions must be admin-only because a moderator does not exist yet.
 _ADMIN_ONLY_EXACT = {
     "lv6_new",
+    "new_game",
     "manage_game",
     "manage_scenarios",
     "add_scenario",
     "remove_scenario",
     "back_main",
+    "choose_scenario",
+    "choose_moderator",
 }
 
 _ADMIN_ONLY_PREFIXES = (
@@ -22,9 +25,9 @@ _ADMIN_ONLY_PREFIXES = (
     "moderator_",
 )
 
-# Game/lobby management may be performed by either a current moderator or a
-# group administrator. This is also the security boundary for stale Telegram
-# messages containing legacy callback_data.
+# Game/lobby management may be performed by either the current moderator or a
+# group administrator. This is the execution-time security boundary for both
+# fresh and stale Telegram inline keyboards.
 _ADMIN_OR_MOD_EXACT = {
     "lv6_manage",
     "lv6_cancel",
@@ -41,6 +44,7 @@ _ADMIN_OR_MOD_EXACT = {
     "start_new_day",
     "speaker_auto",
     "speaker_manual",
+    "choose_head",
     "challenge_toggle",
     "lv6_back_s",
 }
@@ -51,13 +55,23 @@ _ADMIN_OR_MOD_PREFIXES = (
 )
 
 
-def install(main):
-    """Add a final authorization boundary around every registered callback.
+def _callback_of(item):
+    """Support both aiogram HandlerObj instances and dict-style registries."""
+    callback = getattr(item, "callback", None)
+    if callback is None and isinstance(item, dict):
+        callback = item.get("callback")
+    return callback
 
-    UI visibility is not a security boundary: old Telegram messages can still
-    contain legacy callback_data. Therefore authorization is enforced at
-    callback execution time, after all legacy/runtime handlers are registered.
-    """
+
+def _set_callback(item, callback):
+    if hasattr(item, "callback"):
+        item.callback = callback
+    elif isinstance(item, dict):
+        item["callback"] = callback
+
+
+def install(main):
+    """Add a final authorization boundary around every registered callback."""
     dp = main.dp
     bot = main.bot
     registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
@@ -82,6 +96,7 @@ def install(main):
             admins = await bot.get_chat_administrators(group_id)
             return any(a.user.id == user_id for a in admins)
         except Exception:
+            logging.exception("callback authorization: admin lookup failed")
             return False
 
     async def allowed(callback) -> tuple[bool, str]:
@@ -107,12 +122,9 @@ def install(main):
             return True, ""
         return False, "⛔ فقط گرداننده یا مدیر گروه به این گزینه دسترسی دارند."
 
-    # Wrap each callback in-place so we preserve its original filters and
-    # handler ordering. A separate catch-all handler cannot safely "continue"
-    # to the next aiogram handler after authorization.
     wrapped_count = 0
-    for item in registry:
-        callback_fn = getattr(item, "callback", None)
+    for item in list(registry):
+        callback_fn = _callback_of(item)
         if callback_fn is None or getattr(callback_fn, "_callback_auth_guard", False):
             continue
 
@@ -126,7 +138,7 @@ def install(main):
 
         guarded._callback_auth_guard = True
         guarded._callback_auth_original = callback_fn
-        item.callback = guarded
+        _set_callback(item, guarded)
         wrapped_count += 1
 
     main._callback_authorization_installed = True
