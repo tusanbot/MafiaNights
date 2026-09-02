@@ -45,10 +45,16 @@ from runtime.challenge_authority import install as install_challenge_authority
 install_challenge_authority(main)
 
 # Security boundary: Telegram users can keep old inline-keyboard messages after
-# a deployment. Enforce admin/moderator authorization on callback execution,
-# regardless of which legacy handler registered the callback.
+# a deployment. Enforce admin/moderator authorization on callback execution.
 from runtime.callback_authorization import install as install_callback_authorization
 install_callback_authorization(main)
+
+# IMPORTANT: aiogram 2.25.1 stores HandlerObj.handler, not HandlerObj.callback.
+# The historical patch layers above predate that detail and therefore cannot
+# reliably reorder/replace handlers. This finalizer runs last and operates on
+# the real aiogram registry field, making the production behavior deterministic.
+from runtime.final_runtime_guard import install as install_final_runtime_guard
+install_final_runtime_guard(main)
 
 _original_startup = main.on_startup
 
