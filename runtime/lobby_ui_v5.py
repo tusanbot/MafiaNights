@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 def install(main):
     dp, bot = main.dp, main.bot
+    original_main_menu_keyboard = main.main_menu_keyboard
 
     def front(fn):
         handlers = getattr(dp.callback_query_handlers, "handlers", [])
@@ -17,8 +18,7 @@ def install(main):
 
     def active_game():
         try:
-            gid = int(main.group_chat_id)
-            return main.persistent_runtime.state.active_game(gid)
+            return main.persistent_runtime.state.active_game(int(main.group_chat_id))
         except Exception:
             return None
 
@@ -41,15 +41,10 @@ def install(main):
         return f'<a href="tg://user?id={int(uid)}"><b>{html.escape(name(uid, fallback))}</b></a>'
 
     async def edit(message, text, markup=None):
-        """Edit the current bot message only. Never send a replacement message."""
         try:
             await message.edit_text(text, reply_markup=markup, parse_mode="HTML")
         except Exception as exc:
             logging.warning("lobby message edit failed: %s", exc)
-            try:
-                await message.edit_reply_markup(reply_markup=markup)
-            except Exception:
-                logging.exception("lobby message could not be updated")
         return message.message_id
 
     def scenario_kb():
@@ -58,30 +53,26 @@ def install(main):
             cfg = cfg or {}
             roles = cfg.get("roles") or []
             minimum = int(cfg.get("min_players") or 1)
-            kb.add(InlineKeyboardButton(
-                f"📝 {scenario} ({minimum}-{len(roles)})",
-                callback_data=f"lv5_scenario:{i}",
-            ))
+            kb.add(InlineKeyboardButton(f"📝 {scenario} ({minimum}-{len(roles)})", callback_data=f"lv5_scenario:{i}"))
         kb.add(InlineKeyboardButton("⬅️ بازگشت", callback_data="lv5_back_main"))
         return kb
 
     async def moderator_kb():
         kb = InlineKeyboardMarkup(row_width=1)
         for admin in await bot.get_chat_administrators(main.group_chat_id):
-            kb.add(InlineKeyboardButton(
-                name(admin.user.id, admin.user.full_name),
-                callback_data=f"lv5_moderator:{admin.user.id}",
-            ))
+            kb.add(InlineKeyboardButton(name(admin.user.id, admin.user.full_name), callback_data=f"lv5_moderator:{admin.user.id}"))
         kb.add(InlineKeyboardButton("⬅️ بازگشت به سناریو", callback_data="lv5_back_scenario"))
         return kb
 
     def main_menu():
-        """Keep the original menu (including راهنما), remove لیست جدید, retarget بازی جدید."""
+        # Reuse the original menu so راهنما and every legitimate existing item remain.
+        # Only لیست جدید is removed and بازی جدید is redirected to the unified flow.
         try:
-            original = main.main_menu_keyboard()
+            original = original_main_menu_keyboard()
         except Exception:
             original = InlineKeyboardMarkup()
         out = InlineKeyboardMarkup(row_width=2)
+        found_new = False
         for row in getattr(original, "inline_keyboard", []):
             new_row = []
             for button in row:
@@ -90,11 +81,12 @@ def install(main):
                     continue
                 if "بازی جدید" in text:
                     new_row.append(InlineKeyboardButton("🎮 بازی جدید", callback_data="lv5_new_game"))
+                    found_new = True
                 else:
                     new_row.append(button)
             if new_row:
                 out.row(*new_row)
-        if not any(getattr(b, "callback_data", None) == "lv5_new_game" for r in out.inline_keyboard for b in r):
+        if not found_new:
             out.add(InlineKeyboardButton("🎮 بازی جدید", callback_data="lv5_new_game"))
         return out
 
@@ -106,15 +98,7 @@ def install(main):
         players = [r for r in rows if not r.get("is_substitute")]
         reserve = [r for r in rows if r.get("is_substitute")]
         max_seats = int(main.MAX_SEATS or len((main.scenarios.get(scenario) or {}).get("roles", [])))
-        lines = [
-            "🎮 <b>لابی Mafia Nights</b>",
-            "",
-            f"📝 سناریو: <b>{html.escape(str(scenario))}</b>",
-            f"🎩 گرداننده: {mention(moderator) if moderator else '---'}",
-            f"👥 بازیکنان: <b>{len(players)}/{max_seats}</b>",
-            "",
-            "📋 <b>بازیکنان داخل بازی</b>",
-        ]
+        lines = ["🎮 <b>لابی Mafia Nights</b>", "", f"📝 سناریو: <b>{html.escape(str(scenario))}</b>", f"🎩 گرداننده: {mention(moderator) if moderator else '---'}", f"👥 بازیکنان: <b>{len(players)}/{max_seats}</b>", "", "📋 <b>بازیکنان داخل بازی</b>"]
         if players:
             for row in sorted(players, key=lambda r: (r.get("seat") is None, r.get("seat") or 999)):
                 seat = row.get("seat")
@@ -134,7 +118,6 @@ def install(main):
         max_seats = int(main.MAX_SEATS or 0)
         full = max_seats > 0 and len(players) >= max_seats and all(r.get("seat") is not None for r in players)
         kb = InlineKeyboardMarkup(row_width=2)
-        # Telegram group inline keyboards are shared by everyone; use one state-neutral toggle.
         kb.add(InlineKeyboardButton("🎮 ورود / خروج از بازی", callback_data="lv5_toggle_player"))
         kb.add(InlineKeyboardButton("💺 انتخاب صندلی", callback_data="lv5_choose_seat"))
         if full:
@@ -178,7 +161,6 @@ def install(main):
             return
         main.selected_scenario = selected
         main.MAX_SEATS = len(cfg.get("roles") or [])
-        # IMPORTANT: do not create a persistent game here. Creation happens after moderator selection.
         await edit(c.message, f"📝 سناریو: <b>{html.escape(selected)}</b>\n\n🎩 <b>انتخاب گرداننده</b>", await moderator_kb())
         await c.answer("✅ سناریو انتخاب شد")
 
@@ -286,7 +268,6 @@ def install(main):
         except Exception:
             await c.answer("❌ انتخاب صندلی انجام نشد.", show_alert=True)
             return
-        main.player_slots = {int(r.get("seat")): int(r["player_id"]) for r in snapshot().get("players", []) if not r.get("is_substitute") and r.get("seat") is not None}
         await render_lobby(c.message)
         await c.answer(f"✅ صندلی {seat_no} انتخاب شد")
 
@@ -383,6 +364,5 @@ def install(main):
         dp.register_callback_query_handler(fn, flt)
         front(fn)
 
-    # Preserve the existing main menu, including راهنما, while removing لیست جدید.
     main.main_menu_keyboard = main_menu
     logging.info("Single authoritative lobby UI v5 installed")
