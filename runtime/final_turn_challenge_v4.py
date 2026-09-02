@@ -53,22 +53,9 @@ async def _refresh_name(main, uid):
         return None
 
 
-async def _is_admin(main, uid):
-    if not getattr(main, "group_chat_id", None):
-        return False
-    try:
-        admins = await main.bot.get_chat_administrators(main.group_chat_id)
-        return any(a.user.id == uid for a in admins)
-    except Exception:
-        return False
-
-
 def _active_turn_seat(main):
-    """Return the seat whose player owns the current turn, including challenges."""
+    """Return the seat whose player owns the current actionable turn."""
     if getattr(main, "challenge_mode", False):
-        # A challenge turn belongs to the challenger seat. The existing runtime
-        # tracks those seats explicitly, so use the sole active challenger when
-        # available. Fall back to the current normal turn only if necessary.
         active = list(getattr(main, "active_challenger_seats", set()) or set())
         if len(active) == 1:
             return active[0]
@@ -86,6 +73,15 @@ def _actor_can_next(main, uid, active_seat):
         return False
     owner_uid = (getattr(main, "player_slots", {}) or {}).get(active_seat)
     return uid == owner_uid
+
+
+def _seat_for_uid(main, uid):
+    if uid is None:
+        return None
+    return next(
+        (seat for seat, player_uid in (getattr(main, "player_slots", {}) or {}).items() if player_uid == uid),
+        None,
+    )
 
 
 def install(main):
@@ -114,12 +110,20 @@ def install(main):
                 data = str(getattr(callback, "data", "") or "")
                 parts = data.split("_")
                 target_id = None
+                challenger_id = None
                 if len(parts) >= 3:
                     try:
                         target_id = int(parts[-1])
                     except Exception:
                         pass
-                target_seat = next((s for s, uid in (getattr(main, "player_slots", {}) or {}).items() if uid == target_id), None)
+                if len(parts) >= 4 and parts[0] == "accept":
+                    try:
+                        challenger_id = int(parts[2])
+                    except Exception:
+                        pass
+
+                target_seat = _seat_for_uid(main, target_id)
+                challenger_seat = _seat_for_uid(main, challenger_id)
                 old_turn_id = getattr(main, "current_turn_message_id", None)
                 try:
                     result = await _original(callback)
@@ -129,9 +133,19 @@ def install(main):
                     raise
 
                 if parts and parts[0] == "accept" and target_seat is not None:
+                    main.challenge_target_locked.add(target_seat)
                     timing = parts[1] if len(parts) > 1 else ""
                     if timing == "after":
-                        await _next_keyboard(main, old_turn_id, target_seat)
+                        # An accepted AFTER challenge transfers the actionable
+                        # turn to the challenger. The old implementation put
+                        # Next back on the target seat, so the callback was
+                        # rejected as "this turn is no longer active".
+                        next_seat = challenger_seat or _active_turn_seat(main)
+                        await _next_keyboard(main, old_turn_id, next_seat)
+                        # Keep the state aligned with the keyboard when the
+                        # legacy handler leaves challenge_mode enabled.
+                        if next_seat is not None:
+                            main.active_challenger_seats = {next_seat}
                     elif timing == "before":
                         await _delete(main, old_turn_id)
                 return result
@@ -147,10 +161,6 @@ def install(main):
                 uid = getattr(getattr(callback, "from_user", None), "id", None)
                 active_seat = _active_turn_seat(main)
 
-                # IMPORTANT: Telegram group administrator status is NOT a Next
-                # permission. Only the configured moderator or the player who
-                # owns the active turn may advance it. This prevents an admin
-                # who is merely a player from skipping everybody else's turns.
                 if not _actor_can_next(main, uid, active_seat):
                     await callback.answer("⛔ فقط صاحب نوبت یا گرداننده می‌تواند نکست بزند.", show_alert=True)
                     raise CancelHandler()
