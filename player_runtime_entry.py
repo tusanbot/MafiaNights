@@ -25,6 +25,7 @@ install_lobby_legacy_bridge(main)
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 
+authoritative_game_flow = None
 from runtime.game_flow_authority import install as install_game_flow_authority
 authoritative_game_flow = install_game_flow_authority(main)
 
@@ -39,17 +40,24 @@ install_callback_authorization(main)
 from runtime.final_game_flow_authority import install as install_final_game_flow_authority
 install_final_game_flow_authority(main)
 
-# Security boundary must run last so the final callbacks are also protected.
+# Security boundary must run before the final lifecycle layer so the latter can
+# apply the definitive actor checks and remain the last callback authority.
 from runtime.final_runtime_guard import install as install_final_runtime_guard
 install_final_runtime_guard(main)
 
-# V3 captures the real turn message and fixes challenge lifecycle details.
+# V3 captures the real turn message, repairs generic turn names, and handles
+# challenge lifecycle cleanup.
 from runtime.final_turn_challenge_v3 import install as install_final_turn_challenge_v3
 install_final_turn_challenge_v3(main)
 
 # V4 is the final lifecycle boundary for names, Next and challenge keyboards.
 from runtime.final_turn_challenge_v4 import install as install_final_turn_challenge_v4
 install_final_turn_challenge_v4(main)
+
+# Seat selection visual polish must be installed after the authoritative lobby
+# layer so its seat_menu callback is the one users actually receive.
+from runtime.seat_emoji_patch import install as install_seat_emoji_patch
+install_seat_emoji_patch(main)
 
 _original_startup = main.on_startup
 
