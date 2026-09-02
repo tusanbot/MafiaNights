@@ -43,10 +43,13 @@ install_final_game_flow_authority(main)
 from runtime.final_runtime_guard import install as install_final_runtime_guard
 install_final_runtime_guard(main)
 
-# V3 is intentionally installed after the security guard: it fixes the last
-# turn/challenge lifecycle details without reintroducing the old callback stack.
+# V3 captures the real turn message and fixes challenge lifecycle details.
 from runtime.final_turn_challenge_v3 import install as install_final_turn_challenge_v3
 install_final_turn_challenge_v3(main)
+
+# V4 is the final lifecycle boundary for names, Next and challenge keyboards.
+from runtime.final_turn_challenge_v4 import install as install_final_turn_challenge_v4
+install_final_turn_challenge_v4(main)
 
 _original_startup = main.on_startup
 
