@@ -50,7 +50,10 @@ async def _dispatch(payload: dict[str, Any]) -> None:
     try:
         await app.dp.process_update(update)
     finally:
-        Bot.set_current(None)
+        # aiogram 2.x rejects Bot.set_current(None). reset_current() is the
+        # supported way to clear the context and prevents a successful update
+        # from ending with a secondary TypeError/500 response.
+        Bot.reset_current()
 
 
 def app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
