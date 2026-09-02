@@ -18,6 +18,10 @@ install_game_ui_bugfixes(main)
 from runtime.lobby_ui_v6 import install as install_lobby_ui
 install_lobby_ui(main)
 
+# Exact-message commands must run before the legacy catch-all message handler.
+from runtime.lobby_ui_v7_patch import install as install_lobby_v7_patch
+install_lobby_v7_patch(main)
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
