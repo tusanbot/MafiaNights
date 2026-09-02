@@ -34,6 +34,16 @@ install_lobby_legacy_bridge(main)
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 
+# Remove conflicting legacy transition handlers so the cleanup callbacks are
+# actually authoritative for the exact callback_data used by main1.py.
+from runtime.game_flow_authority import install as install_game_flow_authority
+authoritative_game_flow = install_game_flow_authority(main)
+
+# Challenge callbacks are similarly made authoritative after the persistence
+# bridge has wrapped the legacy handlers. This also hydrates Telegram names.
+from runtime.challenge_authority import install as install_challenge_authority
+install_challenge_authority(main)
+
 # Security boundary: Telegram users can keep old inline-keyboard messages after
 # a deployment. Enforce admin/moderator authorization on callback execution,
 # regardless of which legacy handler registered the callback.
