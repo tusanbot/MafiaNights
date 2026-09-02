@@ -28,6 +28,12 @@ install_lobby_v7_patch(main)
 from runtime.lobby_legacy_bridge import install as install_lobby_legacy_bridge
 install_lobby_legacy_bridge(main)
 
+# Final UI ownership layer: role distribution, round transitions, next-turn,
+# night/day transitions and challenge-button lifecycle are cleaned here after
+# every legacy/persistence bridge has registered its handlers.
+from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
+install_game_flow_ui_v2(main)
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
