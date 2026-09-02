@@ -34,6 +34,12 @@ install_lobby_legacy_bridge(main)
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 
+# Security boundary: Telegram users can keep old inline-keyboard messages after
+# a deployment. Enforce admin/moderator authorization on callback execution,
+# regardless of which legacy handler registered the callback.
+from runtime.callback_authorization import install as install_callback_authorization
+install_callback_authorization(main)
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
