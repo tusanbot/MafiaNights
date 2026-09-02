@@ -20,14 +20,6 @@ def _find(registry, name):
     return None
 
 
-def _is_turn_keyboard(message):
-    """Return True when an outgoing message contains the real turn controls."""
-    markup = getattr(message, "reply_markup", None)
-    rows = getattr(markup, "inline_keyboard", None) or []
-    data = [str(getattr(btn, "callback_data", "") or "") for row in rows for btn in row]
-    return any(x.startswith("next_") for x in data) or any(x.startswith("challenge_request_") for x in data)
-
-
 async def _delete_message(main, message_id):
     if not message_id or not getattr(main, "group_chat_id", None):
         return
@@ -97,16 +89,35 @@ def _name(main, uid):
 
 
 async def _hydrate_name(main, uid):
-    """Refresh generic/stale player names from Telegram without touching nicknames."""
+    """Refresh the visible player name from Telegram without overwriting nicknames."""
     try:
         member = await main.bot.get_chat_member(main.group_chat_id, uid)
         full_name = getattr(getattr(member, "user", None), "full_name", None)
         if full_name and isinstance(getattr(main, "players", None), dict):
+            # Only replace placeholders here; nickname resolution remains in
+            # display_name(). V4 performs an unconditional refresh as well.
             current = main.players.get(uid)
             if not current or str(current).strip() in {"بازیکن", "❓", "None"}:
                 main.players[uid] = full_name
+            return full_name
     except Exception:
         pass
+    return None
+
+
+def _turn_text_fix(text, visible_name):
+    """Replace only the generic player label in a freshly-created turn message."""
+    if not text or not visible_name:
+        return text
+    value = str(text)
+    # Legacy start_turn uses the literal generic label in some paths. Replace
+    # only standalone labels; do not touch user names containing this word.
+    for old in ("<b>بازیکن</b>", "بازیکن:", "بازیکن —", "بازیکن -"):
+        if old in value:
+            value = value.replace(old, old.replace("بازیکن", html.escape(str(visible_name))), 1)
+    # The simplest legacy form is a line containing just "بازیکن".
+    value = value.replace("\nبازیکن\n", f"\n{html.escape(str(visible_name))}\n", 1)
+    return value
 
 
 async def _capture_start_turn_message(main, original, seat, duration, is_challenge):
@@ -119,7 +130,7 @@ async def _capture_start_turn_message(main, original, seat, duration, is_challen
         try:
             chat_id = kwargs.get("chat_id", args[0] if args else None)
             if chat_id == main.group_chat_id and _is_turn_keyboard(msg):
-                captured.append(msg.message_id)
+                captured.append(msg)
         except Exception:
             pass
         return msg
@@ -131,9 +142,31 @@ async def _capture_start_turn_message(main, original, seat, duration, is_challen
         main.bot.send_message = original_send
 
     if captured:
-        # start_turn normally emits exactly one turn message; keep the newest one.
-        main.current_turn_message_id = captured[-1]
+        msg = captured[-1]
+        main.current_turn_message_id = msg.message_id
+        uid = (getattr(main, "player_slots", {}) or {}).get(seat)
+        if uid:
+            visible_name = _name(main, uid)
+            fixed = _turn_text_fix(getattr(msg, "text", None), visible_name)
+            if fixed and fixed != getattr(msg, "text", None):
+                try:
+                    await main.bot.edit_message_text(
+                        chat_id=main.group_chat_id,
+                        message_id=msg.message_id,
+                        text=fixed,
+                        parse_mode="HTML",
+                        reply_markup=getattr(msg, "reply_markup", None),
+                    )
+                except Exception:
+                    logging.debug("V3: could not repair generic turn name", exc_info=True)
     return result
+
+
+def _is_turn_keyboard(message):
+    markup = getattr(message, "reply_markup", None)
+    rows = getattr(markup, "inline_keyboard", None) or []
+    data = [str(getattr(btn, "callback_data", "") or "") for row in rows for btn in row]
+    return any(x.startswith("next_") for x in data) or any(x.startswith("challenge_request_") for x in data)
 
 
 def install(main):
@@ -148,9 +181,6 @@ def install(main):
     if not isinstance(getattr(main, "challenge_request_messages", None), dict):
         main.challenge_request_messages = {}
 
-    # Wrap the actual start_turn function once. This fixes the missing
-    # current_turn_message_id left by the legacy implementation and also fixes
-    # generic "بازیکن" labels when Telegram has the real display name.
     original_start_turn = getattr(main, "start_turn", None)
     if original_start_turn is not None and not getattr(original_start_turn, "_v3_capture", False):
         @wraps(original_start_turn)
@@ -162,7 +192,6 @@ def install(main):
         start_turn_v3._v3_capture = True
         main.start_turn = start_turn_v3
 
-    # Reset target locks at the beginning of every new round.
     item = _find(registry, "start_round_clean")
     if item is not None:
         original = _handler(item)
@@ -175,8 +204,6 @@ def install(main):
             start_round_v3._v3_round_reset = True
             item.handler = start_round_v3
 
-    # Challenge request: one challenge per challenger and one resolved request
-    # per target. Both checks happen before the legacy handler can create UI.
     item = _find(registry, "challenge_request")
     if item is not None:
         original = _handler(item)
@@ -194,8 +221,6 @@ def install(main):
             challenge_request_v3._v3_challenge_request = True
             item.handler = challenge_request_v3
 
-    # Challenge response: handle reject explicitly, close every request for the
-    # target, and remove the challenge controls from the actual turn message.
     item = _find(registry, "handle_challenge_response")
     if item is not None:
         original = _handler(item)
@@ -208,12 +233,10 @@ def install(main):
 
                 if action == "reject" and len(parts) == 3:
                     try:
-                        challenger_id = int(parts[1])
-                        target_id = int(parts[2])
+                        challenger_id = int(parts[1]); target_id = int(parts[2])
                     except ValueError:
                         await callback.answer("⚠️ داده چالش نامعتبر است.", show_alert=True)
                         raise CancelHandler()
-
                     target_seat = next((s for s, uid in (getattr(main, "player_slots", {}) or {}).items() if uid == target_id), None)
                     if target_seat is None:
                         await callback.answer("⚠️ بازیکن هدف یافت نشد.", show_alert=True)
@@ -224,19 +247,13 @@ def install(main):
                     if challenger_id not in getattr(main, "challenge_requests", {}).get(target_seat, {}):
                         await callback.answer("⚠️ این درخواست دیگر فعال نیست.", show_alert=True)
                         raise CancelHandler()
-
-                    target_name = _name(main, target_id)
-                    challenger_name = _name(main, challenger_id)
+                    target_name = _name(main, target_id); challenger_name = _name(main, challenger_id)
                     turn_id = getattr(main, "current_turn_message_id", None)
                     await _delete_request_messages(main, target_seat)
                     main.challenge_target_locked.add(target_seat)
-                    await _remove_turn_keyboard(main, turn_id)
+                    await _replace_turn_keyboard_with_next(main, turn_id, target_seat)
                     try:
-                        await main.bot.send_message(
-                            main.group_chat_id,
-                            f"🚫 {html.escape(target_name)} درخواست چالش {html.escape(challenger_name)} را رد کرد.",
-                            parse_mode="HTML",
-                        )
+                        await main.bot.send_message(main.group_chat_id, f"🚫 {html.escape(target_name)} درخواست چالش {html.escape(challenger_name)} را رد کرد.", parse_mode="HTML")
                     except Exception:
                         pass
                     await callback.answer("❌ درخواست رد شد.")
@@ -248,41 +265,30 @@ def install(main):
                     target_id = int(parts[3])
                 except ValueError:
                     return await _original(callback)
-
                 target_seat = next((s for s, uid in (getattr(main, "player_slots", {}) or {}).items() if uid == target_id), None)
                 turn_id = getattr(main, "current_turn_message_id", None)
                 result = await _original(callback)
                 if parts[0] == "accept" and target_seat is not None:
                     main.challenge_target_locked.add(target_seat)
-                    # The accept handler may replace the current turn id when it
-                    # starts a before-challenge turn, so use the captured id first.
-                    await _remove_turn_keyboard(main, turn_id)
                     await _delete_request_messages(main, target_seat)
+                    timing = parts[1] if len(parts) > 1 else ""
+                    if timing == "after":
+                        await _replace_turn_keyboard_with_next(main, turn_id, target_seat)
+                    else:
+                        await _delete_message(main, turn_id)
                 return result
             challenge_response_v3._v3_challenge_response = True
             item.handler = challenge_response_v3
 
-    # Hard boundary for Next. Validate both actor and the seat encoded in the
-    # button, delete only the clicked/previous turn message, then let the
-    # authoritative next handler create the next one.
     item = _find(registry, "next_turn")
     if item is not None:
         original = _handler(item)
         if not getattr(original, "_v3_next_guard", False):
             @wraps(original)
             async def next_v3(callback, _original=original):
-                user_id = getattr(getattr(callback, "from_user", None), "id", None)
-                allowed = user_id == getattr(main, "moderator_id", None)
-                if not allowed:
-                    try:
-                        admins = await main.bot.get_chat_administrators(main.group_chat_id)
-                        allowed = any(a.user.id == user_id for a in admins)
-                    except Exception:
-                        allowed = False
-                if not allowed:
-                    await callback.answer("⛔ فقط گرداننده یا مدیر گروه می‌تواند نکست بزند.", show_alert=True)
-                    raise CancelHandler()
-
+                # V4 performs the definitive actor check. V3 intentionally does
+                # not duplicate an admin check here, otherwise a normal player
+                # would be rejected after V4 authorizes the active turn owner.
                 try:
                     clicked_seat = int(str(callback.data).split("_", 1)[1])
                 except Exception:
@@ -294,17 +300,14 @@ def install(main):
                     expected_seat = main.turn_order[main.current_turn_index]
                 except Exception:
                     pass
-                if not getattr(main, "challenge_mode", False) and expected_seat is not None and clicked_seat != expected_seat:
+                if expected_seat is not None and not getattr(main, "challenge_mode", False) and clicked_seat != expected_seat:
                     await callback.answer("⚠️ این نوبت دیگر فعال نیست.", show_alert=True)
                     raise CancelHandler()
 
                 old_turn_id = getattr(main, "current_turn_message_id", None) or getattr(callback.message, "message_id", None)
-                # Delete exactly the old turn message before advancing. The
-                # authoritative next handler must never delete the new message.
                 await _delete_message(main, old_turn_id)
                 main.current_turn_message_id = None
-                result = await _original(callback)
-                return result
+                return await _original(callback)
             next_v3._v3_next_guard = True
             item.handler = next_v3
 
