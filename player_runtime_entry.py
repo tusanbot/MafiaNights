@@ -22,6 +22,12 @@ install_lobby_ui(main)
 from runtime.lobby_ui_v7_patch import install as install_lobby_v7_patch
 install_lobby_v7_patch(main)
 
+# Old group messages may survive a deployment and still contain legacy callback
+# data (new_game / choose_scenario / scenario_* / choose_moderator / moderator_*).
+# Route those callbacks into v6 so no stale message can reopen the old lobby UI.
+from runtime.lobby_legacy_bridge import install as install_lobby_legacy_bridge
+install_lobby_legacy_bridge(main)
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
