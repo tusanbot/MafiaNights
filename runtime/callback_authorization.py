@@ -4,30 +4,14 @@ import logging
 from functools import wraps
 
 
-# Callback data that must never be executable by an ordinary group member.
+# Setup actions must be admin-only because a moderator does not exist yet.
 _ADMIN_ONLY_EXACT = {
     "lv6_new",
-    "lv6_manage",
-    "lv6_cancel",
-    "lv6_change_s",
-    "lv6_change_m",
-    "lv6_challenge",
-    "lv6_remove",
-    "lv6_ready",
-    "lv6_distribute",
-    "distribute_roles",
     "manage_game",
     "manage_scenarios",
     "add_scenario",
     "remove_scenario",
     "back_main",
-    "start_round",
-    "start_turn",
-    "start_night",
-    "start_new_day",
-    "speaker_auto",
-    "speaker_manual",
-    "challenge_toggle",
 }
 
 _ADMIN_ONLY_PREFIXES = (
@@ -38,11 +22,26 @@ _ADMIN_ONLY_PREFIXES = (
     "moderator_",
 )
 
-# These are management/round-control callbacks in the legacy implementation.
-# Player actions such as joining, choosing a seat, challenge request/response,
-# and next-turn are intentionally NOT included here because they can be valid
-# for ordinary players depending on the current game settings.
+# Game/lobby management may be performed by either a current moderator or a
+# group administrator. This is also the security boundary for stale Telegram
+# messages containing legacy callback_data.
 _ADMIN_OR_MOD_EXACT = {
+    "lv6_manage",
+    "lv6_cancel",
+    "lv6_change_s",
+    "lv6_change_m",
+    "lv6_challenge",
+    "lv6_remove",
+    "lv6_ready",
+    "lv6_distribute",
+    "distribute_roles",
+    "start_round",
+    "start_turn",
+    "start_night",
+    "start_new_day",
+    "speaker_auto",
+    "speaker_manual",
+    "challenge_toggle",
     "lv6_back_s",
 }
 
@@ -90,8 +89,8 @@ def install(main):
         if not requires_admin(data) and not requires_admin_or_moderator(data):
             return True, ""
 
-        group_id = getattr(getattr(callback, "message", None), "chat", None)
-        group_id = getattr(group_id, "id", None) or getattr(main, "group_chat_id", None)
+        chat = getattr(getattr(callback, "message", None), "chat", None)
+        group_id = getattr(chat, "id", None) or getattr(main, "group_chat_id", None)
         if not group_id:
             return False, "⛔ گروه مشخص نیست."
 
