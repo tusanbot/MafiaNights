@@ -14,20 +14,11 @@ main.player_service = player_service
 from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
 
-from runtime.lobby_flow_fix import install as install_lobby_flow_fix
-install_lobby_flow_fix(main)
-
-from runtime.lobby_ui_v2 import install as install_lobby_ui_v2
-install_lobby_ui_v2(main)
-
-from runtime.lobby_ui_v3 import install as install_lobby_ui_v3
-install_lobby_ui_v3(main)
-
-from runtime.lobby_ui_v3_guards import install as install_lobby_ui_v3_guards
-install_lobby_ui_v3_guards(main)
-
-from runtime.lobby_management_v3 import install as install_lobby_management_v3
-install_lobby_management_v3(main)
+# IMPORTANT: only one lobby UI layer is installed. The previous lobby_flow_fix,
+# lobby_ui_v3, guards and management modules registered overlapping callbacks
+# and caused scenario/moderator/create-game transitions to race each other.
+from runtime.lobby_ui_v2 import install as install_lobby_ui
+install_lobby_ui(main)
 
 _original_startup = main.on_startup
 
