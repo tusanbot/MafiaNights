@@ -68,6 +68,12 @@ async def on_startup(dp):
     logging.info("Persistent runtime startup recovery completed: %s", results)
 
     install_stable_round_engine(main)
+    # The private management layer may need to skip the currently active
+    # speaker immediately after an admin selects "سکوت". Expose the stable
+    # engine's authoritative advance function under an explicit bridge name.
+    import runtime.stable_round_engine as _stable_round_engine
+    _stable_round_engine.advance_from_management = _stable_round_engine._advance
+
     install_stable_challenge_button_guard(main)
     logging.info("Stable round engine + challenge UI guard installed")
 
