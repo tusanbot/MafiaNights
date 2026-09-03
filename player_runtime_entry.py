@@ -55,6 +55,7 @@ install_role_security_patch(main)
 
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
+from runtime.transition_ui_dedup import install as install_transition_ui_dedup
 from runtime.role_distribution_notice import install as install_role_distribution_notice
 from runtime.private_game_management_v4 import install as install_private_game_management
 
@@ -66,7 +67,8 @@ async def on_startup(dp):
 
     install_stable_round_engine(main)
     install_stable_challenge_button_guard(main)
-    logging.info("Stable round engine + challenge UI guard installed")
+    install_transition_ui_dedup(main)
+    logging.info("Stable round engine + transition UI dedup installed")
 
     # Private management is intentionally installed last and owns the private
     # management callbacks. It never renders or invokes lobby/group menus.
