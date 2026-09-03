@@ -1,8 +1,7 @@
-"""Final private UI authority for Mafia Nights.
+"""Private UI authority for Mafia Nights.
 
-This is the only runtime owner of the private /start menu and private game
-management menu. Private callbacks are strictly private and never render a
-lobby keyboard or invoke a lobby callback.
+The private menu is isolated from the group lobby. Group-only keyboards are
+never rendered from private callbacks.
 """
 from __future__ import annotations
 
@@ -27,6 +26,9 @@ def _private(callback):
 
 
 def _group_id(app):
+    # group_chat_id is the active game group. Before a lobby exists it is None,
+    # so ALLOWED_GROUP_ID is the canonical configured group for private admin
+    # authorization.
     for key in ("group_chat_id", "ALLOWED_GROUP_ID", "GROUP_ID", "group_id"):
         value = getattr(app, key, None)
         if value:
@@ -105,6 +107,16 @@ def management_report(app):
     )
 
 
+def scenario_keyboard():
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton("➕ افزودن سناریو", callback_data="final:scenario:add"),
+        InlineKeyboardButton("➖ حذف سناریو", callback_data="final:scenario:remove"),
+        InlineKeyboardButton("⬅️ بازگشت", callback_data="final:start"),
+    )
+    return kb
+
+
 async def install(app):
     dp = app.dp
     cq = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
@@ -125,7 +137,7 @@ async def install(app):
                 if uid in {a.user.id for a in admins}:
                     return True
             except Exception:
-                pass
+                logging.exception("private UI: failed to resolve group administrators")
         await callback.answer("⛔ فقط گرداننده یا مدیر گروه دسترسی دارد.", show_alert=True)
         raise CancelHandler()
 
@@ -158,6 +170,57 @@ async def install(app):
         await callback.answer()
         raise CancelHandler()
 
+    async def open_scenarios(callback):
+        await allowed(callback)
+        await callback.message.edit_text(
+            "⚙️ <b>مدیریت سناریو</b>\n\nیک گزینه را انتخاب کنید:",
+            reply_markup=scenario_keyboard(), parse_mode="HTML"
+        )
+        await callback.answer()
+        raise CancelHandler()
+
+    async def scenario_add(callback):
+        await allowed(callback)
+        fn = getattr(app, "add_scenario_start", None)
+        if not fn:
+            await callback.answer("⚠️ افزودن سناریو در دسترس نیست.", show_alert=True)
+            raise CancelHandler()
+        await fn(callback, await app.dp.current_state(user=callback.from_user.id, chat=callback.message.chat.id))
+        raise CancelHandler()
+
+    async def scenario_remove(callback):
+        await allowed(callback)
+        scenarios = getattr(app, "scenarios", {}) or {}
+        if not scenarios:
+            await callback.message.edit_text("⚠️ هیچ سناریویی ثبت نشده است.", reply_markup=scenario_keyboard())
+            await callback.answer()
+            raise CancelHandler()
+        kb = InlineKeyboardMarkup(row_width=1)
+        for name in scenarios:
+            kb.add(InlineKeyboardButton(f"❌ {name}", callback_data=f"final:scenario:delete:{name}"))
+        kb.add(InlineKeyboardButton("⬅️ مدیریت سناریو", callback_data="final:scenarios"))
+        await callback.message.edit_text("سناریوی موردنظر برای حذف را انتخاب کنید:", reply_markup=kb)
+        await callback.answer()
+        raise CancelHandler()
+
+    async def scenario_delete(callback):
+        await allowed(callback)
+        name = str(callback.data).split(":", 3)[3]
+        scenarios = getattr(app, "scenarios", {})
+        if name not in scenarios:
+            await callback.answer("⚠️ سناریو پیدا نشد.", show_alert=True)
+            raise CancelHandler()
+        scenarios.pop(name, None)
+        saver = getattr(app, "save_scenarios", None)
+        if saver:
+            saver()
+        await callback.message.edit_text(
+            f"✅ سناریو «{html.escape(name)}» حذف شد.",
+            reply_markup=scenario_keyboard(), parse_mode="HTML"
+        )
+        await callback.answer()
+        raise CancelHandler()
+
     async def delegate(callback, attr, *args):
         await allowed(callback)
         fn = getattr(app, attr, None)
@@ -170,7 +233,7 @@ async def install(app):
             else:
                 await fn(callback)
         except Exception:
-            logging.exception("final private management action failed: %s", attr)
+            logging.exception("private management action failed: %s", attr)
             await callback.answer("❌ اجرای عملیات ناموفق بود.", show_alert=True)
         raise CancelHandler()
 
@@ -183,7 +246,7 @@ async def install(app):
         try:
             await fn(callback, app.bot)
         except Exception:
-            logging.exception("final resend roles failed")
+            logging.exception("private resend roles failed")
             await callback.answer("❌ ارسال نقش ناموفق بود.", show_alert=True)
         raise CancelHandler()
 
@@ -200,7 +263,7 @@ async def install(app):
         kb = InlineKeyboardMarkup(row_width=1)
         for admin in admins:
             kb.add(InlineKeyboardButton(
-                html.escape(admin.user.full_name or str(admin.user.id)),
+                admin.user.full_name or str(admin.user.id),
                 callback_data=f"finalgm:moderator:{admin.user.id}",
             ))
         kb.add(InlineKeyboardButton("⬅️ مدیریت بازی", callback_data="finalgm:back"))
@@ -238,7 +301,7 @@ async def install(app):
                     parse_mode="HTML",
                 )
             except Exception:
-                logging.exception("final moderator announcement failed")
+                logging.exception("private moderator announcement failed")
         await callback.message.edit_text(
             management_report(app), reply_markup=management_keyboard(), parse_mode="HTML"
         )
@@ -304,6 +367,10 @@ async def install(app):
 
     regs = [
         (open_management, lambda c: c.data == "manage_game"),
+        (open_scenarios, lambda c: c.data == "final:scenarios"),
+        (scenario_add, lambda c: c.data == "final:scenario:add"),
+        (scenario_remove, lambda c: c.data == "final:scenario:remove"),
+        (scenario_delete, lambda c: str(c.data or "").startswith("final:scenario:delete:")),
         (lambda c: delegate(c, "list_players_pv"), lambda c: c.data == "finalgm:players"),
         (roles, lambda c: c.data == "finalgm:roles"),
         (lambda c: delegate(c, "remove_player_handler"), lambda c: c.data == "finalgm:remove"),
@@ -327,7 +394,6 @@ async def install(app):
     others = [h for h in list(cq) if h not in owned]
     cq[:] = owned + others
 
-    # /start is also private-only and is placed before the legacy catch-all.
     dp.register_message_handler(start_message, commands=["start"], state="*")
     if mh:
         for i, h in enumerate(list(mh)):
