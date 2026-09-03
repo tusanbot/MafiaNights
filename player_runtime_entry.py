@@ -21,8 +21,6 @@ install_lobby_legacy_bridge(main)
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 
-# Game-flow/persistence layers remain active; the speaking-turn lifecycle is
-# intentionally NOT assembled from the historical v2/v3/v8/v9/v10/v11 stack.
 authoritative_game_flow = None
 from runtime.game_flow_authority import install as install_game_flow_authority
 authoritative_game_flow = install_game_flow_authority(main)
@@ -58,6 +56,8 @@ from runtime.role_security_patch import install as install_role_security_patch
 install_role_security_patch(main)
 
 from runtime.stable_round_engine import install as install_stable_round_engine
+from runtime.stable_game_management import install as install_stable_game_management
+from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
 
 _original_startup = main.on_startup
 
@@ -65,11 +65,16 @@ async def on_startup(dp):
     results = await persistent_startup(main, _original_startup)
     logging.info("Persistent runtime startup recovery completed: %s", results)
 
-    # IMPORTANT: this is the only round/turn/challenge transition layer.
-    # It removes legacy next/start/challenge callback handlers from the
-    # dispatcher and installs one deterministic finite-state engine.
+    # The stable round engine is the only turn/challenge transition authority.
     install_stable_round_engine(main)
-    logging.info("Stable round engine is the sole turn/challenge authority")
+    install_stable_challenge_button_guard(main)
+    logging.info("Stable round engine + challenge UI guard installed")
+
+    # Private game-management actions are installed after all legacy lobby
+    # handlers so their callbacks take precedence and never fall through into
+    # the 'new game' lobby flow.
+    install_stable_game_management(main)
+    logging.info("Stable game-management/navigation layer installed")
 
 
 if __name__ == "__main__":
