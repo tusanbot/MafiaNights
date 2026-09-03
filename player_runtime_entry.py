@@ -43,10 +43,6 @@ from runtime.user_panel_back_patch import install as install_user_panel_back_pat
 install_user_panel_back_patch(main, user_panel)
 from runtime.admin_access_patch import install as install_admin_access_patch
 install_admin_access_patch(main)
-# IMPORTANT: private management is owned exclusively by stable_game_management.
-# Do not install the legacy game_management_menu_patch: it intentionally bridges
-# private callbacks into group/lobby handlers and violates the private/group
-# separation contract.
 from runtime.admin_menus_v2 import install as install_admin_menus_v2
 install_admin_menus_v2(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
@@ -58,10 +54,9 @@ from runtime.role_security_patch import install as install_role_security_patch
 install_role_security_patch(main)
 
 from runtime.stable_round_engine import install as install_stable_round_engine
-from runtime.stable_game_management import install as install_stable_game_management
-from runtime.stable_game_management_entry import install as install_stable_game_management_entry
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
 from runtime.role_distribution_notice import install as install_role_distribution_notice
+from runtime.private_game_management_v4 import install as install_private_game_management
 
 _original_startup = main.on_startup
 
@@ -70,16 +65,14 @@ async def on_startup(dp):
     logging.info("Persistent runtime startup recovery completed: %s", results)
 
     install_stable_round_engine(main)
-    import runtime.stable_round_engine as _stable_round_engine
-    _stable_round_engine.advance_from_management = _stable_round_engine._advance
-
     install_stable_challenge_button_guard(main)
     logging.info("Stable round engine + challenge UI guard installed")
 
-    install_stable_game_management(main)
-    install_stable_game_management_entry(main)
+    # Private management is intentionally installed last and owns the private
+    # management callbacks. It never renders or invokes lobby/group menus.
+    await install_private_game_management(main)
     install_role_distribution_notice(main)
-    logging.info("Stable private game-management/navigation + role audit layer installed")
+    logging.info("Private game management v4 installed; private/group navigation isolated")
 
 
 if __name__ == "__main__":
