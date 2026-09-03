@@ -57,6 +57,7 @@ install_role_security_patch(main)
 
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.stable_game_management import install as install_stable_game_management
+from runtime.stable_game_management_entry import install as install_stable_game_management_entry
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
 
 _original_startup = main.on_startup
@@ -65,16 +66,13 @@ async def on_startup(dp):
     results = await persistent_startup(main, _original_startup)
     logging.info("Persistent runtime startup recovery completed: %s", results)
 
-    # The stable round engine is the only turn/challenge transition authority.
     install_stable_round_engine(main)
     install_stable_challenge_button_guard(main)
     logging.info("Stable round engine + challenge UI guard installed")
 
-    # Private game-management actions are installed after all legacy lobby
-    # handlers so their callbacks take precedence and never fall through into
-    # the 'new game' lobby flow.
     install_stable_game_management(main)
-    logging.info("Stable game-management/navigation layer installed")
+    install_stable_game_management_entry(main)
+    logging.info("Stable private game-management/navigation layer installed")
 
 
 if __name__ == "__main__":
