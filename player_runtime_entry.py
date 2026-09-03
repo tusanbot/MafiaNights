@@ -43,8 +43,10 @@ from runtime.user_panel_back_patch import install as install_user_panel_back_pat
 install_user_panel_back_patch(main, user_panel)
 from runtime.admin_access_patch import install as install_admin_access_patch
 install_admin_access_patch(main)
-from runtime.game_management_menu_patch import install as install_game_management_menu_patch
-install_game_management_menu_patch(main)
+# IMPORTANT: private management is owned exclusively by stable_game_management.
+# Do not install the legacy game_management_menu_patch: it intentionally bridges
+# private callbacks into group/lobby handlers and violates the private/group
+# separation contract.
 from runtime.admin_menus_v2 import install as install_admin_menus_v2
 install_admin_menus_v2(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
@@ -68,9 +70,6 @@ async def on_startup(dp):
     logging.info("Persistent runtime startup recovery completed: %s", results)
 
     install_stable_round_engine(main)
-    # The private management layer may need to skip the currently active
-    # speaker immediately after an admin selects "سکوت". Expose the stable
-    # engine's authoritative advance function under an explicit bridge name.
     import runtime.stable_round_engine as _stable_round_engine
     _stable_round_engine.advance_from_management = _stable_round_engine._advance
 
