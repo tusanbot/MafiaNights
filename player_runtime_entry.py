@@ -65,6 +65,12 @@ install_final_next_authority_v5(main)
 from runtime.seat_emoji_patch import install as install_seat_emoji_patch
 install_seat_emoji_patch(main)
 
+# Unified private user dashboard. It is deliberately installed after the game
+# authorities and owns only the up:* callback namespace, so it cannot alter
+# game/lobby callback behavior.
+from runtime.user_panel import install as install_user_panel
+user_panel = install_user_panel(main)
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
