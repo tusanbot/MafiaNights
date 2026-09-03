@@ -1,4 +1,8 @@
-"""Patch the legacy /start private menu to expose the user dashboard."""
+"""Patch the legacy /start private menu with the canonical private menu.
+
+Private /start must never render the lobby keyboard or duplicate management
+controls. The game-management button points to the private management owner.
+"""
 from __future__ import annotations
 
 from aiogram import types
@@ -21,17 +25,9 @@ def install(app):
             kb.add(InlineKeyboardButton("🛠 مدیریت بازی", callback_data="manage_game"))
             kb.add(InlineKeyboardButton("⚙ مدیریت سناریو", callback_data="manage_scenarios"))
             kb.add(InlineKeyboardButton("⚙ امکانات اضافه", callback_data="addons_menu"))
-
-            if message.from_user.id == getattr(app, "moderator_id", None):
-                kb.add(InlineKeyboardButton("🛠 مدیریت بازی", callback_data="manage_game"))
-                kb.add(InlineKeyboardButton("⚙ مدیریت سناریو", callback_data="manage_scenarios"))
-                kb.add(InlineKeyboardButton("⚙ امکانات اضافه", callback_data="addons_menu"))
-
-            # Use the user-panel's existing menu callback. The previous
-            # up:profile callback could be intercepted by a legacy profile
-            # handler in some runtime combinations.
             kb.add(InlineKeyboardButton("👤 پروفایل", callback_data="up:menu"))
             kb.add(InlineKeyboardButton("📚 راهنما", callback_data="help"))
+
             await message.reply("📋 منوی ربات:", reply_markup=kb)
 
         handler_obj.handler = start_with_profile
