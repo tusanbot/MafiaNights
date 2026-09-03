@@ -58,6 +58,11 @@ install_user_panel_back_patch(main, user_panel)
 from runtime.admin_access_patch import install as install_admin_access_patch
 install_admin_access_patch(main)
 
+# Restore the complete legacy game-management menu while keeping the private
+# menu as a controller; actual game/lobby creation happens in the configured group.
+from runtime.game_management_menu_patch import install as install_game_management_menu_patch
+install_game_management_menu_patch(main)
+
 # Authoritative private admin/scenario menus and updated help.
 from runtime.admin_menus_v2 import install as install_admin_menus_v2
 install_admin_menus_v2(main)
