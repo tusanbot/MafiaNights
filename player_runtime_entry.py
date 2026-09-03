@@ -68,6 +68,8 @@ install_round_player_controls_v2(main)
 from runtime.round_player_controls_v3 import install as install_round_player_controls_v3
 from runtime.role_security_patch import install as install_role_security_patch
 install_role_security_patch(main)
+from runtime.final_challenge_moderator_fix import install as install_final_challenge_moderator_fix
+install_final_challenge_moderator_fix(main)
 
 _original_startup = main.on_startup
 
@@ -75,7 +77,8 @@ async def on_startup(dp):
     results = await persistent_startup(main, _original_startup)
     logging.info("Persistent runtime startup recovery completed: %s", results)
     await install_round_player_controls_v3(main)
-    logging.info("GM V3 authoritative controls installed during startup")
+    await install_final_challenge_moderator_fix(main)
+    logging.info("GM V3 + final challenge/moderator authority installed during startup")
 
 if __name__ == "__main__":
     main.executor.start_polling(main.dp, skip_updates=True, on_startup=on_startup)
