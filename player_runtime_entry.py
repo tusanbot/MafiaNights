@@ -71,6 +71,10 @@ install_role_security_patch(main)
 from runtime.final_challenge_moderator_fix import install as install_final_challenge_moderator_fix
 install_final_challenge_moderator_fix(main)
 
+# Final lifecycle authority must be installed last because V3/V4/V5 are legacy
+# compatibility layers that otherwise can re-register stale Next handlers.
+from runtime.round_state_final_v6 import install as install_round_state_final_v6
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
@@ -78,7 +82,8 @@ async def on_startup(dp):
     logging.info("Persistent runtime startup recovery completed: %s", results)
     await install_round_player_controls_v3(main)
     await install_final_challenge_moderator_fix(main)
-    logging.info("GM V3 + final challenge/moderator authority installed during startup")
+    await install_round_state_final_v6(main)
+    logging.info("Final round lifecycle + challenge/moderator authority installed during startup")
 
 if __name__ == "__main__":
     main.executor.start_polling(main.dp, skip_updates=True, on_startup=on_startup)
