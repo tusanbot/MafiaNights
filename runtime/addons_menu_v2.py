@@ -1,9 +1,4 @@
-"""Improved private menu for MafiaAddons settings.
-
-The underlying MafiaAddons object remains the source of settings; this module
-only provides a clearer, safer UI and exposes settings that were previously
-stored but not reachable from the menu.
-"""
+"""Improved private menu for MafiaAddons settings with explicit group-admin access."""
 from __future__ import annotations
 
 import copy
@@ -18,37 +13,48 @@ class AddonsMenuV2:
         self.dp = app.dp
         self.addons = getattr(app, "addons", None)
 
+    def group_id(self):
+        for obj in (self.addons, self.app):
+            for attr in ("group_id", "group_chat_id", "ALLOWED_GROUP_ID"):
+                value = getattr(obj, attr, None)
+                if value:
+                    try:
+                        return int(value)
+                    except (TypeError, ValueError):
+                        pass
+        return None
+
     async def allowed(self, uid):
-        if not self.addons:
-            return False
-        moderator = getattr(self.addons, "moderator_id", None) or getattr(self.app, "moderator_id", None)
-        if uid == moderator:
-            return True
-        gid = getattr(self.addons, "group_id", None) or getattr(self.app, "group_chat_id", None)
+        gid = self.group_id()
         if not gid:
             return False
         try:
-            return uid in {a.user.id for a in await self.app.bot.get_chat_administrators(gid)}
+            admins = await self.app.bot.get_chat_administrators(gid)
+            if any(a.user.id == uid for a in admins):
+                return True
         except Exception:
             return False
+        # Moderator is allowed only as a convenience; role-revealing actions
+        # are not implemented in this menu.
+        return uid == getattr(self.app, "moderator_id", None)
 
     def settings(self):
         if not self.addons:
             return copy.deepcopy(DEFAULT_GROUP_SETTINGS)
-        gid = getattr(self.addons, "group_id", None) or getattr(self.app, "group_chat_id", None)
+        gid = self.group_id()
         if gid:
             self.addons.settings = self.addons.get_group_settings(gid)
         return self.addons.settings
 
     def save(self, settings):
-        gid = getattr(self.addons, "group_id", None) or getattr(self.app, "group_chat_id", None)
+        gid = self.group_id()
         if self.addons and gid:
             self.addons.set_group_settings(gid, settings)
             self.addons.settings = settings
 
     async def menu(self, callback):
         if not await self.allowed(callback.from_user.id):
-            await callback.answer("⛔ فقط گرداننده یا مدیر گروه دسترسی دارد.", show_alert=True); return
+            await callback.answer("⛔ فقط مدیران گروه یا گرداننده دسترسی دارند.", show_alert=True); return
         s = self.settings()
         kb = InlineKeyboardMarkup(row_width=1)
         kb.add(
