@@ -10,6 +10,7 @@ install_player_bridge(main)
 _bridge = install_persistent_bridge(main)
 main.player_service = player_service
 
+# Core game/lobby engines. These are state/flow layers, not private-menu owners.
 from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
 from runtime.lobby_ui_v6 import install as install_lobby_ui
@@ -21,9 +22,8 @@ install_lobby_legacy_bridge(main)
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 
-authoritative_game_flow = None
 from runtime.game_flow_authority import install as install_game_flow_authority
-authoritative_game_flow = install_game_flow_authority(main)
+install_game_flow_authority(main)
 from runtime.challenge_authority import install as install_challenge_authority
 install_challenge_authority(main)
 from runtime.callback_authorization import install as install_callback_authorization
@@ -35,30 +35,23 @@ install_final_runtime_guard(main)
 from runtime.seat_emoji_patch import install as install_seat_emoji_patch
 install_seat_emoji_patch(main)
 
+# User dashboard and optional add-ons remain separate from game/lobby UI.
 from runtime.user_panel import install as install_user_panel
 user_panel = install_user_panel(main)
 from runtime.start_profile_patch import install as install_start_profile_patch
 install_start_profile_patch(main)
 from runtime.user_panel_back_patch import install as install_user_panel_back_patch
 install_user_panel_back_patch(main, user_panel)
-from runtime.admin_access_patch import install as install_admin_access_patch
-install_admin_access_patch(main)
-# The old admin_menus_v2 controller is intentionally NOT installed. It owns
-# the obsolete experimental manage_game menu and can route into lobby UI.
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
-from runtime.admin_menu_cancel_patch import install as install_admin_menu_cancel_patch
-install_admin_menu_cancel_patch(main)
-install_callback_authorization(main)
-from runtime.role_security_patch import install as install_role_security_patch
-install_role_security_patch(main)
+
+# One and only one private menu authority.
+from runtime.final_private_ui import install as install_final_private_ui
 
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
 from runtime.transition_ui_dedup import install as install_transition_ui_dedup
 from runtime.role_distribution_notice import install as install_role_distribution_notice
-from runtime.private_game_management_v4 import install as install_private_game_management
-from runtime.private_management_priority import install as install_private_management_priority
 
 _original_startup = main.on_startup
 
@@ -71,12 +64,11 @@ async def on_startup(dp):
     install_transition_ui_dedup(main)
     logging.info("Stable round engine + transition UI dedup installed")
 
-    # Private management is the sole owner of the private manage_game flow.
-    # It must never render or invoke lobby/group keyboards.
-    await install_private_game_management(main)
-    install_private_management_priority(main)
+    # Final private UI is installed last and moved to the front of the
+    # aiogram 2.x registries. It owns /start + private game management only.
+    await install_final_private_ui(main)
     install_role_distribution_notice(main)
-    logging.info("Private game management v4 installed and prioritized; private/group navigation isolated")
+    logging.info("Final private UI installed; private/group navigation isolated")
 
 
 if __name__ == "__main__":
