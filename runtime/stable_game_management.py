@@ -84,10 +84,7 @@ async def _render_management(app, callback, answer=None):
         await callback.message.edit_text(text, reply_markup=_management_kb(app), parse_mode="HTML")
     except Exception as exc:
         logging.warning("stable game management render failed: %s", exc)
-    if answer:
-        await callback.answer(answer)
-    else:
-        await callback.answer()
+    await callback.answer(answer or "")
 
 
 def install(app):
@@ -95,6 +92,26 @@ def install(app):
     reg = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
     if reg is None or getattr(app, "_stable_game_management_installed", False):
         return False
+
+    # Replace the private AdminMenusV2.open_game renderer itself. This is
+    # important because game_management_menu_patch previously rendered old
+    # callback_data (lv6_change_s/lv6_change_m), which fell through to the
+    # legacy lobby flow after a selection.
+    try:
+        from runtime.admin_menus_v2 import AdminMenusV2
+
+        async def open_game(self, callback):
+            if callback.message.chat.type != "private":
+                await callback.answer("این بخش فقط در پیوی قابل استفاده است.", show_alert=True)
+                return
+            if not await self._can_manage(callback.from_user.id):
+                await callback.answer("⛔ فقط گرداننده یا مدیر گروه دسترسی دارد.", show_alert=True)
+                return
+            await _render_management(self.app, callback)
+
+        AdminMenusV2.open_game = open_game
+    except Exception as exc:
+        logging.warning("stable game management: could not replace AdminMenusV2.open_game: %s", exc)
 
     async def change_scenario(callback):
         if _is_running(app):
@@ -217,7 +234,7 @@ def install(app):
             answer = "🔊 سکوت بازیکن لغو شد."
         else:
             muted.add(seat)
-            answer = "🔇 سکوت بازیکن برای نوبت جاری ثبت شد."
+            answer = "🔇 بازیکن برای نوبت جاری ساکت شد."
         await callback.answer(answer)
         await mute_menu(callback)
 
