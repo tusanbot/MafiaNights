@@ -63,7 +63,9 @@ install_admin_access_patch(main)
 from runtime.game_management_menu_patch import install as install_game_management_menu_patch
 install_game_management_menu_patch(main)
 
-# Add player-list management, next-round silence and post-round extra turns.
+# Legacy first-generation player controls are retained for compatibility, but
+# the V2 patch below becomes the final authority after every runtime layer has
+# registered its handlers.
 from runtime.round_player_controls_patch import install as install_round_player_controls
 install_round_player_controls(main)
 from runtime.extra_turn_challenge_guard import install as install_extra_turn_challenge_guard
@@ -80,6 +82,12 @@ install_admin_menu_cancel_patch(main)
 # Re-run the authorization pass so handlers registered by the menu patches
 # receive the same execution-time security boundary.
 install_callback_authorization(main)
+
+# Final V2 controls: player names, one-shot extra turns, next-round mute and
+# strict challenge permissions. This MUST be installed last so no legacy
+# callback can win before these rules.
+from runtime.round_player_controls_v2 import install as install_round_player_controls_v2
+install_round_player_controls_v2(main)
 
 # Prevent stale role information from being exposed through the private
 # "نقش من" command after a game or to non-participants.
