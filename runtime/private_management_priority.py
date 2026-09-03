@@ -1,10 +1,8 @@
 """Make the private management controller authoritative in aiogram 2.x.
 
-The dispatcher stores callback handlers in registration order.  Some legacy
-modules register broad callbacks such as ``manage_game`` before the clean
-private controller is installed.  This module deliberately moves only the
-private controller's handlers to the front; it does not invoke or import any
-lobby/group handler.
+aiogram 2.x stores callback handlers as Handler objects whose callable is in
+``handler`` (not ``callback``). Legacy management handlers are therefore
+moved behind the v4 controller by inspecting the actual registered callable.
 """
 
 
@@ -17,7 +15,7 @@ def install(app):
     owned = []
     other = []
     for h in list(handlers):
-        cb = getattr(h, "callback", None)
+        cb = getattr(h, "handler", None)
         module = getattr(cb, "__module__", "")
         if module == "runtime.private_game_management_v4":
             owned.append(h)
