@@ -4,7 +4,8 @@ import logging
 from functools import wraps
 
 
-# Setup actions must be admin-only because a moderator does not exist yet.
+# Actions that may be performed by a Telegram group administrator.
+# These do not reveal secret game state.
 _ADMIN_ONLY_EXACT = {
     "lv6_new",
     "new_game",
@@ -25,9 +26,7 @@ _ADMIN_ONLY_PREFIXES = (
     "moderator_",
 )
 
-# Game/lobby management may be performed by either the current moderator or a
-# group administrator. This is the execution-time security boundary for both
-# fresh and stale Telegram inline keyboards.
+# Actions that affect lobby/game administration but do not disclose roles.
 _ADMIN_OR_MOD_EXACT = {
     "lv6_manage",
     "lv6_cancel",
@@ -36,12 +35,6 @@ _ADMIN_OR_MOD_EXACT = {
     "lv6_challenge",
     "lv6_remove",
     "lv6_ready",
-    "lv6_distribute",
-    "distribute_roles",
-    "start_round",
-    "start_turn",
-    "start_night",
-    "start_new_day",
     "speaker_auto",
     "speaker_manual",
     "choose_head",
@@ -54,9 +47,33 @@ _ADMIN_OR_MOD_PREFIXES = (
     "remove_",
 )
 
+# Sensitive game-state actions MUST remain moderator-only.
+# A group admin can manage the game, but must never receive private roles or
+# gain an execution path that could expose role information.
+_MODERATOR_ONLY_EXACT = {
+    "lv6_distribute",
+    "distribute_roles",
+    "start_round",
+    "start_turn",
+    "start_night",
+    "start_new_day",
+    "show_roles",
+    "view_roles",
+    "send_roles",
+    "roles",
+}
+
+_MODERATOR_ONLY_PREFIXES = (
+    "role:",
+    "roles:",
+    "show_role:",
+    "view_role:",
+    "send_role:",
+    "distribute:",
+)
+
 
 def _callback_of(item):
-    """Support both aiogram HandlerObj instances and dict-style registries."""
     callback = getattr(item, "callback", None)
     if callback is None and isinstance(item, dict):
         callback = item.get("callback")
@@ -71,15 +88,16 @@ def _set_callback(item, callback):
 
 
 def install(main):
-    """Add a final authorization boundary around every registered callback."""
+    """Install an execution-time authorization boundary around callbacks.
+
+    The function is intentionally re-runnable because some runtime patches
+    register handlers after the first authorization pass.
+    """
     dp = main.dp
     bot = main.bot
     registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
     if registry is None:
         logging.warning("callback authorization: callback registry unavailable")
-        return
-
-    if getattr(main, "_callback_authorization_installed", False):
         return
 
     def data_of(callback):
@@ -91,6 +109,22 @@ def install(main):
     def requires_admin_or_moderator(data: str) -> bool:
         return data in _ADMIN_OR_MOD_EXACT or any(data.startswith(p) for p in _ADMIN_OR_MOD_PREFIXES)
 
+    def requires_moderator(data: str) -> bool:
+        return data in _MODERATOR_ONLY_EXACT or any(data.startswith(p) for p in _MODERATOR_ONLY_PREFIXES)
+
+    def configured_group_id() -> int | None:
+        # Private-menu callbacks have no group chat in callback.message, so use
+        # the active group first and the bot's single allowed group as fallback.
+        for obj in (main, getattr(main, "addons", None)):
+            for attr in ("group_chat_id", "group_id", "ALLOWED_GROUP_ID"):
+                value = getattr(obj, attr, None)
+                if value:
+                    try:
+                        return int(value)
+                    except (TypeError, ValueError):
+                        pass
+        return None
+
     async def is_admin(user_id: int, group_id: int) -> bool:
         try:
             admins = await bot.get_chat_administrators(group_id)
@@ -101,19 +135,29 @@ def install(main):
 
     async def allowed(callback) -> tuple[bool, str]:
         data = data_of(callback)
-        if not requires_admin(data) and not requires_admin_or_moderator(data):
+        sensitive = requires_moderator(data)
+        admin_action = requires_admin(data)
+        shared_action = requires_admin_or_moderator(data)
+        if not (sensitive or admin_action or shared_action):
             return True, ""
 
         chat = getattr(getattr(callback, "message", None), "chat", None)
-        group_id = getattr(chat, "id", None) or getattr(main, "group_chat_id", None)
+        group_id = getattr(chat, "id", None) if chat else None
         if not group_id:
-            return False, "⛔ گروه مشخص نیست."
+            group_id = configured_group_id()
+        if not group_id:
+            return False, "⛔ گروه بازی مشخص نیست."
 
         user_id = callback.from_user.id
         admin = await is_admin(user_id, int(group_id))
         moderator = user_id == getattr(main, "moderator_id", None)
 
-        if requires_admin(data):
+        if sensitive:
+            if moderator:
+                return True, ""
+            return False, "⛔ این بخش فقط برای گرداننده بازی مجاز است."
+
+        if admin_action:
             if admin:
                 return True, ""
             return False, "⛔ فقط مدیران گروه به این گزینه دسترسی دارند."
@@ -142,4 +186,4 @@ def install(main):
         wrapped_count += 1
 
     main._callback_authorization_installed = True
-    logging.info("✅ Callback authorization guard installed on %s handlers", wrapped_count)
+    logging.info("Callback authorization pass installed on %s unguarded handlers", wrapped_count)
