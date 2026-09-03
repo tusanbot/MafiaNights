@@ -35,7 +35,7 @@ install_final_runtime_guard(main)
 from runtime.seat_emoji_patch import install as install_seat_emoji_patch
 install_seat_emoji_patch(main)
 
-# User dashboard and optional add-ons remain separate from game/lobby UI.
+# User dashboard and the existing add-ons controller remain separate from game/lobby UI.
 from runtime.user_panel import install as install_user_panel
 user_panel = install_user_panel(main)
 from runtime.start_profile_patch import install as install_start_profile_patch
@@ -45,7 +45,7 @@ install_user_panel_back_patch(main, user_panel)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 
-# One and only one private menu authority.
+# One private menu authority.
 from runtime.final_private_ui import install as install_final_private_ui
 
 from runtime.stable_round_engine import install as install_stable_round_engine
@@ -59,13 +59,30 @@ async def on_startup(dp):
     results = await persistent_startup(main, _original_startup)
     logging.info("Persistent runtime startup recovery completed: %s", results)
 
+    # The private UI must know the configured game group even before a lobby exists.
+    # Populate the same admin cache used by legacy game code so every private
+    # controller sees one consistent authorization source.
+    try:
+        configured_gid = getattr(main, "ALLOWED_GROUP_ID", None)
+        if configured_gid:
+            main.group_chat_id = int(configured_gid)
+            admins = await main.bot.get_chat_administrators(main.group_chat_id)
+            main.admins = {a.user.id for a in admins}
+            main.group_admins = list(main.admins)
+            logging.info(
+                "Private UI authorization synced: group=%s admins=%d",
+                main.group_chat_id,
+                len(main.admins),
+            )
+    except Exception:
+        logging.exception("Failed to initialize private UI group/admin authorization")
+
     install_stable_round_engine(main)
     install_stable_challenge_button_guard(main)
     install_transition_ui_dedup(main)
     logging.info("Stable round engine + transition UI dedup installed")
 
-    # Final private UI is installed last and moved to the front of the
-    # aiogram 2.x registries. It owns /start + private game management only.
+    # Final private UI is installed last and moved to the front of the aiogram 2.x registries.
     await install_final_private_ui(main)
     install_role_distribution_notice(main)
     logging.info("FINAL UI AUTHORITY ACTIVE: private start + management are isolated from lobby")
