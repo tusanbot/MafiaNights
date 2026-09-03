@@ -71,6 +71,12 @@ install_seat_emoji_patch(main)
 from runtime.user_panel import install as install_user_panel
 user_panel = install_user_panel(main)
 
+# The legacy /start handler builds its private keyboard itself. Patch that
+# handler after the user panel is installed so /start exposes the profile entry
+# while preserving the existing group menu and game-management callbacks.
+from runtime.start_profile_patch import install as install_start_profile_patch
+install_start_profile_patch(main)
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
