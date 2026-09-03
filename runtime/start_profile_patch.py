@@ -1,15 +1,8 @@
-"""Patch the legacy /start private menu to expose the user dashboard.
-
-The legacy start handler builds its private keyboard itself. The dashboard
-button therefore uses a dedicated callback namespace that cannot collide with
-legacy profile callbacks.
-"""
+"""Patch the legacy /start private menu to expose the user dashboard."""
 from __future__ import annotations
 
 from aiogram import types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-DASHBOARD_CALLBACK = "userpanel:open"
 
 
 def install(app):
@@ -34,7 +27,10 @@ def install(app):
                 kb.add(InlineKeyboardButton("⚙ مدیریت سناریو", callback_data="manage_scenarios"))
                 kb.add(InlineKeyboardButton("⚙ امکانات اضافه", callback_data="addons_menu"))
 
-            kb.add(InlineKeyboardButton("👤 پروفایل", callback_data=DASHBOARD_CALLBACK))
+            # Use the user-panel's existing menu callback. The previous
+            # up:profile callback could be intercepted by a legacy profile
+            # handler in some runtime combinations.
+            kb.add(InlineKeyboardButton("👤 پروفایل", callback_data="up:menu"))
             kb.add(InlineKeyboardButton("📚 راهنما", callback_data="help"))
             await message.reply("📋 منوی ربات:", reply_markup=kb)
 
