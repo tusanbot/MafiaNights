@@ -43,8 +43,8 @@ from runtime.user_panel_back_patch import install as install_user_panel_back_pat
 install_user_panel_back_patch(main, user_panel)
 from runtime.admin_access_patch import install as install_admin_access_patch
 install_admin_access_patch(main)
-from runtime.admin_menus_v2 import install as install_admin_menus_v2
-install_admin_menus_v2(main)
+# The old admin_menus_v2 controller is intentionally NOT installed. It owns
+# the obsolete experimental manage_game menu and can route into lobby UI.
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 from runtime.admin_menu_cancel_patch import install as install_admin_menu_cancel_patch
@@ -71,8 +71,8 @@ async def on_startup(dp):
     install_transition_ui_dedup(main)
     logging.info("Stable round engine + transition UI dedup installed")
 
-    # Private management is intentionally installed last and owns the private
-    # management callbacks. It never renders or invokes lobby/group menus.
+    # Private management is the sole owner of the private manage_game flow.
+    # It must never render or invoke lobby/group keyboards.
     await install_private_game_management(main)
     install_private_management_priority(main)
     install_role_distribution_notice(main)
