@@ -70,8 +70,8 @@ from runtime.role_security_patch import install as install_role_security_patch
 install_role_security_patch(main)
 from runtime.final_challenge_moderator_fix import install as install_final_challenge_moderator_fix
 install_final_challenge_moderator_fix(main)
-from runtime.round_state_final_v6 import install as install_round_state_final_v6
-from runtime.round_state_final_v7 import install as install_round_state_final_v7
+from runtime.round_state_final_v8 import install as install_round_state_final_v8
+from runtime.round_challenge_final_v9 import install as install_round_challenge_final_v9
 
 _original_startup = main.on_startup
 
@@ -80,9 +80,9 @@ async def on_startup(dp):
     logging.info("Persistent runtime startup recovery completed: %s", results)
     await install_round_player_controls_v3(main)
     await install_final_challenge_moderator_fix(main)
-    await install_round_state_final_v6(main)
-    await install_round_state_final_v7(main)
-    logging.info("Final round lifecycle + challenge/moderator authority installed during startup")
+    await install_round_state_final_v8(main)
+    await install_round_challenge_final_v9(main)
+    logging.info("Terminal round v8 + challenge v9 authorities installed during startup")
 
 if __name__ == "__main__":
     main.executor.start_polling(main.dp, skip_updates=True, on_startup=on_startup)
