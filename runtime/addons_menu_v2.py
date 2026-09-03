@@ -1,8 +1,8 @@
-"""Improved private menu for MafiaAddons settings with explicit group-admin access."""
+"""Existing private add-ons menu for MafiaNights."""
 from __future__ import annotations
 
 import copy
-from aiogram import types
+from aiogram.dispatcher.handler import CancelHandler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from mafia_addons import DEFAULT_GROUP_SETTINGS
 
@@ -15,7 +15,7 @@ class AddonsMenuV2:
 
     def group_id(self):
         for obj in (self.addons, self.app):
-            for attr in ("group_id", "group_chat_id", "ALLOWED_GROUP_ID"):
+            for attr in ("group_id", "group_chat_id", "ALLOWED_GROUP_ID", "GROUP_ID"):
                 value = getattr(obj, attr, None)
                 if value:
                     try:
@@ -25,18 +25,38 @@ class AddonsMenuV2:
         return None
 
     async def allowed(self, uid):
+        # The moderator must work even when there is no active lobby.
+        ids = set()
+        for attr in ("moderator_id",):
+            value = getattr(self.app, attr, None)
+            if value:
+                ids.add(value)
+        for attr in ("reserved_god", "reserved_moderator", "god"):
+            value = getattr(self.app, attr, None)
+            if isinstance(value, dict):
+                value = value.get("id") or value.get("user_id")
+            if value:
+                ids.add(value)
+        if uid in ids:
+            return True
+
+        for attr in ("admins", "group_admins"):
+            cached = getattr(self.app, attr, None) or []
+            for item in cached:
+                candidate = getattr(getattr(item, "user", None), "id", item)
+                if candidate == uid:
+                    return True
+
         gid = self.group_id()
         if not gid:
             return False
         try:
             admins = await self.app.bot.get_chat_administrators(gid)
-            if any(a.user.id == uid for a in admins):
-                return True
+            admin_ids = {a.user.id for a in admins}
+            self.app.admins = admin_ids
+            return uid in admin_ids
         except Exception:
             return False
-        # Moderator is allowed only as a convenience; role-revealing actions
-        # are not implemented in this menu.
-        return uid == getattr(self.app, "moderator_id", None)
 
     def settings(self):
         if not self.addons:
@@ -53,8 +73,11 @@ class AddonsMenuV2:
             self.addons.settings = settings
 
     async def menu(self, callback):
+        if callback.message.chat.type != "private":
+            raise CancelHandler()
         if not await self.allowed(callback.from_user.id):
-            await callback.answer("⛔ فقط مدیران گروه یا گرداننده دسترسی دارند.", show_alert=True); return
+            await callback.answer("⛔ فقط مدیران گروه یا گرداننده دسترسی دارند.", show_alert=True)
+            raise CancelHandler()
         s = self.settings()
         kb = InlineKeyboardMarkup(row_width=1)
         kb.add(
@@ -63,79 +86,69 @@ class AddonsMenuV2:
             InlineKeyboardButton("▶️ شروع خودکار", callback_data="adm2:add:auto"),
             InlineKeyboardButton("🎨 نمایش و رنگ‌بندی", callback_data="adm2:add:visual"),
             InlineKeyboardButton("♻️ بازگردانی تنظیمات پیش‌فرض", callback_data="adm2:add:reset"),
-            InlineKeyboardButton("⬅️ بازگشت", callback_data="adm2:main"),
+            InlineKeyboardButton("⬅️ بازگشت", callback_data="final:start"),
         )
-        text = (
+        await callback.message.edit_text(
             "⚙️ <b>امکانات اضافه</b>\n\n"
             f"🛡 امنیت: {'فعال' if s.get('security', {}).get('control_speech', True) else 'غیرفعال'}\n"
             f"⏭ ضداسپم: {'فعال' if s.get('next', {}).get('anti_spam', True) else 'غیرفعال'}\n"
-            f"▶️ شروع خودکار: {'فعال' if s.get('auto_start', {}).get('enabled', False) else 'غیرفعال'}"
-        )
-        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+            f"▶️ شروع خودکار: {'فعال' if s.get('auto_start', {}).get('enabled', False) else 'غیرفعال'}",
+            reply_markup=kb, parse_mode="HTML")
         await callback.answer()
+        raise CancelHandler()
 
     async def security(self, callback):
         if not await self.allowed(callback.from_user.id):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); raise CancelHandler()
         s = self.settings().get("security", {})
         kb = InlineKeyboardMarkup(row_width=1).add(
             InlineKeyboardButton(f"🗣 کنترل نوبت صحبت: {'فعال' if s.get('control_speech', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:speech"),
             InlineKeyboardButton(f"🗑 حذف پیام خارج نوبت: {'فعال' if s.get('delete_out_of_turn', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:delete"),
-            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),
-        )
-        await callback.message.edit_text("🔐 <b>امنیت بازی</b>", reply_markup=kb, parse_mode="HTML"); await callback.answer()
+            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),)
+        await callback.message.edit_text("🔐 <b>امنیت بازی</b>", reply_markup=kb, parse_mode="HTML"); await callback.answer(); raise CancelHandler()
 
     async def next_menu(self, callback):
         if not await self.allowed(callback.from_user.id):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); raise CancelHandler()
         s = self.settings().get("next", {})
         kb = InlineKeyboardMarkup(row_width=1).add(
             InlineKeyboardButton(f"🛡 ضداسپم نکست: {'فعال' if s.get('anti_spam', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:anti"),
             InlineKeyboardButton(f"👤 اجازه نکست به بازیکنان: {'فعال' if s.get('allow_players_next', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:players"),
             InlineKeyboardButton(f"🎩 اجازه نکست به گرداننده: {'فعال' if s.get('allow_moderator_next', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:moderator"),
-            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),
-        )
-        await callback.message.edit_text("⏭ <b>مدیریت نکست</b>", reply_markup=kb, parse_mode="HTML"); await callback.answer()
+            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),)
+        await callback.message.edit_text("⏭ <b>مدیریت نکست</b>", reply_markup=kb, parse_mode="HTML"); await callback.answer(); raise CancelHandler()
 
     async def auto(self, callback):
         if not await self.allowed(callback.from_user.id):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); raise CancelHandler()
         s = self.settings().get("auto_start", {})
         kb = InlineKeyboardMarkup(row_width=1).add(
             InlineKeyboardButton(f"▶️ شروع خودکار دور جدید: {'فعال' if s.get('enabled', False) else 'غیرفعال'}", callback_data="adm2:add:toggle:auto"),
-            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),
-        )
-        await callback.message.edit_text("▶️ <b>شروع خودکار</b>\n\nاین گزینه در صورت پشتیبانی جریان بازی، آغاز خودکار دور بعدی را کنترل می‌کند.", reply_markup=kb, parse_mode="HTML"); await callback.answer()
+            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),)
+        await callback.message.edit_text("▶️ <b>شروع خودکار</b>\n\nاین گزینه در صورت پشتیبانی جریان بازی، آغاز خودکار دور بعدی را کنترل می‌کند.", reply_markup=kb, parse_mode="HTML"); await callback.answer(); raise CancelHandler()
 
     async def visual(self, callback):
         if not await self.allowed(callback.from_user.id):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); raise CancelHandler()
         s = self.settings().get("color", {})
         kb = InlineKeyboardMarkup(row_width=1).add(
             InlineKeyboardButton(f"🎨 نمایش نوبت اصلی: {'فعال' if s.get('primary', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:primary"),
             InlineKeyboardButton(f"🟥 نمایش نوبت چالش: {'فعال' if s.get('challenge', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:challenge"),
-            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),
-        )
-        await callback.message.edit_text("🎨 <b>نمایش و رنگ‌بندی</b>", reply_markup=kb, parse_mode="HTML"); await callback.answer()
+            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),)
+        await callback.message.edit_text("🎨 <b>نمایش و رنگ‌بندی</b>", reply_markup=kb, parse_mode="HTML"); await callback.answer(); raise CancelHandler()
 
     async def toggle(self, callback):
         if not await self.allowed(callback.from_user.id):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); raise CancelHandler()
         s = self.settings()
+        mapping = {"speech": ("security", "control_speech", True), "delete": ("security", "delete_out_of_turn", True), "anti": ("next", "anti_spam", True), "players": ("next", "allow_players_next", True), "moderator": ("next", "allow_moderator_next", True), "auto": ("auto_start", "enabled", False), "primary": ("color", "primary", True), "challenge": ("color", "challenge", True)}
         key = callback.data.rsplit(":", 1)[1]
-        mapping = {
-            "speech": ("security", "control_speech", True), "delete": ("security", "delete_out_of_turn", True),
-            "anti": ("next", "anti_spam", True), "players": ("next", "allow_players_next", True),
-            "moderator": ("next", "allow_moderator_next", True), "auto": ("auto_start", "enabled", False),
-            "primary": ("color", "primary", True), "challenge": ("color", "challenge", True),
-        }
         if key not in mapping:
-            await callback.answer("تنظیم نامعتبر است.", show_alert=True); return
+            await callback.answer("تنظیم نامعتبر است.", show_alert=True); raise CancelHandler()
         section, option, default = mapping[key]
         s.setdefault(section, {})
         s[section][option] = not s[section].get(option, default)
         self.save(s)
-        await callback.answer("✅ ذخیره شد")
         if key in {"speech", "delete"}: await self.security(callback)
         elif key in {"anti", "players", "moderator"}: await self.next_menu(callback)
         elif key == "auto": await self.auto(callback)
@@ -143,9 +156,8 @@ class AddonsMenuV2:
 
     async def reset(self, callback):
         if not await self.allowed(callback.from_user.id):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); raise CancelHandler()
         self.save(copy.deepcopy(DEFAULT_GROUP_SETTINGS))
-        await callback.answer("♻️ تنظیمات به حالت پیش‌فرض برگشت.")
         await self.menu(callback)
 
     def install(self):
@@ -157,11 +169,11 @@ class AddonsMenuV2:
         d.register_callback_query_handler(self.visual, lambda c: c.data == "adm2:add:visual", state="*")
         d.register_callback_query_handler(self.toggle, lambda c: c.data.startswith("adm2:add:toggle:"), state="*")
         d.register_callback_query_handler(self.reset, lambda c: c.data == "adm2:add:reset", state="*")
-        for name in {"menu", "security", "next_menu", "auto", "visual", "toggle", "reset"}:
-            hs = getattr(d.callback_query_handlers, "handlers", [])
-            for i, h in enumerate(hs):
-                if getattr(getattr(h, "handler", None), "__name__", "") == name:
-                    hs.insert(0, hs.pop(i)); break
+        handlers = getattr(d.callback_query_handlers, "handlers", [])
+        names = {"menu", "security", "next_menu", "auto", "visual", "toggle", "reset"}
+        for i in range(len(handlers) - 1, -1, -1):
+            if getattr(getattr(handlers[i], "handler", None), "__name__", "") in names:
+                handlers.insert(0, handlers.pop(i))
         return self
 
 
