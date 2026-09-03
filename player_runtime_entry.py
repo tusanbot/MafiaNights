@@ -53,6 +53,12 @@ install_start_profile_patch(main)
 from runtime.user_panel_back_patch import install as install_user_panel_back_patch
 install_user_panel_back_patch(main, user_panel)
 
+# Authoritative private admin/scenario menus and updated help.
+from runtime.admin_menus_v2 import install as install_admin_menus_v2
+install_admin_menus_v2(main)
+from runtime.addons_menu_v2 import install as install_addons_menu_v2
+install_addons_menu_v2(main)
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
