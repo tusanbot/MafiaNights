@@ -66,6 +66,8 @@ install_game_management_menu_patch(main)
 # Add player-list management, next-round silence and post-round extra turns.
 from runtime.round_player_controls_patch import install as install_round_player_controls
 install_round_player_controls(main)
+from runtime.extra_turn_challenge_guard import install as install_extra_turn_challenge_guard
+install_extra_turn_challenge_guard(main)
 
 # Authoritative private admin/scenario menus and updated help.
 from runtime.admin_menus_v2 import install as install_admin_menus_v2
