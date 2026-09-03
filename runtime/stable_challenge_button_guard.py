@@ -1,7 +1,35 @@
 """Prevent stale challenge buttons after a player has already challenged."""
 from __future__ import annotations
 
+import asyncio
 import logging
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+
+def _group_id(app):
+    for key in ("group_chat_id", "ALLOWED_GROUP_ID", "GROUP_ID", "group_id"):
+        value = getattr(app, key, None)
+        if value:
+            try:
+                return int(value)
+            except Exception:
+                pass
+    return None
+
+
+async def _hide_challenge_button(app, seat):
+    """Remove the challenge action from the currently displayed turn."""
+    mid = getattr(app, "current_turn_message_id", None)
+    gid = _group_id(app)
+    if not mid or not gid:
+        return
+    kb = InlineKeyboardMarkup(row_width=1).add(
+        InlineKeyboardButton("⏭ نکست", callback_data=f"next_{int(seat)}")
+    )
+    try:
+        await app.bot.edit_message_reply_markup(gid, int(mid), reply_markup=kb)
+    except Exception as exc:
+        logging.debug("challenge button UI update failed: %s", exc)
 
 
 def install(app):
@@ -20,25 +48,32 @@ def install(app):
             return True
 
         async def guarded(callback):
+            data = str(callback.data or "")
             try:
-                data = str(callback.data or "")
                 target_seat = int(data.split("_", 2)[2])
-                challenger_uid = int(callback.from_user.id)
-                slots = getattr(app, "player_slots", {}) or {}
-                challenger_seat = next((int(s) for s, uid in slots.items() if int(uid) == challenger_uid), None)
-                used = getattr(app, "_stable_challenge_used", set())
-                locked = getattr(app, "_stable_challenge_locked", set())
-                if challenger_uid in used or (challenger_seat is not None and challenger_seat in locked):
-                    await callback.answer("❌ شما در این دور قبلاً چالش داده‌اید.", show_alert=True)
-                    return
-                # Lock immediately, before the original handler renders any
-                # subsequent turn keyboard. This prevents stale challenge UI.
-                used.add(challenger_uid)
-                if challenger_seat is not None:
-                    locked.add(challenger_seat)
-                return await original(callback)
             except Exception:
-                raise
+                return await original(callback)
+            challenger_uid = int(callback.from_user.id)
+            slots = getattr(app, "player_slots", {}) or {}
+            challenger_seat = next(
+                (int(s) for s, uid in slots.items() if int(uid) == challenger_uid),
+                None,
+            )
+            used = getattr(app, "_stable_challenge_used", set())
+            locked = getattr(app, "_stable_challenge_locked", set())
+            if challenger_uid in used:
+                await callback.answer("❌ شما در این دور قبلاً چالش داده‌اید.", show_alert=True)
+                return
+            # _stable_challenge_locked contains TARGET seats whose challenge
+            # has already been consumed. It must never contain the requester.
+            if target_seat in locked:
+                await callback.answer("⛔ برای این نوبت دیگر چالش پذیرفته نمی‌شود.", show_alert=True)
+                return
+            # Hide the stale action before the request is processed. The
+            # authoritative handler still performs all semantic validation and
+            # records _stable_challenge_used only after validation succeeds.
+            await _hide_challenge_button(app, target_seat)
+            return await original(callback)
 
         guarded.__name__ = "challenge_request"
         guarded._stable_wrapped = True
