@@ -1,4 +1,4 @@
-"""Production entry point for the staged persistent-runtime cut-over."""
+"""Production entry point for the persistent MafiaNights runtime."""
 
 import logging
 import main1 as main
@@ -21,6 +21,8 @@ install_lobby_legacy_bridge(main)
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 
+# Game-flow/persistence layers remain active; the speaking-turn lifecycle is
+# intentionally NOT assembled from the historical v2/v3/v8/v9/v10/v11 stack.
 authoritative_game_flow = None
 from runtime.game_flow_authority import install as install_game_flow_authority
 authoritative_game_flow = install_game_flow_authority(main)
@@ -32,12 +34,6 @@ from runtime.final_game_flow_authority import install as install_final_game_flow
 install_final_game_flow_authority(main)
 from runtime.final_runtime_guard import install as install_final_runtime_guard
 install_final_runtime_guard(main)
-from runtime.final_turn_challenge_v3 import install as install_final_turn_challenge_v3
-install_final_turn_challenge_v3(main)
-from runtime.final_turn_challenge_v4 import install as install_final_turn_challenge_v4
-install_final_turn_challenge_v4(main)
-from runtime.final_next_authority_v5 import install as install_final_next_authority_v5
-install_final_next_authority_v5(main)
 from runtime.seat_emoji_patch import install as install_seat_emoji_patch
 install_seat_emoji_patch(main)
 
@@ -51,10 +47,6 @@ from runtime.admin_access_patch import install as install_admin_access_patch
 install_admin_access_patch(main)
 from runtime.game_management_menu_patch import install as install_game_management_menu_patch
 install_game_management_menu_patch(main)
-from runtime.round_player_controls_patch import install as install_round_player_controls
-install_round_player_controls(main)
-from runtime.extra_turn_challenge_guard import install as install_extra_turn_challenge_guard
-install_extra_turn_challenge_guard(main)
 from runtime.admin_menus_v2 import install as install_admin_menus_v2
 install_admin_menus_v2(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
@@ -62,33 +54,23 @@ install_addons_menu_v2(main)
 from runtime.admin_menu_cancel_patch import install as install_admin_menu_cancel_patch
 install_admin_menu_cancel_patch(main)
 install_callback_authorization(main)
-
-from runtime.round_player_controls_v2 import install as install_round_player_controls_v2
-install_round_player_controls_v2(main)
-from runtime.round_player_controls_v3 import install as install_round_player_controls_v3
 from runtime.role_security_patch import install as install_role_security_patch
 install_role_security_patch(main)
-from runtime.final_challenge_moderator_fix import install as install_final_challenge_moderator_fix
-install_final_challenge_moderator_fix(main)
-from runtime.round_state_final_v8 import install as install_round_state_final_v8
-from runtime.round_challenge_final_v9 import install as install_round_challenge_final_v9
-from runtime.round_state_terminal_v10 import install as install_round_state_terminal_v10
-from runtime.turn_day_end_guard import install as install_turn_day_end_guard
-from runtime.round_state_terminal_v11 import install as install_round_state_terminal_v11
+
+from runtime.stable_round_engine import install as install_stable_round_engine
 
 _original_startup = main.on_startup
 
 async def on_startup(dp):
     results = await persistent_startup(main, _original_startup)
     logging.info("Persistent runtime startup recovery completed: %s", results)
-    await install_round_player_controls_v3(main)
-    await install_final_challenge_moderator_fix(main)
-    await install_round_state_final_v8(main)
-    await install_round_challenge_final_v9(main)
-    await install_round_state_terminal_v10(main)
-    await install_turn_day_end_guard(main)
-    await install_round_state_terminal_v11(main)
-    logging.info("Terminal round v8 + challenge v9 + transition guard v10 + day-end guard + terminal registry guard v11 installed")
+
+    # IMPORTANT: this is the only round/turn/challenge transition layer.
+    # It removes legacy next/start/challenge callback handlers from the
+    # dispatcher and installs one deterministic finite-state engine.
+    install_stable_round_engine(main)
+    logging.info("Stable round engine is the sole turn/challenge authority")
+
 
 if __name__ == "__main__":
     main.executor.start_polling(main.dp, skip_updates=True, on_startup=on_startup)
