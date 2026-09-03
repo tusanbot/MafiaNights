@@ -70,6 +70,11 @@ install_admin_menu_cancel_patch(main)
 # receive the same execution-time security boundary.
 install_callback_authorization(main)
 
+# Prevent stale role information from being exposed through the private
+# "نقش من" command after a game or to non-participants.
+from runtime.role_security_patch import install as install_role_security_patch
+install_role_security_patch(main)
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
