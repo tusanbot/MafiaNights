@@ -53,6 +53,11 @@ install_start_profile_patch(main)
 from runtime.user_panel_back_patch import install as install_user_panel_back_patch
 install_user_panel_back_patch(main, user_panel)
 
+# Normalize group-admin resolution for private management menus before those
+# menus are instantiated and registered.
+from runtime.admin_access_patch import install as install_admin_access_patch
+install_admin_access_patch(main)
+
 # Authoritative private admin/scenario menus and updated help.
 from runtime.admin_menus_v2 import install as install_admin_menus_v2
 install_admin_menus_v2(main)
@@ -60,6 +65,10 @@ from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 from runtime.admin_menu_cancel_patch import install as install_admin_menu_cancel_patch
 install_admin_menu_cancel_patch(main)
+
+# Re-run the authorization pass so handlers registered by the menu patches
+# receive the same execution-time security boundary.
+install_callback_authorization(main)
 
 _original_startup = main.on_startup
 
