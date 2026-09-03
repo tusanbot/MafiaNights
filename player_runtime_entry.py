@@ -59,6 +59,7 @@ from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.stable_game_management import install as install_stable_game_management
 from runtime.stable_game_management_entry import install as install_stable_game_management_entry
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
+from runtime.role_distribution_notice import install as install_role_distribution_notice
 
 _original_startup = main.on_startup
 
@@ -72,7 +73,8 @@ async def on_startup(dp):
 
     install_stable_game_management(main)
     install_stable_game_management_entry(main)
-    logging.info("Stable private game-management/navigation layer installed")
+    install_role_distribution_notice(main)
+    logging.info("Stable private game-management/navigation + role audit layer installed")
 
 
 if __name__ == "__main__":
