@@ -58,6 +58,8 @@ from runtime.admin_menus_v2 import install as install_admin_menus_v2
 install_admin_menus_v2(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
+from runtime.admin_menu_cancel_patch import install as install_admin_menu_cancel_patch
+install_admin_menu_cancel_patch(main)
 
 _original_startup = main.on_startup
 
