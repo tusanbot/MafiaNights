@@ -58,6 +58,7 @@ from runtime.stable_challenge_button_guard import install as install_stable_chal
 from runtime.transition_ui_dedup import install as install_transition_ui_dedup
 from runtime.role_distribution_notice import install as install_role_distribution_notice
 from runtime.private_game_management_v4 import install as install_private_game_management
+from runtime.private_management_priority import install as install_private_management_priority
 
 _original_startup = main.on_startup
 
@@ -73,8 +74,9 @@ async def on_startup(dp):
     # Private management is intentionally installed last and owns the private
     # management callbacks. It never renders or invokes lobby/group menus.
     await install_private_game_management(main)
+    install_private_management_priority(main)
     install_role_distribution_notice(main)
-    logging.info("Private game management v4 installed; private/group navigation isolated")
+    logging.info("Private game management v4 installed and prioritized; private/group navigation isolated")
 
 
 if __name__ == "__main__":
