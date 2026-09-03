@@ -47,10 +47,13 @@ def install(app):
         else:
             kb.add(InlineKeyboardButton("⚙️ ادامه مدیریت لابی", callback_data="lv6_manage"))
         for text, data in [
+            ("👥 لیست بازیکنان", "gm:players"),
             ("🚫 لغو بازی", "lv6_cancel"),
             ("📝 تغییر سناریو", "lv6_change_s"),
             ("🎩 تغییر گرداننده", "lv6_change_m"),
             ("⚔️ وضعیت چالش", "lv6_challenge"),
+            ("🔇 سکوت بازیکن", "gm:mute"),
+            ("➕ ترن اضافه", "gm:extra"),
             ("🗑 حذف بازیکن", "lv6_remove"),
             ("📢 حاضری / تگ لیست", "lv6_ready"),
             ("⬅️ بازگشت", "adm2:main"),
