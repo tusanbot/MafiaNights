@@ -68,7 +68,7 @@ async def on_startup(dp):
     # aiogram 2.x registries. It owns /start + private game management only.
     await install_final_private_ui(main)
     install_role_distribution_notice(main)
-    logging.info("Final private UI installed; private/group navigation isolated")
+    logging.info("FINAL UI AUTHORITY ACTIVE: private start + management are isolated from lobby")
 
 
 if __name__ == "__main__":
