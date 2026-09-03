@@ -41,56 +41,31 @@ install_final_next_authority_v5(main)
 from runtime.seat_emoji_patch import install as install_seat_emoji_patch
 install_seat_emoji_patch(main)
 
-# Unified private user dashboard.
 from runtime.user_panel import install as install_user_panel
 user_panel = install_user_panel(main)
-
-# Connect the legacy private /start menu to the user dashboard.
 from runtime.start_profile_patch import install as install_start_profile_patch
 install_start_profile_patch(main)
-
-# Add a return button from the dashboard to the legacy private start menu.
 from runtime.user_panel_back_patch import install as install_user_panel_back_patch
 install_user_panel_back_patch(main, user_panel)
-
-# Normalize group-admin resolution for private management menus before those
-# menus are instantiated and registered.
 from runtime.admin_access_patch import install as install_admin_access_patch
 install_admin_access_patch(main)
-
-# Restore the complete legacy game-management menu while keeping the private
-# menu as a controller; actual game/lobby creation happens in the configured group.
 from runtime.game_management_menu_patch import install as install_game_management_menu_patch
 install_game_management_menu_patch(main)
-
-# Legacy first-generation player controls are retained for compatibility, but
-# the V2 patch below becomes the final authority after every runtime layer has
-# registered its handlers.
 from runtime.round_player_controls_patch import install as install_round_player_controls
 install_round_player_controls(main)
 from runtime.extra_turn_challenge_guard import install as install_extra_turn_challenge_guard
 install_extra_turn_challenge_guard(main)
-
-# Authoritative private admin/scenario menus and updated help.
 from runtime.admin_menus_v2 import install as install_admin_menus_v2
 install_admin_menus_v2(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 from runtime.admin_menu_cancel_patch import install as install_admin_menu_cancel_patch
 install_admin_menu_cancel_patch(main)
-
-# Re-run the authorization pass so handlers registered by the menu patches
-# receive the same execution-time security boundary.
 install_callback_authorization(main)
 
-# Final V2 controls: player names, one-shot extra turns, next-round mute and
-# strict challenge permissions. This MUST be installed last so no legacy
-# callback can win before these rules.
 from runtime.round_player_controls_v2 import install as install_round_player_controls_v2
 install_round_player_controls_v2(main)
-
-# Prevent stale role information from being exposed through the private
-# "نقش من" command after a game or to non-participants.
+from runtime.round_player_controls_v3 import install as install_round_player_controls_v3
 from runtime.role_security_patch import install as install_role_security_patch
 install_role_security_patch(main)
 
@@ -99,6 +74,8 @@ _original_startup = main.on_startup
 async def on_startup(dp):
     results = await persistent_startup(main, _original_startup)
     logging.info("Persistent runtime startup recovery completed: %s", results)
+    await install_round_player_controls_v3(main)
+    logging.info("GM V3 authoritative controls installed during startup")
 
 if __name__ == "__main__":
     main.executor.start_polling(main.dp, skip_updates=True, on_startup=on_startup)
