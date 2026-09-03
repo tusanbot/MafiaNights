@@ -1,10 +1,20 @@
-"""Add a back-to-main-menu button to the private user dashboard."""
+"""Return the private user dashboard to the canonical private main menu."""
 from __future__ import annotations
 
 from aiogram import types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 BACK_CALLBACK = "userpanel:back"
+
+
+def _private_main_kb():
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton("🛠 مدیریت بازی", callback_data="manage_game"))
+    kb.add(InlineKeyboardButton("⚙ مدیریت سناریو", callback_data="manage_scenarios"))
+    kb.add(InlineKeyboardButton("⚙ امکانات اضافه", callback_data="addons_menu"))
+    kb.add(InlineKeyboardButton("👤 پروفایل", callback_data="up:menu"))
+    kb.add(InlineKeyboardButton("📚 راهنما", callback_data="help"))
+    return kb
 
 
 def install(app, panel):
@@ -22,18 +32,7 @@ def install(app, panel):
             await callback.answer("فقط در پیوی.", show_alert=True)
             return
 
-        kb = InlineKeyboardMarkup(row_width=1)
-        kb.add(InlineKeyboardButton("🛠 مدیریت بازی", callback_data="manage_game"))
-        kb.add(InlineKeyboardButton("⚙ مدیریت سناریو", callback_data="manage_scenarios"))
-        kb.add(InlineKeyboardButton("⚙ امکانات اضافه", callback_data="addons_menu"))
-        if callback.from_user.id == getattr(app, "moderator_id", None):
-            kb.add(InlineKeyboardButton("🛠 مدیریت بازی", callback_data="manage_game"))
-            kb.add(InlineKeyboardButton("⚙ مدیریت سناریو", callback_data="manage_scenarios"))
-            kb.add(InlineKeyboardButton("⚙ امکانات اضافه", callback_data="addons_menu"))
-        kb.add(InlineKeyboardButton("👤 پروفایل", callback_data="up:menu"))
-        kb.add(InlineKeyboardButton("📚 راهنما", callback_data="help"))
-
-        await callback.message.edit_text("📋 منوی ربات:", reply_markup=kb)
+        await callback.message.edit_text("📋 منوی ربات:", reply_markup=_private_main_kb())
         await callback.answer()
 
     app.dp.register_callback_query_handler(back_to_main, lambda c: c.data == BACK_CALLBACK)
