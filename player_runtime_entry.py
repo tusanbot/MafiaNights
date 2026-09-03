@@ -73,6 +73,7 @@ install_final_challenge_moderator_fix(main)
 from runtime.round_state_final_v8 import install as install_round_state_final_v8
 from runtime.round_challenge_final_v9 import install as install_round_challenge_final_v9
 from runtime.round_state_terminal_v10 import install as install_round_state_terminal_v10
+from runtime.turn_day_end_guard import install as install_turn_day_end_guard
 
 _original_startup = main.on_startup
 
@@ -84,7 +85,8 @@ async def on_startup(dp):
     await install_round_state_final_v8(main)
     await install_round_challenge_final_v9(main)
     await install_round_state_terminal_v10(main)
-    logging.info("Terminal round v8 + challenge v9 + transition guard v10 installed")
+    await install_turn_day_end_guard(main)
+    logging.info("Terminal round v8 + challenge v9 + transition guard v10 + day-end guard installed")
 
 if __name__ == "__main__":
     main.executor.start_polling(main.dp, skip_updates=True, on_startup=on_startup)
