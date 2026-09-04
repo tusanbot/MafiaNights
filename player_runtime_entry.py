@@ -53,6 +53,11 @@ install_private_ui_bootstrap(main)
 from runtime.private_navigation_authority import install as install_private_navigation_authority
 install_private_navigation_authority(main)
 
+# Scenario CRUD uses the existing main1 API, but scenario persistence must not
+# crash on Vercel's read-only deployment filesystem.
+from runtime.scenario_persistence_patch import install as install_scenario_persistence_patch
+install_scenario_persistence_patch(main)
+
 # The richer private menu remains available for polling/startup environments.
 from runtime.final_private_ui import install as install_final_private_ui
 
