@@ -47,6 +47,7 @@ install_addons_menu_v2(main)
 from runtime.final_private_ui import install as install_final_private_ui
 
 from runtime.stable_round_engine import install as install_stable_round_engine
+from runtime.stable_round_policy import install as install_stable_round_policy
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
 from runtime.transition_ui_dedup import install as install_transition_ui_dedup
 from runtime.role_distribution_notice import install as install_role_distribution_notice
@@ -74,8 +75,10 @@ async def on_startup(dp):
         logging.exception("Failed to initialize private UI group/admin authorization")
 
     # StableRoundEngine is the sole authority for start/next/challenge/day
-    # transitions. It removes competing legacy transition handlers when installed.
+    # transitions. The policy module only applies pre-day mute state and the
+    # muted-challenge restriction; it does not implement another turn engine.
     install_stable_round_engine(main)
+    install_stable_round_policy(main)
     install_stable_challenge_button_guard(main)
     install_transition_ui_dedup(main)
     logging.info("Stable round engine installed as the sole turn/round authority")
