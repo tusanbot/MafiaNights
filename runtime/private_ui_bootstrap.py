@@ -19,6 +19,10 @@ def _private(callback):
     return bool(callback.message and callback.message.chat.type == "private")
 
 
+def _handler(item):
+    return getattr(item, "callback", None) or getattr(item, "handler", None)
+
+
 def _group_id(app):
     for obj in (app, getattr(app, "addons", None)):
         for key in ("ALLOWED_GROUP_ID", "GROUP_ID", "group_chat_id", "group_id"):
@@ -222,7 +226,7 @@ def install(app):
             getattr(app.dp, "callback_query_handlers", None), "handlers", []
         )
         for item in list(current_registry):
-            fn = getattr(item, "handler", None)
+            fn = _handler(item)
             if fn is None or fn is lazy_final_private_ui:
                 continue
             if getattr(fn, "__module__", "") != "runtime.final_private_ui":
@@ -257,7 +261,9 @@ def install(app):
     for fn, filt in regs:
         app.dp.register_callback_query_handler(fn, filt, state="*")
 
-    owned = [h for h in list(registry) if getattr(getattr(h, "handler", None), "__module__", "") == __name__]
+    # aiogram 2.x exposes HandlerObj.callback; some compatibility layers expose
+    # HandlerObj.handler. Support both when moving bootstrap handlers to front.
+    owned = [h for h in list(registry) if getattr(_handler(h), "__module__", "") == __name__]
     others = [h for h in list(registry) if h not in owned]
     registry[:] = owned + others
     app._private_ui_bootstrap_installed = True
