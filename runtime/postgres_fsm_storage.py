@@ -1,9 +1,9 @@
-"""PostgreSQL-backed aiogram FSM storage for webhook/serverless runtimes.
+"""PostgreSQL-backed aiogram 2 FSM storage for webhook/serverless runtimes.
 
 Vercel may execute consecutive Telegram webhook updates in different Python
 workers. aiogram's MemoryStorage is therefore unsafe for multi-step flows.
-This storage keeps state/data/bucket in PostgreSQL so every webhook invocation
-sees the same FSM session.
+This storage mirrors the aiogram 2 BaseStorage contract while persisting
+state/data/bucket in the existing PostgreSQL database.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, text
 
 
 class PostgresFSMStorage:
-    """Small aiogram-2-compatible storage implemented on the existing DB."""
+    """aiogram 2.25-compatible persistent storage backed by PostgreSQL."""
 
     def __init__(self, database_url: str | None = None):
         url = database_url or os.getenv("DATABASE_URL")
@@ -44,7 +44,24 @@ class PostgresFSMStorage:
             """))
 
     @staticmethod
+    def check_address(*, chat: Any = None, user: Any = None) -> tuple[Any, Any]:
+        if chat is None and user is None:
+            raise ValueError("Both chat and user can't be None")
+        if chat is None:
+            chat = user
+        if user is None:
+            user = chat
+        return chat, user
+
+    @staticmethod
+    def resolve_state(state: Any = None):
+        if state is None:
+            return None
+        return getattr(state, "state", state)
+
+    @staticmethod
     def _ids(chat: Any, user: Any) -> tuple[str, str]:
+        chat, user = PostgresFSMStorage.check_address(chat=chat, user=user)
         return str(chat), str(user)
 
     def _ensure_row(self, chat: Any, user: Any) -> None:
@@ -56,22 +73,23 @@ class PostgresFSMStorage:
                 on conflict (chat_id, user_id) do nothing
             """), {"chat_id": chat_id, "user_id": user_id})
 
-    async def get_state(self, *, chat: Any, user: Any, default: Any = None):
+    async def get_state(self, *, chat: Any = None, user: Any = None, default: Any = None):
         self._ensure_row(chat, user)
         chat_id, user_id = self._ids(chat, user)
         with self.engine.begin() as conn:
             value = conn.execute(text("select state from public.mafia_fsm_state where chat_id=:chat_id and user_id=:user_id"),
                                  {"chat_id": chat_id, "user_id": user_id}).scalar()
-        return default if value is None else value
+        return self.resolve_state(default) if value is None else value
 
-    async def set_state(self, *, chat: Any, user: Any, state: Any = None):
+    async def set_state(self, *, chat: Any = None, user: Any = None, state: Any = None):
         chat_id, user_id = self._ids(chat, user)
         self._ensure_row(chat, user)
+        state = self.resolve_state(state)
         with self.engine.begin() as conn:
             conn.execute(text("update public.mafia_fsm_state set state=:state, updated_at=now() where chat_id=:chat_id and user_id=:user_id"),
                          {"chat_id": chat_id, "user_id": user_id, "state": state})
 
-    async def get_data(self, *, chat: Any, user: Any, default: Any = None):
+    async def get_data(self, *, chat: Any = None, user: Any = None, default: Any = None):
         self._ensure_row(chat, user)
         chat_id, user_id = self._ids(chat, user)
         with self.engine.begin() as conn:
@@ -79,20 +97,22 @@ class PostgresFSMStorage:
                                  {"chat_id": chat_id, "user_id": user_id}).scalar()
         return dict(value or (default or {}))
 
-    async def set_data(self, *, chat: Any, user: Any, data: dict | None = None):
+    async def set_data(self, *, chat: Any = None, user: Any = None, data: dict | None = None):
         chat_id, user_id = self._ids(chat, user)
         self._ensure_row(chat, user)
         with self.engine.begin() as conn:
             conn.execute(text("update public.mafia_fsm_state set data=:data::jsonb, updated_at=now() where chat_id=:chat_id and user_id=:user_id"),
                          {"chat_id": chat_id, "user_id": user_id, "data": json.dumps(data or {}, ensure_ascii=False)})
 
-    async def update_data(self, *, chat: Any, user: Any, **kwargs):
-        data = await self.get_data(chat=chat, user=user)
-        data.update(kwargs)
-        await self.set_data(chat=chat, user=user, data=data)
-        return data
+    async def update_data(self, *, chat: Any = None, user: Any = None, data: dict | None = None, **kwargs):
+        merged = dict(data or {})
+        merged.update(kwargs)
+        current = await self.get_data(chat=chat, user=user)
+        current.update(merged)
+        await self.set_data(chat=chat, user=user, data=current)
+        return current
 
-    async def reset_state(self, *, chat: Any, user: Any, with_data: bool = False):
+    async def reset_state(self, *, chat: Any = None, user: Any = None, with_data: bool = True):
         chat_id, user_id = self._ids(chat, user)
         self._ensure_row(chat, user)
         with self.engine.begin() as conn:
@@ -103,10 +123,13 @@ class PostgresFSMStorage:
                 conn.execute(text("update public.mafia_fsm_state set state=null, updated_at=now() where chat_id=:chat_id and user_id=:user_id"),
                              {"chat_id": chat_id, "user_id": user_id})
 
-    async def finish(self, *, chat: Any, user: Any):
+    async def finish(self, *, chat: Any = None, user: Any = None):
         await self.reset_state(chat=chat, user=user, with_data=True)
 
-    async def get_bucket(self, *, chat: Any, user: Any, default: Any = None):
+    def has_bucket(self):
+        return True
+
+    async def get_bucket(self, *, chat: Any = None, user: Any = None, default: Any = None):
         self._ensure_row(chat, user)
         chat_id, user_id = self._ids(chat, user)
         with self.engine.begin() as conn:
@@ -114,20 +137,21 @@ class PostgresFSMStorage:
                                  {"chat_id": chat_id, "user_id": user_id}).scalar()
         return dict(value or (default or {}))
 
-    async def set_bucket(self, *, chat: Any, user: Any, bucket: dict | None = None):
+    async def set_bucket(self, *, chat: Any = None, user: Any = None, bucket: dict | None = None):
         chat_id, user_id = self._ids(chat, user)
         self._ensure_row(chat, user)
         with self.engine.begin() as conn:
             conn.execute(text("update public.mafia_fsm_state set bucket=:bucket::jsonb, updated_at=now() where chat_id=:chat_id and user_id=:user_id"),
                          {"chat_id": chat_id, "user_id": user_id, "bucket": json.dumps(bucket or {}, ensure_ascii=False)})
 
-    async def update_bucket(self, *, chat: Any, user: Any, **kwargs):
-        bucket = await self.get_bucket(chat=chat, user=user)
-        bucket.update(kwargs)
-        await self.set_bucket(chat=chat, user=user, bucket=bucket)
-        return bucket
+    async def update_bucket(self, *, chat: Any = None, user: Any = None, bucket: dict | None = None, **kwargs):
+        current = await self.get_bucket(chat=chat, user=user)
+        current.update(bucket or {})
+        current.update(kwargs)
+        await self.set_bucket(chat=chat, user=user, bucket=current)
+        return current
 
-    async def reset_bucket(self, *, chat: Any, user: Any):
+    async def reset_bucket(self, *, chat: Any = None, user: Any = None):
         await self.set_bucket(chat=chat, user=user, bucket={})
 
     async def close(self):
