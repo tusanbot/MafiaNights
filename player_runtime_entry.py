@@ -10,6 +10,14 @@ install_player_bridge(main)
 _bridge = install_persistent_bridge(main)
 main.player_service = player_service
 
+# Webhook requests can land on different serverless workers. FSM and scenario
+# configuration therefore must be backed by PostgreSQL, not process memory or
+# the read-only deployment filesystem.
+from runtime.postgres_fsm_storage import install as install_postgres_fsm_storage
+install_postgres_fsm_storage(main)
+from runtime.scenario_persistence_patch import install as install_scenario_persistence_patch
+install_scenario_persistence_patch(main)
+
 # Core game/lobby engines. These are state/flow layers, not private-menu owners.
 from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
@@ -20,7 +28,7 @@ install_lobby_v7_patch(main)
 from runtime.lobby_legacy_bridge import install as install_lobby_legacy_bridge
 install_lobby_legacy_bridge(main)
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
-install_game_flow_ui_v2(main)
+a=install_game_flow_ui_v2(main)
 
 from runtime.game_flow_authority import install as install_game_flow_authority
 install_game_flow_authority(main)
@@ -52,11 +60,6 @@ install_private_ui_bootstrap(main)
 # every legacy/bridge layer so its routes win in webhook mode as well.
 from runtime.private_navigation_authority import install as install_private_navigation_authority
 install_private_navigation_authority(main)
-
-# Scenario CRUD uses the existing main1 API, but scenario persistence must not
-# crash on Vercel's read-only deployment filesystem.
-from runtime.scenario_persistence_patch import install as install_scenario_persistence_patch
-install_scenario_persistence_patch(main)
 
 # The richer private menu remains available for polling/startup environments.
 from runtime.final_private_ui import install as install_final_private_ui
@@ -100,6 +103,10 @@ async def on_startup(dp):
 
     # Final private UI is installed last and moved to the front of the aiogram 2.x registries.
     await install_final_private_ui(main)
+    # final_private_ui promotes its own handlers during startup; promote the
+    # webhook navigation authority again so its exact back/scenario routes stay
+    # ahead of every legacy private handler in polling mode too.
+    install_private_navigation_authority(main)
     install_role_distribution_notice(main)
     logging.info("FINAL UI AUTHORITY ACTIVE: private start + management are isolated from lobby")
 
