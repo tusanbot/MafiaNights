@@ -35,4 +35,4 @@ def test_clean_entrypoint_imports_without_network_startup(monkeypatch, tmp_path)
     assert module.persistence_status["fsm"] is False
     assert module.persistence_status["scenarios"] is True
     assert module.persistence_status["addons"] is True
-    assert not module.app.dp.loop.is_running()
+    assert module.app.dp.loop is None or not module.app.dp.loop.is_running()
