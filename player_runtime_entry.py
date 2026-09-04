@@ -52,6 +52,11 @@ install_addons_persistence_patch(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 
+# Canonical identity resolver: legacy and persistent player maps use different
+# name fields, so all UI surfaces should share one resilient resolver.
+from runtime.player_identity import install as install_player_identity
+install_player_identity(main)
+
 # SINGLE private-navigation owner for webhook mode. The old bootstrap and
 # reorder modules are intentionally not installed: duplicate registrations were
 # causing callbacks to fall through to legacy handlers.
