@@ -26,7 +26,7 @@ install_lobby_v7_patch(main)
 from runtime.lobby_legacy_bridge import install as install_lobby_legacy_bridge
 install_lobby_legacy_bridge(main)
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
-game_flow_ui_v2 = install_game_flow_ui_v2(main)
+install_game_flow_ui_v2(main)
 from runtime.game_flow_authority import install as install_game_flow_authority
 install_game_flow_authority(main)
 from runtime.challenge_authority import install as install_challenge_authority
