@@ -48,6 +48,11 @@ install_addons_menu_v2(main)
 from runtime.private_ui_bootstrap import install as install_private_ui_bootstrap
 install_private_ui_bootstrap(main)
 
+# Final import-time navigation authority. It is intentionally installed after
+# every legacy/bridge layer so its routes win in webhook mode as well.
+from runtime.private_navigation_authority import install as install_private_navigation_authority
+install_private_navigation_authority(main)
+
 # The richer private menu remains available for polling/startup environments.
 from runtime.final_private_ui import install as install_final_private_ui
 
