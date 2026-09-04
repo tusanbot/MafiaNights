@@ -47,8 +47,6 @@ def install(main):
 
     async def start_round_with_policy(callback):
         _ensure_state(main)
-        # Do not mutate state for invalid clicks. StableRoundEngine remains the
-        # authority for authorization and lifecycle validation.
         if (
             callback.message
             and callback.message.chat.type in {"group", "supergroup"}
@@ -56,8 +54,6 @@ def install(main):
             and getattr(main, "game_running", False)
             and not getattr(main, "_stable_day_active", False)
         ):
-            # Selection made during the previous day becomes active here,
-            # before StableRoundEngine freezes this day's normal order.
             main._gm_muted_active = set(main._gm_muted_next_round)
             main._gm_muted_next_round.clear()
         return await start_fn(callback)
@@ -87,5 +83,15 @@ def install(main):
     start_item.handler = start_round_with_policy
     challenge_item.handler = challenge_request_with_policy
     main._stable_round_policy_installed = True
+
+    # Voting is attached after the stable engine has registered its authoritative
+    # DAY-end function. It does not introduce another NEXT/round engine.
+    try:
+        from runtime.voting_runtime import install as install_voting_runtime
+        install_voting_runtime(main)
+    except Exception:
+        logging.exception("stable round policy: failed to install voting runtime")
+        raise
+
     logging.info("Stable round policy installed: pending mute -> active day state; muted challenge blocked")
     return True
