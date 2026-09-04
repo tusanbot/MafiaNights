@@ -1,7 +1,12 @@
-"""Existing private add-ons menu for MafiaNights."""
+"""Private add-ons/settings controller for MafiaNights.
+
+The private UI owns the top-level navigation; this module owns only the
+add-ons/settings screens and their controls.
+"""
 from __future__ import annotations
 
 import copy
+
 from aiogram.dispatcher.handler import CancelHandler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from mafia_addons import DEFAULT_GROUP_SETTINGS
@@ -15,7 +20,7 @@ class AddonsMenuV2:
 
     def group_id(self):
         for obj in (self.addons, self.app):
-            for attr in ("group_id", "group_chat_id", "ALLOWED_GROUP_ID", "GROUP_ID"):
+            for attr in ("group_id", "ALLOWED_GROUP_ID", "GROUP_ID", "group_chat_id"):
                 value = getattr(obj, attr, None)
                 if value:
                     try:
@@ -25,28 +30,13 @@ class AddonsMenuV2:
         return None
 
     async def allowed(self, uid):
-        # The moderator must work even when there is no active lobby.
-        ids = set()
-        for attr in ("moderator_id",):
-            value = getattr(self.app, attr, None)
-            if value:
-                ids.add(value)
-        for attr in ("reserved_god", "reserved_moderator", "god"):
-            value = getattr(self.app, attr, None)
-            if isinstance(value, dict):
-                value = value.get("id") or value.get("user_id")
-            if value:
-                ids.add(value)
-        if uid in ids:
+        if uid == getattr(self.app, "moderator_id", None):
             return True
-
         for attr in ("admins", "group_admins"):
-            cached = getattr(self.app, attr, None) or []
-            for item in cached:
+            for item in getattr(self.app, attr, None) or []:
                 candidate = getattr(getattr(item, "user", None), "id", item)
                 if candidate == uid:
                     return True
-
         gid = self.group_id()
         if not gid:
             return False
@@ -86,14 +76,29 @@ class AddonsMenuV2:
             InlineKeyboardButton("▶️ شروع خودکار", callback_data="adm2:add:auto"),
             InlineKeyboardButton("🎨 نمایش و رنگ‌بندی", callback_data="adm2:add:visual"),
             InlineKeyboardButton("♻️ بازگردانی تنظیمات پیش‌فرض", callback_data="adm2:add:reset"),
-            InlineKeyboardButton("⬅️ بازگشت", callback_data="final:start"),
+            InlineKeyboardButton("⬅️ بازگشت", callback_data="addons:back"),
         )
         await callback.message.edit_text(
             "⚙️ <b>امکانات اضافه</b>\n\n"
             f"🛡 امنیت: {'فعال' if s.get('security', {}).get('control_speech', True) else 'غیرفعال'}\n"
             f"⏭ ضداسپم: {'فعال' if s.get('next', {}).get('anti_spam', True) else 'غیرفعال'}\n"
             f"▶️ شروع خودکار: {'فعال' if s.get('auto_start', {}).get('enabled', False) else 'غیرفعال'}",
-            reply_markup=kb, parse_mode="HTML")
+            reply_markup=kb, parse_mode="HTML",
+        )
+        await callback.answer()
+        raise CancelHandler()
+
+    async def back_main(self, callback):
+        if callback.message.chat.type != "private":
+            raise CancelHandler()
+        if not await self.allowed(callback.from_user.id):
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True)
+            raise CancelHandler()
+        from runtime.final_private_ui import start_keyboard
+        await callback.message.edit_text(
+            "🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:",
+            reply_markup=start_keyboard(), parse_mode="HTML",
+        )
         await callback.answer()
         raise CancelHandler()
 
@@ -104,7 +109,8 @@ class AddonsMenuV2:
         kb = InlineKeyboardMarkup(row_width=1).add(
             InlineKeyboardButton(f"🗣 کنترل نوبت صحبت: {'فعال' if s.get('control_speech', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:speech"),
             InlineKeyboardButton(f"🗑 حذف پیام خارج نوبت: {'فعال' if s.get('delete_out_of_turn', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:delete"),
-            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),)
+            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),
+        )
         await callback.message.edit_text("🔐 <b>امنیت بازی</b>", reply_markup=kb, parse_mode="HTML"); await callback.answer(); raise CancelHandler()
 
     async def next_menu(self, callback):
@@ -115,7 +121,8 @@ class AddonsMenuV2:
             InlineKeyboardButton(f"🛡 ضداسپم نکست: {'فعال' if s.get('anti_spam', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:anti"),
             InlineKeyboardButton(f"👤 اجازه نکست به بازیکنان: {'فعال' if s.get('allow_players_next', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:players"),
             InlineKeyboardButton(f"🎩 اجازه نکست به گرداننده: {'فعال' if s.get('allow_moderator_next', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:moderator"),
-            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),)
+            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),
+        )
         await callback.message.edit_text("⏭ <b>مدیریت نکست</b>", reply_markup=kb, parse_mode="HTML"); await callback.answer(); raise CancelHandler()
 
     async def auto(self, callback):
@@ -124,7 +131,8 @@ class AddonsMenuV2:
         s = self.settings().get("auto_start", {})
         kb = InlineKeyboardMarkup(row_width=1).add(
             InlineKeyboardButton(f"▶️ شروع خودکار دور جدید: {'فعال' if s.get('enabled', False) else 'غیرفعال'}", callback_data="adm2:add:toggle:auto"),
-            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),)
+            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),
+        )
         await callback.message.edit_text("▶️ <b>شروع خودکار</b>\n\nاین گزینه در صورت پشتیبانی جریان بازی، آغاز خودکار دور بعدی را کنترل می‌کند.", reply_markup=kb, parse_mode="HTML"); await callback.answer(); raise CancelHandler()
 
     async def visual(self, callback):
@@ -134,7 +142,8 @@ class AddonsMenuV2:
         kb = InlineKeyboardMarkup(row_width=1).add(
             InlineKeyboardButton(f"🎨 نمایش نوبت اصلی: {'فعال' if s.get('primary', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:primary"),
             InlineKeyboardButton(f"🟥 نمایش نوبت چالش: {'فعال' if s.get('challenge', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:challenge"),
-            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),)
+            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="addons_menu"),
+        )
         await callback.message.edit_text("🎨 <b>نمایش و رنگ‌بندی</b>", reply_markup=kb, parse_mode="HTML"); await callback.answer(); raise CancelHandler()
 
     async def toggle(self, callback):
@@ -163,6 +172,7 @@ class AddonsMenuV2:
     def install(self):
         d = self.dp
         d.register_callback_query_handler(self.menu, lambda c: c.data == "addons_menu", state="*")
+        d.register_callback_query_handler(self.back_main, lambda c: c.data == "addons:back", state="*")
         d.register_callback_query_handler(self.security, lambda c: c.data == "adm2:add:security", state="*")
         d.register_callback_query_handler(self.next_menu, lambda c: c.data == "adm2:add:next", state="*")
         d.register_callback_query_handler(self.auto, lambda c: c.data == "adm2:add:auto", state="*")
@@ -170,7 +180,7 @@ class AddonsMenuV2:
         d.register_callback_query_handler(self.toggle, lambda c: c.data.startswith("adm2:add:toggle:"), state="*")
         d.register_callback_query_handler(self.reset, lambda c: c.data == "adm2:add:reset", state="*")
         handlers = getattr(d.callback_query_handlers, "handlers", [])
-        names = {"menu", "security", "next_menu", "auto", "visual", "toggle", "reset"}
+        names = {"menu", "back_main", "security", "next_menu", "auto", "visual", "toggle", "reset"}
         for i in range(len(handlers) - 1, -1, -1):
             if getattr(getattr(handlers[i], "handler", None), "__name__", "") in names:
                 handlers.insert(0, handlers.pop(i))
