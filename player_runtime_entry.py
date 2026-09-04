@@ -63,6 +63,7 @@ from runtime.stable_round_policy import install as install_stable_round_policy
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
 from runtime.transition_ui_dedup import install as install_transition_ui_dedup
 from runtime.role_distribution_notice import install as install_role_distribution_notice
+from runtime.voting_runtime import install as install_voting_runtime
 
 _original_startup = main.on_startup
 
@@ -83,6 +84,10 @@ async def on_startup(dp):
     install_stable_round_policy(main)
     install_stable_challenge_button_guard(main)
     install_transition_ui_dedup(main)
+
+    # Voting must be installed after the stable round engine so its day-end
+    # integration can replace the engine's final-day UI with the voting menu.
+    install_voting_runtime(main)
 
     # Polling mode only: webhook mode already has the import-time router.
     from runtime.final_private_ui import install as install_final_private_ui
