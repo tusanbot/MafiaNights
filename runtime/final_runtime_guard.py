@@ -44,6 +44,21 @@ def _set_handler(item, fn):
     return False
 
 
+def _configured_group_id(main):
+    """Return the actual game-group id, never the private callback chat id."""
+    # ALLOWED_GROUP_ID is the authoritative static configuration. Mutable
+    # group_chat_id can temporarily contain a private/chat context in legacy
+    # flows, so it must not win over the configured game group.
+    for attr in ("ALLOWED_GROUP_ID", "GROUP_ID", "group_id", "group_chat_id"):
+        value = getattr(main, attr, None)
+        if value:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
 def install(main):
     dp = main.dp
     registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
@@ -80,17 +95,19 @@ def install(main):
             protected_game = data in ADMIN_OR_MOD_EXACT or any(data.startswith(p) for p in ADMIN_OR_MOD_PREFIXES)
 
             if protected_admin or protected_game:
-                chat = getattr(getattr(callback, "message", None), "chat", None)
-                group_id = getattr(chat, "id", None) or getattr(main, "group_chat_id", None)
+                # Authorization is always against the configured game group.
+                # Never use callback.message.chat.id here: private callbacks
+                # arrive with the administrator's private chat id.
+                group_id = _configured_group_id(main)
                 user_id = getattr(getattr(callback, "from_user", None), "id", None)
 
                 is_admin = False
                 if group_id and user_id:
                     try:
-                        admins = await main.bot.get_chat_administrators(int(group_id))
+                        admins = await main.bot.get_chat_administrators(group_id)
                         is_admin = any(a.user.id == user_id for a in admins)
                     except Exception:
-                        logging.exception("FINAL runtime guard: admin lookup failed")
+                        logging.exception("FINAL runtime guard: admin lookup failed for configured group %s", group_id)
 
                 is_mod = user_id == getattr(main, "moderator_id", None)
                 allowed = is_admin if protected_admin else (is_admin or is_mod)
