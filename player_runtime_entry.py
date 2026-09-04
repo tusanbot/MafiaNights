@@ -26,7 +26,7 @@ install_lobby_v7_patch(main)
 from runtime.lobby_legacy_bridge import install as install_lobby_legacy_bridge
 install_lobby_legacy_bridge(main)
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
-install_game_flow_ui_v2(main)
+game_flow_ui_v2 = install_game_flow_ui_v2(main)
 from runtime.game_flow_authority import install as install_game_flow_authority
 install_game_flow_authority(main)
 from runtime.challenge_authority import install as install_challenge_authority
@@ -44,6 +44,11 @@ from runtime.start_profile_patch import install as install_start_profile_patch
 install_start_profile_patch(main)
 from runtime.user_panel_back_patch import install as install_user_panel_back_patch
 install_user_panel_back_patch(main, user_panel)
+
+# Canonical standalone text commands. This must be registered on main1.dp;
+# commands.py intentionally no longer owns a second Dispatcher.
+from commands import register_commands as register_text_commands
+register_text_commands(main)
 
 # MafiaAddons is instantiated by main1 during import. Replace its filesystem
 # persistence with PostgreSQL before any add-on UI handler can read/write it.
