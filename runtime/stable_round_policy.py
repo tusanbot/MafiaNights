@@ -47,10 +47,19 @@ def install(main):
 
     async def start_round_with_policy(callback):
         _ensure_state(main)
-        # Mute selected during the previous day is consumed exactly at the
-        # beginning of this day, before StableRoundEngine freezes the order.
-        main._gm_muted_active = set(main._gm_muted_next_round)
-        main._gm_muted_next_round.clear()
+        # Do not mutate state for invalid clicks. StableRoundEngine remains the
+        # authority for authorization and lifecycle validation.
+        if (
+            callback.message
+            and callback.message.chat.type in {"group", "supergroup"}
+            and int(callback.from_user.id) == int(getattr(main, "moderator_id", -1) or -1)
+            and getattr(main, "game_running", False)
+            and not getattr(main, "_stable_day_active", False)
+        ):
+            # Selection made during the previous day becomes active here,
+            # before StableRoundEngine freezes this day's normal order.
+            main._gm_muted_active = set(main._gm_muted_next_round)
+            main._gm_muted_next_round.clear()
         return await start_fn(callback)
 
     start_round_with_policy.__name__ = "start_round"
@@ -60,14 +69,12 @@ def install(main):
     async def challenge_request_with_policy(callback):
         _ensure_state(main)
         try:
-            target = int(str(callback.data).split("_", 2)[2])
-        except Exception:
-            return await challenge_fn(callback)
-        requester_seat = None
-        for seat, uid in (getattr(main, "player_slots", {}) or {}).items():
-            if int(uid) == int(callback.from_user.id):
-                requester_seat = int(seat)
-                break
+            requester_seat = next(
+                int(seat) for seat, uid in (getattr(main, "player_slots", {}) or {}).items()
+                if int(uid) == int(callback.from_user.id)
+            )
+        except StopIteration:
+            requester_seat = None
         if requester_seat in main._gm_muted_active:
             await callback.answer("⛔ بازیکن ساکت نمی‌تواند درخواست چالش بدهد.", show_alert=True)
             raise CancelHandler()
