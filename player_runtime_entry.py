@@ -52,10 +52,10 @@ install_addons_persistence_patch(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 
-# Canonical identity resolver: legacy and persistent player maps use different
-# name fields, so all UI surfaces should share one resilient resolver.
-from runtime.player_identity import install as install_player_identity
-install_player_identity(main)
+# Do not globally replace main.display_name here. main1 already owns the
+# canonical nickname/players resolution and the stable round engine performs
+# its own safe fallback. A global wrapper changed the semantics of existing
+# turn/challenge surfaces and caused generic names to leak into several UIs.
 
 # SINGLE private-navigation owner for webhook mode. The old bootstrap and
 # reorder modules are intentionally not installed: duplicate registrations were
@@ -90,8 +90,9 @@ async def on_startup(dp):
     install_stable_challenge_button_guard(main)
     install_transition_ui_dedup(main)
 
-    # Voting must be installed after the stable round engine so its day-end
-    # integration can replace the engine's final-day UI with the voting menu.
+    # Voting registers a day-end hook on the authoritative round engine. This
+    # avoids monkey-patching the module-level _end_day after closures have been
+    # created and guarantees the end-of-day menu is reached from _advance().
     install_voting_runtime(main)
 
     # Polling mode only: webhook mode already has the import-time router.
