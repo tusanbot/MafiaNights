@@ -1,10 +1,9 @@
 """Authoritative-state boundary for legacy Telegram globals.
 
-During migration, ``main.py`` still needs a number of mutable globals for
-rendering and callback compatibility. They are treated as a derived cache,
-not as the source of truth. This module hydrates them from PersistentGameRuntime
-before updates and captures only compatibility mutations back into persisted
-state after an update.
+During migration, ``main.py`` still needs mutable globals for rendering and
+callback compatibility. They are treated as a derived cache, not the source
+of truth. This module hydrates them from PersistentGameRuntime before updates
+and captures supported compatibility mutations into persisted state.
 """
 from __future__ import annotations
 
@@ -21,6 +20,9 @@ PERSISTED_FIELDS = {
     "current_turn_seat",
     "players_in_game",
     "extra_turns",
+    "removed_players",
+    "next_by_players_enabled",
+    "next_by_moderator_enabled",
 }
 EPHEMERAL_FIELDS = {
     "game_message_id",
@@ -82,6 +84,18 @@ def _serialise_players_in_game(value: Any) -> dict[str, dict[str, Any]]:
     return {str(key): dict(row) for key, row in _normalise_players_in_game(value).items()}
 
 
+def _normalise_removed(value: Any) -> dict[int, dict[str, Any]]:
+    result: dict[int, dict[str, Any]] = {}
+    for key, row in (value or {}).items():
+        if not isinstance(row, dict):
+            continue
+        try:
+            result[int(key)] = dict(row)
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
 class LegacyStateAuthority:
     """Synchronize legacy compatibility state without making it authoritative."""
 
@@ -116,6 +130,9 @@ class LegacyStateAuthority:
         self.main.turn_order = _normalise_order(payload.get("turn_order"))
         self.main.extra_turns = _normalise_order(payload.get("extra_turns"))
         self.main.players_in_game = _normalise_players_in_game(payload.get("players_in_game"))
+        self.main.removed_players = {int(group_id): _normalise_removed(payload.get("removed_players"))}
+        self.main.next_by_players_enabled = bool(payload.get("next_by_players_enabled", True))
+        self.main.next_by_moderator_enabled = bool(payload.get("next_by_moderator_enabled", True))
 
         day = self.runtime.day_snapshot(group_id)
         self.main.day_number = int(day.get("day") or 0)
@@ -138,13 +155,7 @@ class LegacyStateAuthority:
         return snapshot
 
     def capture_compatibility_mutations(self, group_id: int) -> dict[str, Any] | None:
-        """Capture legacy mutations into persistence, then immediately rehydrate.
-
-        This is intentionally limited to state that has no dedicated cut-over
-        callback. Dedicated Lobby/Turn/Challenge/Day bridges remain responsible
-        for their transactional operations; this method only closes gaps in
-        legacy transitions and running-game substitutions.
-        """
+        """Capture legacy mutations into persistence, then immediately rehydrate."""
         game = self._game(group_id)
         if not game:
             return None
@@ -156,6 +167,11 @@ class LegacyStateAuthority:
         payload["turn_order"] = _normalise_order(getattr(self.main, "turn_order", []))
         payload["extra_turns"] = _normalise_order(getattr(self.main, "extra_turns", []))
         payload["players_in_game"] = _serialise_players_in_game(getattr(self.main, "players_in_game", {}))
+        gid = int(group_id)
+        removed_all = getattr(self.main, "removed_players", {}) or {}
+        payload["removed_players"] = _normalise_removed(removed_all.get(gid, {}))
+        payload["next_by_players_enabled"] = bool(getattr(self.main, "next_by_players_enabled", True))
+        payload["next_by_moderator_enabled"] = bool(getattr(self.main, "next_by_moderator_enabled", True))
         payload["state_authority"] = "persistent"
 
         current_index = int(getattr(self.main, "current_turn_index", 0) or 0)
