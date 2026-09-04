@@ -58,7 +58,7 @@ def _name(main, uid, seat=None):
 def _row_name(main, row): return row.get("nickname") or row.get("first_name") or _name(main, row["player_id"], row.get("seat"))
 def _default(main):
     return {"round": 1, "wait_seconds": 20, "vote_seconds": 20, "mode": AUTO,
-            "vote_rights_taken": [], "targets": [int(x["player_id"]) for x in _players(main)],
+            "vote_rights_taken": [], "round_two_vote_rights_taken": [], "targets": [int(x["player_id"]) for x in _players(main)],
             "target_index": 0, "votes": {}, "started_at": None, "deadline": None,
             "phase": "settings", "selected_round_two": []}
 
@@ -70,6 +70,10 @@ def _v(main):
 
 def _put(main, voting):
     payload = _state(main); payload["voting"] = voting; _save(main, payload); return voting
+
+def _active_rights(v):
+    key = "round_two_vote_rights_taken" if int(v.get("round") or 1) == 2 else "vote_rights_taken"
+    return {int(x) for x in v.get(key, [])}
 
 def _settings_kb(v):
     mode = "خودکار" if v.get("mode") == AUTO else "دستی"
@@ -88,12 +92,17 @@ def _choices(prefix, values, current):
         kb.add(InlineKeyboardButton(label, callback_data=f"vote:{prefix}:{value}"))
     kb.add(InlineKeyboardButton("⬅️ تنظیمات رای‌گیری", callback_data="vote:settings")); return kb
 
-def _rights_kb(main, v):
-    taken = {int(x) for x in v.get("vote_rights_taken", [])}; kb = InlineKeyboardMarkup(row_width=1)
+def _rights_kb(main, v, round_two=False):
+    key = "round_two_vote_rights_taken" if round_two else "vote_rights_taken"
+    taken = {int(x) for x in v.get(key, [])}; kb = InlineKeyboardMarkup(row_width=1)
+    allowed = set(int(x) for x in (v.get("selected_round_two") or [])) if round_two else None
     for row in _players(main):
-        uid = int(row["player_id"]); label = f"🚫 {_row_name(main, row)}" + (" ✅" if uid in taken else "")
-        kb.add(InlineKeyboardButton(label, callback_data=f"vote:right:{uid}"))
-    kb.add(InlineKeyboardButton("⬅️ تنظیمات رای‌گیری", callback_data="vote:settings")); return kb
+        uid = int(row["player_id"])
+        if allowed is not None and uid not in allowed: continue
+        label = f"🚫 {_row_name(main, row)}" + (" ✅" if uid in taken else "")
+        kb.add(InlineKeyboardButton(label, callback_data=f"vote:r2right:{uid}" if round_two else f"vote:right:{uid}"))
+    kb.add(InlineKeyboardButton("⬅️ تنظیمات رای‌گیری", callback_data="vote:settings"))
+    return kb
 
 def _day_end_kb():
     return InlineKeyboardMarkup(row_width=1).add(
@@ -125,7 +134,7 @@ async def _timer(main, deadline, expected):
 async def _start_wait(main):
     v = _v(main); deadline = time.time() + int(v["wait_seconds"])
     v.update(phase="waiting", started_at=time.time(), deadline=deadline, target_index=0, votes={}); _put(main, v)
-    blocked = {int(x) for x in v.get("vote_rights_taken", [])}; names = [_row_name(main, r) for r in _players(main) if int(r["player_id"]) in blocked]
+    blocked = _active_rights(v); names = [_row_name(main, r) for r in _players(main) if int(r["player_id"]) in blocked]
     blocked_text = "\n".join(f"• {html.escape(x)}" for x in names) if names else "• هیچ‌کس"
     await main.bot.send_message(_gid(main), f"🗳 <b>رای‌گیری پس از {int(v['wait_seconds'])} ثانیه شروع می‌شود.</b>\nبرای رای به هر بازیکن {int(v['vote_seconds'])} ثانیه فرصت دارید.\n\n🚫 <b>بازیکنانی که حق رای ندارند:</b>\n{blocked_text}", parse_mode="HTML")
     main._voting_task = asyncio.create_task(_timer(main, deadline, "waiting"))
@@ -146,8 +155,8 @@ async def _round2(main, callback):
     v = _v(main); selected = {int(x) for x in v.get("selected_round_two", [])}; kb = InlineKeyboardMarkup(row_width=1)
     for row in _players(main):
         uid = int(row["player_id"]); kb.add(InlineKeyboardButton(_row_name(main, row) + (" ✅" if uid in selected else ""), callback_data=f"vote:r2pick:{uid}"))
-    kb.add(InlineKeyboardButton("✅ تایید و شروع رای دوم", callback_data="vote:r2confirm"), InlineKeyboardButton("⬅️ بازگشت", callback_data="vote:settings"))
-    await callback.message.edit_text("🔄 <b>بازیکنان رای دوم را انتخاب کنید.</b>", reply_markup=kb, parse_mode="HTML"); await callback.answer()
+    kb.add(InlineKeyboardButton("🚫 گرفتن حق رای دور دوم", callback_data="vote:r2rights"), InlineKeyboardButton("✅ تایید و شروع رای دوم", callback_data="vote:r2confirm"), InlineKeyboardButton("⬅️ بازگشت", callback_data="vote:settings"))
+    await callback.message.edit_text("🔄 <b>بازیکنان رای دوم را انتخاب کنید.</b>\n\nابتدا بازیکنان را انتخاب کنید، سپس در صورت نیاز از گزینه «گرفتن حق رای دور دوم» استفاده کنید.", reply_markup=kb, parse_mode="HTML"); await callback.answer()
 
 def install(main):
     if getattr(main, "_voting_runtime_installed", False): return False
@@ -167,7 +176,7 @@ def install(main):
     async def start(c):
         await only_mod(c); v=_v(main)
         if v.get("phase") in {"waiting","voting"}: await c.answer("⚠️ رای‌گیری در حال اجراست.",show_alert=True); raise CancelHandler()
-        saved={k:v.get(k) for k in ("wait_seconds","vote_seconds","mode","vote_rights_taken","selected_round_two")}; fresh=_default(main); fresh.update(saved); fresh["targets"]=[int(x["player_id"]) for x in _players(main)]; _put(main,fresh)
+        saved={k:v.get(k) for k in ("wait_seconds","vote_seconds","mode","vote_rights_taken","selected_round_two","round_two_vote_rights_taken")}; fresh=_default(main); fresh.update(saved); fresh["targets"]=[int(x["player_id"]) for x in _players(main)]; _put(main,fresh)
         rt,gid=_rt(main),_gid(main)
         if rt and gid:
             try: rt.days.set_phase(gid,"voting",extra={"voting":fresh})
@@ -176,7 +185,7 @@ def install(main):
     async def cast(c):
         v=_v(main)
         if v.get("phase")!="voting": await c.answer("⚠️ رای‌گیری فعال نیست.",show_alert=True); raise CancelHandler()
-        voter=int(c.from_user.id); blocked={int(x) for x in v.get("vote_rights_taken",[])}; players={int(x["player_id"]):x for x in _players(main)}
+        voter=int(c.from_user.id); blocked=_active_rights(v); players={int(x["player_id"]):x for x in _players(main)}
         if voter in blocked: await c.answer("🚫 حق رای شما گرفته شده است.",show_alert=True); raise CancelHandler()
         if voter not in players: await c.answer("⛔ شما بازیکن این بازی نیستید.",show_alert=True); raise CancelHandler()
         targets=v.get("targets") or []; idx=int(v.get("target_index") or 0)
@@ -185,9 +194,20 @@ def install(main):
         if voter in bucket: await c.answer("⚠️ رای شما قبلاً ثبت شده است.",show_alert=True); raise CancelHandler()
         bucket.add(voter); votes[str(target)]=sorted(bucket); _put(main,v); await c.answer("✅ رای شما ثبت شد."); raise CancelHandler()
     async def r2pick(c): await only_mod(c); v=_v(main); uid=int(c.data.rsplit(":",1)[1]); s={int(x) for x in v.get("selected_round_two",[])}; s.symmetric_difference_update({uid}); v["selected_round_two"]=sorted(s); _put(main,v); await _round2(main,c)
+    async def r2rights(c):
+        await only_mod(c); v=_v(main)
+        selected={int(x) for x in v.get("selected_round_two",[])}
+        v["round_two_vote_rights_taken"]=[int(x) for x in v.get("round_two_vote_rights_taken",[]) if int(x) in selected]
+        _put(main,v)
+        await c.message.edit_text("🚫 <b>گرفتن حق رای دور دوم</b>\n\nفقط بازیکنان انتخاب‌شده برای دور دوم نمایش داده می‌شوند.",reply_markup=_rights_kb(main,v,round_two=True),parse_mode="HTML"); await c.answer()
+    async def r2toggle_right(c):
+        await only_mod(c); v=_v(main); uid=int(c.data.rsplit(":",1)[1]); selected={int(x) for x in v.get("selected_round_two",[])}
+        if uid not in selected: await c.answer("⚠️ این بازیکن در دور دوم انتخاب نشده است.",show_alert=True); raise CancelHandler()
+        s={int(x) for x in v.get("round_two_vote_rights_taken",[])}; s.symmetric_difference_update({uid}); v["round_two_vote_rights_taken"]=sorted(s); _put(main,v); await r2rights(c)
     async def r2confirm(c):
         await only_mod(c); v=_v(main); selected=[int(x) for x in v.get("selected_round_two",[])]
         if not selected: await c.answer("⚠️ حداقل یک بازیکن انتخاب کنید.",show_alert=True); raise CancelHandler()
+        v["round_two_vote_rights_taken"]=[int(x) for x in v.get("round_two_vote_rights_taken",[]) if int(x) in set(selected)]
         v.update(round=2,targets=selected,target_index=0,votes={},phase="waiting",started_at=None,deadline=None); _put(main,v); await c.answer("🔄 رای دوم آماده شد."); await _start_wait(main); raise CancelHandler()
     async def end(c):
         await only_mod(c); v=_v(main); v["phase"],v["deadline"]="finished",None; _put(main,v); await c.message.edit_text("🛡 <b>هیچ بازیکنی وارد دفاع نمی‌شود.</b>",parse_mode="HTML",reply_markup=InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🌙 ورود به فاز شب",callback_data="vote:night"))); await c.answer()
@@ -197,7 +217,7 @@ def install(main):
             try: rt.days.start_night(gid,extra={"voting":_v(main)})
             except Exception: pass
         await c.answer("🌙 فاز شب شروع شد."); raise CancelHandler()
-    pairs=[(settings,lambda c:c.data=="vote:settings"),(wait_menu,lambda c:c.data=="vote:wait"),(duration_menu,lambda c:c.data=="vote:duration"),(choose_wait,lambda c:str(c.data or "").startswith("vote:wait:")),(choose_duration,lambda c:str(c.data or "").startswith("vote:duration:")),(rights,lambda c:c.data=="vote:rights"),(toggle_right,lambda c:str(c.data or "").startswith("vote:right:")),(mode,lambda c:c.data=="vote:mode"),(choose_mode,lambda c:str(c.data or "").startswith("vote:mode:")),(start,lambda c:c.data=="vote:start"),(cast,lambda c:c.data=="vote:cast"),(lambda c:_round2(main,c),lambda c:c.data=="vote:round2"),(r2pick,lambda c:str(c.data or "").startswith("vote:r2pick:")),(r2confirm,lambda c:c.data=="vote:r2confirm"),(end,lambda c:c.data=="vote:end"),(night,lambda c:c.data=="vote:night")]
+    pairs=[(settings,lambda c:c.data=="vote:settings"),(wait_menu,lambda c:c.data=="vote:wait"),(duration_menu,lambda c:c.data=="vote:duration"),(choose_wait,lambda c:str(c.data or "").startswith("vote:wait:")),(choose_duration,lambda c:str(c.data or "").startswith("vote:duration:")),(rights,lambda c:c.data=="vote:rights"),(toggle_right,lambda c:str(c.data or "").startswith("vote:right:")),(mode,lambda c:c.data=="vote:mode"),(choose_mode,lambda c:str(c.data or "").startswith("vote:mode:")),(start,lambda c:c.data=="vote:start"),(cast,lambda c:c.data=="vote:cast"),(lambda c:_round2(main,c),lambda c:c.data=="vote:round2"),(r2pick,lambda c:str(c.data or "").startswith("vote:r2pick:")),(r2rights,lambda c:c.data=="vote:r2rights"),(r2toggle_right,lambda c:str(c.data or "").startswith("vote:r2right:")),(r2confirm,lambda c:c.data=="vote:r2confirm"),(end,lambda c:c.data=="vote:end"),(night,lambda c:c.data=="vote:night")]
     for fn,p in pairs: dp.register_callback_query_handler(fn,p,state="*")
     import runtime.stable_round_engine as stable
     if not getattr(stable,"_voting_end_day_wrapped",False):
