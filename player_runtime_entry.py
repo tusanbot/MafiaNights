@@ -28,8 +28,6 @@ from runtime.challenge_authority import install as install_challenge_authority
 install_challenge_authority(main)
 from runtime.callback_authorization import install as install_callback_authorization
 install_callback_authorization(main)
-from runtime.final_game_flow_authority import install as install_final_game_flow_authority
-install_final_game_flow_authority(main)
 from runtime.final_runtime_guard import install as install_final_runtime_guard
 install_final_runtime_guard(main)
 from runtime.seat_emoji_patch import install as install_seat_emoji_patch
@@ -60,8 +58,6 @@ async def on_startup(dp):
     logging.info("Persistent runtime startup recovery completed: %s", results)
 
     # The private UI must know the configured game group even before a lobby exists.
-    # Populate the same admin cache used by legacy game code so every private
-    # controller sees one consistent authorization source.
     try:
         configured_gid = getattr(main, "ALLOWED_GROUP_ID", None)
         if configured_gid:
@@ -77,10 +73,12 @@ async def on_startup(dp):
     except Exception:
         logging.exception("Failed to initialize private UI group/admin authorization")
 
+    # StableRoundEngine is the sole authority for start/next/challenge/day
+    # transitions. It removes competing legacy transition handlers when installed.
     install_stable_round_engine(main)
     install_stable_challenge_button_guard(main)
     install_transition_ui_dedup(main)
-    logging.info("Stable round engine + transition UI dedup installed")
+    logging.info("Stable round engine installed as the sole turn/round authority")
 
     # Final private UI is installed last and moved to the front of the aiogram 2.x registries.
     await install_final_private_ui(main)
