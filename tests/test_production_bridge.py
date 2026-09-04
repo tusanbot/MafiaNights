@@ -33,7 +33,8 @@ def test_install_attaches_shared_runtime(monkeypatch):
     result = bridge.install(main)
 
     assert main.persistent_runtime is calls["runtime"]
-    assert main._migration_adapter is calls["adapter_runtime"]
+    assert main._migration_adapter is not calls["runtime"]
+    assert calls["adapter_runtime"] is calls["runtime"]
     assert main._persistent_challenge_runtime is calls["runtime"].challenges
     assert result["turn_cutover"]["next_turn"] is True
     assert result["lobby_cutover"]["installed"] is True
