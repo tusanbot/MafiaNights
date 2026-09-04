@@ -24,11 +24,11 @@ def _authorized(environ: dict[str, Any]) -> bool:
 
 
 def _get_application() -> Any:
-    """Return the staged production entry, not the incomplete refactor target."""
+    """Return the canonical clean production application."""
     global _app
     if _app is None:
-        import player_runtime_entry
-        _app = player_runtime_entry.main
+        import main
+        _app = main.app
     return _app
 
 
@@ -37,14 +37,6 @@ async def _dispatch(payload: dict[str, Any]) -> None:
 
     app = _get_application()
     update = types.Update(**payload)
-
-    # aiogram 2.25.1 exposes set_current()/get_current() through
-    # ContextInstanceMixin, but it does NOT provide Bot.reset_current().
-    # The old reset call caused every webhook request to finish with a 500
-    # after the update had already been processed, which made Telegram retry
-    # callbacks and made the UI appear inconsistent. Set the current bot for
-    # each isolated Vercel invocation and leave the context alone when the
-    # invocation ends.
     Bot.set_current(app.bot)
     await app.dp.process_update(update)
 
@@ -97,16 +89,12 @@ def app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
             _seen_updates.clear()
             _seen_updates.add(update_id)
 
-    try:
-        asyncio.run(_dispatch(payload))
-    except Exception:
-        # Preserve Telegram's webhook contract and log the actual exception
-        # through Vercel instead of hiding it behind a context-reset error.
-        raise
-
+    asyncio.run(_dispatch(payload))
     status, headers, body = _response({"ok": True})
     start_response(status, headers)
     return [body]
 
 
+# Compatibility exports for Vercel configurations and older integrations.
 handler = app
+main = app
