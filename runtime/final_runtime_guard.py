@@ -5,7 +5,6 @@ from functools import wraps
 
 from aiogram.dispatcher.handler import CancelHandler
 
-
 ADMIN_ONLY_EXACT = {
     "lv6_new", "new_game", "manage_game", "manage_scenarios",
     "add_scenario", "remove_scenario", "back_main", "choose_scenario",
@@ -26,6 +25,13 @@ LEGACY_GAME_HANDLERS = {
     "distribute_roles_callback",
 }
 
+# These callbacks are owned by the single private UI authority. They must not
+# be passed through a group-admin guard because their callback message lives
+# in the user's private chat. The private UI performs its own group-admin
+# authorization against the configured game group.
+PRIVATE_UI_EXACT = {"manage_game", "final:start", "final:scenarios", "final:help", "addons_menu"}
+PRIVATE_UI_PREFIXES = ("finalgm:", "final:scenario:", "adm2:add:")
+
 
 def _handler(item):
     return getattr(item, "handler", None)
@@ -45,10 +51,6 @@ def _set_handler(item, fn):
 
 
 def _configured_group_id(main):
-    """Return the actual game-group id, never the private callback chat id."""
-    # ALLOWED_GROUP_ID is the authoritative static configuration. Mutable
-    # group_chat_id can temporarily contain a private/chat context in legacy
-    # flows, so it must not win over the configured game group.
     for attr in ("ALLOWED_GROUP_ID", "GROUP_ID", "group_id", "group_chat_id"):
         value = getattr(main, attr, None)
         if value:
@@ -85,22 +87,19 @@ def install(main):
         fn = _handler(item)
         if fn is None or getattr(fn, "_final_runtime_guard", False):
             continue
-
         original = fn
 
         @wraps(original)
         async def guarded(callback, _original=original):
             data = str(getattr(callback, "data", "") or "")
+            if data in PRIVATE_UI_EXACT or any(data.startswith(p) for p in PRIVATE_UI_PREFIXES):
+                return await _original(callback)
+
             protected_admin = data in ADMIN_ONLY_EXACT or any(data.startswith(p) for p in ADMIN_ONLY_PREFIXES)
             protected_game = data in ADMIN_OR_MOD_EXACT or any(data.startswith(p) for p in ADMIN_OR_MOD_PREFIXES)
-
             if protected_admin or protected_game:
-                # Authorization is always against the configured game group.
-                # Never use callback.message.chat.id here: private callbacks
-                # arrive with the administrator's private chat id.
                 group_id = _configured_group_id(main)
                 user_id = getattr(getattr(callback, "from_user", None), "id", None)
-
                 is_admin = False
                 if group_id and user_id:
                     try:
@@ -108,7 +107,6 @@ def install(main):
                         is_admin = any(a.user.id == user_id for a in admins)
                     except Exception:
                         logging.exception("FINAL runtime guard: admin lookup failed for configured group %s", group_id)
-
                 is_mod = user_id == getattr(main, "moderator_id", None)
                 allowed = is_admin if protected_admin else (is_admin or is_mod)
                 if not allowed:
@@ -119,7 +117,6 @@ def install(main):
                     )
                     await callback.answer(reason, show_alert=True)
                     raise CancelHandler()
-
             return await _original(callback)
 
         guarded._final_runtime_guard = True
@@ -136,8 +133,4 @@ def install(main):
     logging.info(
         "FINAL runtime guard installed: handlers=%d legacy_removed=%d protected_exact=%d",
         len(registry), removed_legacy, len(ADMIN_ONLY_EXACT | ADMIN_OR_MOD_EXACT),
-    )
-    logging.info(
-        "FINAL callback registry head: %s",
-        [getattr(_handler(item), "__name__", "?") for item in list(registry)[:15]],
     )
