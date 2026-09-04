@@ -1,11 +1,10 @@
 """Import-time bootstrap for the private UI on webhook runtimes.
 
 Vercel imports ``player_runtime_entry`` for each webhook invocation and does not
-run aiogram's polling startup hook first.  This module therefore installs the
-private entry points immediately.  Detailed private management handlers are
-lazily materialized on their first callback, then the callback is dispatched to
-``final_private_ui``'s real handler.  This keeps one authoritative implementation
-instead of duplicating the whole management menu here.
+run aiogram's polling startup hook first. This module therefore installs the
+private entry points immediately. Detailed game-management handlers are lazily
+materialized on first click, while scenario CRUD and navigation are handled
+here synchronously so legacy handlers cannot steal the callback.
 """
 from __future__ import annotations
 
@@ -54,15 +53,13 @@ def _management_keyboard():
 
 
 def _scenario_keyboard():
-    # Use the callback namespace owned by final_private_ui.  In webhook mode
-    # these are lazy-dispatched to that module on first click.
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
-        InlineKeyboardButton("➕ افزودن سناریو", callback_data="final:scenario:add"),
-        InlineKeyboardButton("➖ حذف سناریو", callback_data="final:scenario:remove"),
-        InlineKeyboardButton("✏️ ویرایش سناریو", callback_data="final:scenario:edit"),
-        InlineKeyboardButton("📋 لیست سناریوها", callback_data="final:scenario:list"),
-        InlineKeyboardButton("⬅️ بازگشت", callback_data="final:start"),
+        InlineKeyboardButton("➕ افزودن سناریو", callback_data="private_scenario:add"),
+        InlineKeyboardButton("➖ حذف سناریو", callback_data="private_scenario:remove"),
+        InlineKeyboardButton("✏️ ویرایش سناریو", callback_data="private_scenario:edit"),
+        InlineKeyboardButton("📋 لیست سناریوها", callback_data="private_scenario:list"),
+        InlineKeyboardButton("⬅️ بازگشت", callback_data="private:start"),
     )
     return kb
 
@@ -114,20 +111,107 @@ def install(app):
     async def scenarios(callback):
         await allowed(callback)
         await callback.message.edit_text(
-            "⚙️ <b>مدیریت سناریو</b>\n\nاز این بخش سناریوها را مدیریت کنید:",
+            "⚙️ <b>مدیریت سناریو</b>\n\nیک گزینه را انتخاب کنید:",
             reply_markup=_scenario_keyboard(), parse_mode="HTML",
         )
         await callback.answer()
         raise CancelHandler()
 
-    async def lazy_final_private_ui(callback):
-        """Install final_private_ui now, then execute its matching handler.
+    async def scenario_list(callback):
+        await allowed(callback)
+        scenarios = getattr(app, "scenarios", {}) or {}
+        if not scenarios:
+            text = "📋 <b>لیست سناریوها</b>\n\nهیچ سناریویی ثبت نشده است."
+        else:
+            lines = ["📋 <b>لیست سناریوها</b>", ""]
+            for i, name in enumerate(scenarios.keys(), 1):
+                lines.append(f"{i}. {html.escape(str(name))}")
+            text = "\n".join(lines)
+        await callback.message.edit_text(text, reply_markup=_scenario_keyboard(), parse_mode="HTML")
+        await callback.answer()
+        raise CancelHandler()
 
-        aiogram 2.x dispatches the first matching handler only.  Because the
-        final UI normally installs during on_startup (which webhook runtimes do
-        not call), this bridge materializes it during the first private
-        management click and manually runs the exact matching final handler.
-        """
+    async def scenario_add(callback):
+        await allowed(callback)
+        fn = getattr(app, "add_scenario_start", None)
+        if not fn:
+            await callback.answer("⚠️ افزودن سناریو در دسترس نیست.", show_alert=True)
+            raise CancelHandler()
+        state = await app.dp.current_state(user=callback.from_user.id, chat=callback.message.chat.id)
+        await fn(callback, state)
+        raise CancelHandler()
+
+    async def scenario_remove(callback):
+        await allowed(callback)
+        scenarios = getattr(app, "scenarios", {}) or {}
+        if not scenarios:
+            await callback.message.edit_text(
+                "⚠️ هیچ سناریویی ثبت نشده است.", reply_markup=_scenario_keyboard()
+            )
+            await callback.answer()
+            raise CancelHandler()
+        if len(scenarios) == 1:
+            await callback.answer("⚠️ حداقل یک سناریو باید باقی بماند.", show_alert=True)
+            raise CancelHandler()
+        kb = InlineKeyboardMarkup(row_width=1)
+        for i, name in enumerate(scenarios.keys()):
+            kb.add(InlineKeyboardButton(str(name), callback_data=f"private_scenario:delete:{i}"))
+        kb.add(InlineKeyboardButton("⬅️ مدیریت سناریو", callback_data="private:scenarios"))
+        await callback.message.edit_text("سناریوی موردنظر را برای حذف انتخاب کنید:", reply_markup=kb)
+        await callback.answer()
+        raise CancelHandler()
+
+    async def scenario_delete(callback):
+        await allowed(callback)
+        scenarios = getattr(app, "scenarios", {}) or {}
+        try:
+            index = int(str(callback.data).rsplit(":", 1)[1])
+            name = list(scenarios.keys())[index]
+        except Exception:
+            await callback.answer("⚠️ سناریو نامعتبر است.", show_alert=True)
+            raise CancelHandler()
+        if len(scenarios) <= 1:
+            await callback.answer("⚠️ حداقل یک سناریو باید باقی بماند.", show_alert=True)
+            raise CancelHandler()
+        if getattr(app, "lobby_active", False) or getattr(app, "game_running", False):
+            await callback.answer("⛔ هنگام فعال بودن بازی/لابی حذف سناریو مجاز نیست.", show_alert=True)
+            raise CancelHandler()
+        scenarios.pop(name, None)
+        saver = getattr(app, "save_scenarios", None)
+        if saver:
+            saver()
+        if getattr(app, "selected_scenario", None) == name:
+            app.selected_scenario = None
+        await callback.message.edit_text(
+            f"✅ سناریو «{html.escape(str(name))}» حذف شد.",
+            reply_markup=_scenario_keyboard(), parse_mode="HTML",
+        )
+        await callback.answer()
+        raise CancelHandler()
+
+    async def scenario_edit(callback):
+        await allowed(callback)
+        fn = getattr(app, "edit_scenario_start", None) or getattr(app, "edit_scenario", None)
+        if fn:
+            state = await app.dp.current_state(user=callback.from_user.id, chat=callback.message.chat.id)
+            await fn(callback, state)
+        else:
+            await callback.answer("⚠️ ویرایش سناریو در runtime فعال نیست.", show_alert=True)
+        raise CancelHandler()
+
+    async def addons_back(callback):
+        if not _private(callback):
+            raise CancelHandler()
+        await allowed(callback)
+        await callback.message.edit_text(
+            "🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:",
+            reply_markup=_keyboard_start(), parse_mode="HTML",
+        )
+        await callback.answer()
+        raise CancelHandler()
+
+    async def lazy_final_private_ui(callback):
+        """Install final_private_ui during webhook handling and run its exact handler."""
         if not _private(callback):
             raise CancelHandler()
         from runtime import final_private_ui
@@ -144,9 +228,13 @@ def install(app):
             if getattr(fn, "__module__", "") != "runtime.final_private_ui":
                 continue
             try:
-                matched, data = await item.check_filters(callback)
+                result = await item.check_filters(callback)
             except TypeError:
-                matched, data = await item.check_filters(callback=callback)
+                result = await item.check_filters(callback=callback)
+            if isinstance(result, tuple):
+                matched, data = result
+            else:
+                matched, data = bool(result), {}
             if matched:
                 await fn(callback, **(data or {}))
                 raise CancelHandler()
@@ -158,11 +246,13 @@ def install(app):
         (start, lambda c: c.data in {"private:start", "final:start"}),
         (management, lambda c: c.data == "manage_game"),
         (scenarios, lambda c: c.data in {"private:scenarios", "final:scenarios", "manage_scenarios", "change_scenario"}),
-        # All detailed management/scenario callbacks are owned by final_private_ui.
-        # Registering one lazy bridge here prevents webhook mode from falling
-        # through to legacy handlers before on_startup has run.
+        (scenario_list, lambda c: c.data == "private_scenario:list"),
+        (scenario_add, lambda c: c.data == "private_scenario:add"),
+        (scenario_remove, lambda c: c.data == "private_scenario:remove"),
+        (scenario_delete, lambda c: str(c.data or "").startswith("private_scenario:delete:")),
+        (scenario_edit, lambda c: c.data == "private_scenario:edit"),
+        (addons_back, lambda c: c.data == "addons:back"),
         (lazy_final_private_ui, lambda c: str(c.data or "").startswith("finalgm:")),
-        (lazy_final_private_ui, lambda c: str(c.data or "").startswith("final:scenario:")),
     ]
     for fn, filt in regs:
         app.dp.register_callback_query_handler(fn, filt, state="*")
