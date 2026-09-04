@@ -43,7 +43,12 @@ install_user_panel_back_patch(main, user_panel)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 
-# One private menu authority.
+# Webhook requests import this module directly and do not depend on aiogram's
+# polling startup hook. Bootstrap the private entry-point handlers immediately.
+from runtime.private_ui_bootstrap import install as install_private_ui_bootstrap
+install_private_ui_bootstrap(main)
+
+# The richer private menu remains available for polling/startup environments.
 from runtime.final_private_ui import install as install_final_private_ui
 
 from runtime.stable_round_engine import install as install_stable_round_engine
