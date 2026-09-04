@@ -10,14 +10,13 @@ install_player_bridge(main)
 _bridge = install_persistent_bridge(main)
 main.player_service = player_service
 
-# Webhook workers are short-lived, so FSM and scenario configuration must use
+# Webhook workers are short-lived, so FSM, scenarios and settings must use
 # persistent storage rather than process memory or the read-only deployment FS.
 from runtime.postgres_fsm_storage import install as install_postgres_fsm_storage
 install_postgres_fsm_storage(main)
 from runtime.scenario_persistence_patch import install as install_scenario_persistence_patch
 install_scenario_persistence_patch(main)
 
-# Core game/lobby engines. These layers do not own private navigation.
 from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
 from runtime.lobby_ui_v6 import install as install_lobby_ui
@@ -39,19 +38,23 @@ install_final_runtime_guard(main)
 from runtime.seat_emoji_patch import install as install_seat_emoji_patch
 install_seat_emoji_patch(main)
 
-# User dashboard and add-ons remain separate from the game/lobby flow.
 from runtime.user_panel import install as install_user_panel
 user_panel = install_user_panel(main)
 from runtime.start_profile_patch import install as install_start_profile_patch
 install_start_profile_patch(main)
 from runtime.user_panel_back_patch import install as install_user_panel_back_patch
 install_user_panel_back_patch(main, user_panel)
+
+# MafiaAddons is instantiated by main1 during import. Replace its filesystem
+# persistence with PostgreSQL before any add-on UI handler can read/write it.
+from runtime.addons_persistence_patch import install as install_addons_persistence_patch
+install_addons_persistence_patch(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 
-# SINGLE private-navigation owner for webhook mode. Do not install the old
-# bootstrap/reorder layers here; they register competing handlers and can move
-# legacy callbacks ahead of the authoritative router.
+# SINGLE private-navigation owner for webhook mode. The old bootstrap and
+# reorder modules are intentionally not installed: duplicate registrations were
+# causing callbacks to fall through to legacy handlers.
 from runtime.private_navigation_authority import install as install_private_navigation_authority
 install_private_navigation_authority(main)
 
@@ -81,7 +84,7 @@ async def on_startup(dp):
     install_stable_challenge_button_guard(main)
     install_transition_ui_dedup(main)
 
-    # Polling mode only: webhook mode already has its import-time router.
+    # Polling mode only: webhook mode already has the import-time router.
     from runtime.final_private_ui import install as install_final_private_ui
     await install_final_private_ui(main)
     install_role_distribution_notice(main)
