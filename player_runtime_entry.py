@@ -70,6 +70,15 @@ from runtime.transition_ui_dedup import install as install_transition_ui_dedup
 from runtime.role_distribution_notice import install as install_role_distribution_notice
 from runtime.voting_runtime import install as install_voting_runtime
 
+# These are callback-router/runtime registrations, not polling-only startup
+# tasks. Install them at import time so webhook workers and polling both use the
+# same authoritative day/turn/voting flow.
+install_stable_round_engine(main)
+install_stable_round_policy(main)
+install_stable_challenge_button_guard(main)
+install_transition_ui_dedup(main)
+install_voting_runtime(main)
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
@@ -84,16 +93,6 @@ async def on_startup(dp):
             main.group_admins = list(main.admins)
     except Exception:
         logging.exception("Failed to initialize private UI group/admin authorization")
-
-    install_stable_round_engine(main)
-    install_stable_round_policy(main)
-    install_stable_challenge_button_guard(main)
-    install_transition_ui_dedup(main)
-
-    # Voting registers a day-end hook on the authoritative round engine. This
-    # avoids monkey-patching the module-level _end_day after closures have been
-    # created and guarantees the end-of-day menu is reached from _advance().
-    install_voting_runtime(main)
 
     # Polling mode only: webhook mode already has the import-time router.
     from runtime.final_private_ui import install as install_final_private_ui
