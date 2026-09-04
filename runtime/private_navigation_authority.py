@@ -1,8 +1,8 @@
-"""Final import-time router for private navigation on webhook runtimes.
+"""Single import-time private navigation authority for the webhook runtime.
 
-This module is the webhook-safe authority for private navigation. It deliberately
-keeps navigation independent from the async startup hook and avoids delegating
-simple back actions to competing legacy handlers.
+This module is intentionally the last private-router layer installed by
+player_runtime_entry.  It owns top-level navigation and scenario CRUD, while
+final_private_ui owns the detailed game-management actions behind finalgm:*.
 """
 from __future__ import annotations
 
@@ -24,66 +24,52 @@ def install(app):
     dp = app.dp
     cq = getattr(getattr(dp, "callback_query_handlers", None), "handlers", [])
     mh = getattr(getattr(dp, "message_handlers", None), "handlers", [])
-
     if getattr(app, "_private_navigation_authority_installed", False):
         return False
-
-    def is_private(item):
-        return bool(item.message and item.message.chat.type == "private")
 
     def handler_fn(item):
         return getattr(item, "handler", None) or getattr(item, "callback", None)
 
-    async def allowed(callback):
-        """Authorize using cached group/moderator data first.
+    def private(item):
+        return bool(getattr(item, "message", None) and item.message.chat.type == "private")
 
-        Never query Telegram with a possibly stale/private group id when cached
-        authorization is already available. This also avoids the recurring
-        `There are no administrators in the private chat` failure.
-        """
-        if not is_private(callback):
+    async def allowed(c):
+        if not private(c):
             raise CancelHandler()
-        uid = int(callback.from_user.id)
-
-        moderator = getattr(app, "moderator_id", None)
-        if moderator is not None and uid == int(moderator):
+        uid = int(c.from_user.id)
+        if uid == int(getattr(app, "moderator_id", 0) or 0):
             return True
-
         cached = set()
         for obj in (app, getattr(app, "addons", None)):
             for key in ("admins", "group_admins"):
-                value = getattr(obj, key, None)
-                if value:
+                for x in getattr(obj, key, None) or []:
                     try:
-                        cached.update(int(x) for x in value)
+                        cached.add(int(getattr(getattr(x, "user", None), "id", x)))
                     except (TypeError, ValueError):
                         pass
         if uid in cached:
             return True
-
-        # Only use the configured group id as a last resort. Never use a
-        # runtime group_chat_id here because it can be contaminated by private UI.
+        # Never use a mutable runtime group_chat_id here: private requests can
+        # arrive on workers that have not seen the game group yet.
         gid = getattr(app, "ALLOWED_GROUP_ID", None)
         if gid:
             try:
                 admins = await app.bot.get_chat_administrators(int(gid))
-                if uid in {int(a.user.id) for a in admins}:
+                ids = {int(a.user.id) for a in admins}
+                app.admins = ids
+                app.group_admins = list(ids)
+                if uid in ids:
                     return True
             except Exception:
-                logging.exception("private navigation: configured-group admin lookup failed")
-
-        await callback.answer("⛔ فقط گرداننده یا مدیر گروه دسترسی دارد.", show_alert=True)
+                logging.warning("private navigation: configured-group admin lookup failed", exc_info=True)
+        await c.answer("⛔ فقط گرداننده یا مدیر گروه دسترسی دارد.", show_alert=True)
         raise CancelHandler()
 
-    def start_keyboard():
-        from runtime.final_private_ui import start_keyboard as _start_keyboard
-        return _start_keyboard()
+    def start_kb():
+        from runtime.final_private_ui import start_keyboard
+        return start_keyboard()
 
-    def management_keyboard():
-        from runtime.final_private_ui import management_keyboard as _management_keyboard
-        return _management_keyboard()
-
-    def scenario_keyboard():
+    def scenario_kb():
         kb = InlineKeyboardMarkup(row_width=1)
         kb.add(
             InlineKeyboardButton("➕ افزودن سناریو", callback_data="private_scenario:add"),
@@ -94,309 +80,233 @@ def install(app):
         )
         return kb
 
-    def render_scenarios_text():
-        scenarios = getattr(app, "scenarios", {}) or {}
-        if not scenarios:
-            return "📋 <b>لیست سناریوها</b>\n\nهیچ سناریویی ثبت نشده است."
-        lines = ["📋 <b>لیست سناریوها</b>", ""]
-        for i, name in enumerate(scenarios.keys(), 1):
-            lines.append(f"{i}. {html.escape(str(name))}")
-        return "\n".join(lines)
-
-    async def edit_message_or_ignore(message, text, reply_markup=None):
+    async def edit_here(message, text, kb):
         try:
-            await message.edit_text(text, reply_markup=reply_markup, parse_mode="HTML")
+            await message.edit_text(text, reply_markup=kb, parse_mode="HTML")
         except Exception as exc:
-            # Navigation must not fail just because Telegram reports that the
-            # requested content is already identical.
             if exc.__class__.__name__ != "MessageNotModified":
                 raise
 
-    async def scenarios(callback):
-        await allowed(callback)
-        await edit_message_or_ignore(
-            callback.message,
-            "⚙️ <b>مدیریت سناریو</b>\n\nیک گزینه را انتخاب کنید:",
-            scenario_keyboard(),
-        )
-        await callback.answer()
-        raise CancelHandler()
-
-    async def private_start(callback):
-        if not is_private(callback):
+    async def go_start(c):
+        if not private(c):
             raise CancelHandler()
-        await edit_message_or_ignore(
-            callback.message,
-            "🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:",
-            start_keyboard(),
-        )
-        await callback.answer()
+        await edit_here(c.message, "🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:", start_kb())
+        await c.answer()
         raise CancelHandler()
 
-    async def manage_game_back(callback):
-        await allowed(callback)
-        await edit_message_or_ignore(
-            callback.message,
-            "🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:",
-            start_keyboard(),
-        )
-        await callback.answer()
+    async def manage_game(c):
+        await allowed(c)
+        from runtime.final_private_ui import management_keyboard, management_report
+        await edit_here(c.message, management_report(app), management_keyboard())
+        await c.answer()
         raise CancelHandler()
 
-    async def addons_back(callback):
-        # The user has already reached the add-ons screen; going back is a pure
-        # navigation action and must not perform another admin lookup.
-        if not is_private(callback):
-            raise CancelHandler()
-        await edit_message_or_ignore(
-            callback.message,
-            "🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:",
-            start_keyboard(),
-        )
-        await callback.answer()
+    async def manage_game_back(c):
+        await allowed(c)
+        # final_private_ui historically reused finalgm:back for both the root
+        # management screen and its submenus. Resolve it from the current
+        # message so both old keyboards remain functional: root -> main,
+        # submenu -> management root.
+        current = (getattr(c.message, "text", None) or "").strip()
+        if current.startswith("🛠 <b>مدیریت بازی</b>"):
+            await edit_here(c.message, "🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:", start_kb())
+        else:
+            from runtime.final_private_ui import management_keyboard, management_report
+            await edit_here(c.message, management_report(app), management_keyboard())
+        await c.answer()
         raise CancelHandler()
 
-    async def scenario_list(callback):
-        await allowed(callback)
-        await edit_message_or_ignore(callback.message, render_scenarios_text(), scenario_keyboard())
-        await callback.answer()
+    async def scenarios(c):
+        await allowed(c)
+        await edit_here(c.message, "⚙️ <b>مدیریت سناریو</b>\n\nیک گزینه را انتخاب کنید:", scenario_kb())
+        await c.answer()
         raise CancelHandler()
 
-    async def scenario_add(callback):
-        await allowed(callback)
+    async def scenario_list(c):
+        await allowed(c)
+        scenarios = getattr(app, "scenarios", {}) or {}
+        lines = ["📋 <b>لیست سناریوها</b>", ""]
+        if scenarios:
+            lines += [f"{i}. {html.escape(str(name))}" for i, name in enumerate(scenarios, 1)]
+        else:
+            lines.append("هیچ سناریویی ثبت نشده است.")
+        await edit_here(c.message, "\n".join(lines), scenario_kb())
+        await c.answer()
+        raise CancelHandler()
+
+    async def scenario_add(c):
+        await allowed(c)
         fn = getattr(app, "add_scenario_start", None)
         if not fn:
-            await callback.answer("⚠️ افزودن سناریو در runtime فعال نیست.", show_alert=True)
+            await c.answer("⚠️ افزودن سناریو در دسترس نیست.", show_alert=True)
             raise CancelHandler()
-        state = await dp.current_state(user=callback.from_user.id, chat=callback.message.chat.id)
-        await fn(callback, state)
-        await callback.answer()
+        state = await dp.current_state(user=c.from_user.id, chat=c.message.chat.id)
+        await fn(c, state)
+        await c.answer()
         raise CancelHandler()
 
-    async def scenario_remove(callback):
-        await allowed(callback)
+    async def scenario_remove(c):
+        await allowed(c)
         scenarios = getattr(app, "scenarios", {}) or {}
         if not scenarios:
-            await edit_message_or_ignore(
-                callback.message,
-                "⚠️ هیچ سناریویی ثبت نشده است.",
-                scenario_keyboard(),
-            )
-            await callback.answer()
-            raise CancelHandler()
+            await edit_here(c.message, "⚠️ هیچ سناریویی ثبت نشده است.", scenario_kb())
+            await c.answer(); raise CancelHandler()
         if len(scenarios) == 1:
-            await callback.answer("⚠️ حداقل یک سناریو باید باقی بماند.", show_alert=True)
+            await c.answer("⚠️ حداقل یک سناریو باید باقی بماند.", show_alert=True)
             raise CancelHandler()
         kb = InlineKeyboardMarkup(row_width=1)
-        for i, name in enumerate(scenarios.keys()):
+        for i, name in enumerate(scenarios):
             kb.add(InlineKeyboardButton(str(name), callback_data=f"private_scenario:delete:{i}"))
         kb.add(InlineKeyboardButton("⬅️ مدیریت سناریو", callback_data="final:scenarios"))
-        await edit_message_or_ignore(callback.message, "سناریوی موردنظر را برای حذف انتخاب کنید:", kb)
-        await callback.answer()
-        raise CancelHandler()
+        await edit_here(c.message, "سناریوی موردنظر را برای حذف انتخاب کنید:", kb)
+        await c.answer(); raise CancelHandler()
 
-    async def scenario_delete(callback):
-        await allowed(callback)
+    async def scenario_delete(c):
+        await allowed(c)
         scenarios = getattr(app, "scenarios", {}) or {}
         try:
-            index = int(str(callback.data).rsplit(":", 1)[1])
-            name = list(scenarios.keys())[index]
+            idx = int(str(c.data).rsplit(":", 1)[1])
+            name = list(scenarios)[idx]
         except Exception:
-            await callback.answer("⚠️ سناریو نامعتبر است.", show_alert=True)
-            raise CancelHandler()
+            await c.answer("⚠️ سناریو نامعتبر است.", show_alert=True); raise CancelHandler()
         if len(scenarios) <= 1:
-            await callback.answer("⚠️ حداقل یک سناریو باید باقی بماند.", show_alert=True)
-            raise CancelHandler()
+            await c.answer("⚠️ حداقل یک سناریو باید باقی بماند.", show_alert=True); raise CancelHandler()
         if getattr(app, "lobby_active", False) or getattr(app, "game_running", False):
-            await callback.answer("⛔ هنگام فعال بودن بازی/لابی حذف سناریو مجاز نیست.", show_alert=True)
-            raise CancelHandler()
+            await c.answer("⛔ هنگام فعال بودن بازی/لابی حذف سناریو مجاز نیست.", show_alert=True); raise CancelHandler()
         scenarios.pop(name, None)
         saver = getattr(app, "save_scenarios", None)
         if saver:
-            try:
-                saver()
-            except OSError:
-                logging.warning("scenario delete: persistent file is read-only; keeping in-memory state")
+            saver()
         if getattr(app, "selected_scenario", None) == name:
             app.selected_scenario = None
-        await edit_message_or_ignore(
-            callback.message,
-            f"✅ سناریو «{html.escape(str(name))}» حذف شد.",
-            scenario_keyboard(),
-        )
-        await callback.answer()
-        raise CancelHandler()
+        await edit_here(c.message, f"✅ سناریو «{html.escape(str(name))}» حذف شد.", scenario_kb())
+        await c.answer(); raise CancelHandler()
 
-    async def scenario_edit(callback):
-        await allowed(callback)
+    async def scenario_edit(c):
+        await allowed(c)
         scenarios = getattr(app, "scenarios", {}) or {}
         if not scenarios:
-            await callback.answer("⚠️ هیچ سناریویی برای ویرایش وجود ندارد.", show_alert=True)
-            raise CancelHandler()
+            await c.answer("⚠️ هیچ سناریویی برای ویرایش وجود ندارد.", show_alert=True); raise CancelHandler()
         kb = InlineKeyboardMarkup(row_width=1)
-        for i, name in enumerate(scenarios.keys()):
+        for i, name in enumerate(scenarios):
             kb.add(InlineKeyboardButton(str(name), callback_data=f"private_scenario:edit:{i}"))
         kb.add(InlineKeyboardButton("⬅️ مدیریت سناریو", callback_data="final:scenarios"))
-        await edit_message_or_ignore(callback.message, "سناریوی موردنظر را برای ویرایش انتخاب کنید:", kb)
-        await callback.answer()
-        raise CancelHandler()
+        await edit_here(c.message, "سناریوی موردنظر را برای ویرایش انتخاب کنید:", kb)
+        await c.answer(); raise CancelHandler()
 
-    async def scenario_edit_pick(callback):
-        await allowed(callback)
+    async def scenario_edit_pick(c):
+        await allowed(c)
         scenarios = getattr(app, "scenarios", {}) or {}
         try:
-            index = int(str(callback.data).rsplit(":", 1)[1])
-            name = list(scenarios.keys())[index]
-            current_roles = scenarios[name].get("roles", []) if isinstance(scenarios[name], dict) else []
+            idx = int(str(c.data).rsplit(":", 1)[1])
+            name = list(scenarios)[idx]
+            value = scenarios[name] if isinstance(scenarios[name], dict) else {}
+            roles = value.get("roles") or []
         except Exception:
-            await callback.answer("⚠️ سناریوی نامعتبر.", show_alert=True)
-            raise CancelHandler()
-        state = await dp.current_state(user=callback.from_user.id, chat=callback.message.chat.id)
+            await c.answer("⚠️ سناریوی نامعتبر.", show_alert=True); raise CancelHandler()
+        state = await dp.current_state(user=c.from_user.id, chat=c.message.chat.id)
         await state.update_data(edit_scenario_name=name)
         await state.set_state(EditScenario.waiting_for_roles)
-        roles_text = ", ".join(str(x) for x in current_roles)
-        await callback.message.answer(
+        await c.message.answer(
             f"✏️ ویرایش «{html.escape(str(name))}»\n\n"
-            f"نقش‌های جدید را با کاما جدا کنید.\n"
-            f"نقش‌های فعلی: {html.escape(roles_text)}"
+            "نقش‌های جدید را با کاما جدا کنید.\n"
+            f"نقش‌های فعلی: {html.escape(', '.join(map(str, roles)))}"
         )
-        await callback.answer()
-        raise CancelHandler()
+        await c.answer(); raise CancelHandler()
 
-    async def scenario_edit_roles(message, state: FSMContext):
-        roles = [r.strip() for r in (message.text or "").split(",") if r.strip()]
+    async def edit_roles(message, state):
+        roles = [x.strip() for x in (message.text or "").split(",") if x.strip()]
         if not roles:
-            await message.answer("⚠️ حداقل یک نقش وارد کنید.")
-            return
+            await message.answer("⚠️ حداقل یک نقش وارد کنید."); return
         await state.update_data(edit_roles=roles)
         await message.answer("🔢 حداقل تعداد بازیکنان را وارد کنید:")
         await state.set_state(EditScenario.waiting_for_min_players)
 
-    async def scenario_edit_min_players(message, state: FSMContext):
-        text = (message.text or "").strip()
-        if not text.isdigit() or int(text) < 1:
-            await message.answer("⚠️ یک عدد معتبر بزرگ‌تر از صفر وارد کنید.")
-            return
-        data = await state.get_data()
-        name = data.get("edit_scenario_name")
-        roles = data.get("edit_roles") or []
+    async def edit_min(message, state):
+        raw = (message.text or "").strip()
+        if not raw.isdigit() or int(raw) < 1:
+            await message.answer("⚠️ یک عدد معتبر بزرگ‌تر از صفر وارد کنید."); return
+        data = await state.get_data(); name = data.get("edit_scenario_name"); roles = data.get("edit_roles") or []
         scenarios = getattr(app, "scenarios", {}) or {}
-        if not name or name not in scenarios:
-            await message.answer("⚠️ سناریوی موردنظر دیگر وجود ندارد.")
-            await state.finish()
-            return
-        min_players = int(text)
-        scenarios[name] = {
-            **(scenarios.get(name) if isinstance(scenarios.get(name), dict) else {}),
-            "roles": roles,
-            "min_players": min_players,
-            "max_players": len(roles),
-        }
+        if name not in scenarios:
+            await message.answer("⚠️ سناریوی موردنظر دیگر وجود ندارد."); await state.finish(); return
+        minimum = int(raw)
+        current = scenarios.get(name) if isinstance(scenarios.get(name), dict) else {}
+        scenarios[name] = {**current, "roles": roles, "min_players": minimum, "max_players": len(roles)}
         saver = getattr(app, "save_scenarios", None)
-        persistence_warning = ""
-        if saver:
-            try:
-                saver()
-            except OSError:
-                persistence_warning = "\n⚠️ فایل روی Vercel قابل‌نوشتن نیست؛ تغییر فعلاً در حافظه runtime اعمال شد."
-                logging.warning("scenario edit: persistent file is read-only; keeping in-memory state")
+        ok = True if not saver else bool(saver())
+        suffix = "" if ok else "\n⚠️ ذخیره دائمی ناموفق بود؛ تغییر در این worker اعمال شد."
         await message.answer(
             f"✅ سناریو «{html.escape(str(name))}» ویرایش شد.\n\n"
             f"👥 نقش‌ها: {html.escape(', '.join(roles))}\n"
-            f"🔢 بازیکنان: {min_players} تا {len(roles)}"
-            f"{persistence_warning}"
+            f"🔢 بازیکنان: {minimum} تا {len(roles)}{suffix}"
         )
         await state.finish()
 
-    async def dispatch_final(callback):
-        """Materialize final_private_ui and dispatch once without recursive routing."""
-        if not is_private(callback):
+    async def addons_back(c):
+        await go_start(c)
+
+    async def dispatch_final(c):
+        if not private(c):
             raise CancelHandler()
         from runtime import final_private_ui
         await final_private_ui.install(app)
-
-        own = [h for h in list(cq) if handler_fn(h) in {
-            dispatch_final, scenarios, private_start, manage_game_back, addons_back,
-            scenario_list, scenario_add, scenario_remove, scenario_delete,
-            scenario_edit, scenario_edit_pick,
-        }]
+        own = [h for h in list(cq) if handler_fn(h) in OWN]
         try:
             for h in own:
-                if h in cq:
-                    cq.remove(h)
-            await dp.callback_query_handlers.notify(callback)
+                if h in cq: cq.remove(h)
+            await dp.callback_query_handlers.notify(c)
         finally:
-            for h in reversed(own):
-                cq.insert(0, h)
+            for h in own:
+                if h not in cq: cq.insert(0, h)
         raise CancelHandler()
+
+    OWN = {scenarios, go_start, manage_game, manage_game_back, addons_back, scenario_list,
+           scenario_add, scenario_remove, scenario_delete, scenario_edit, scenario_edit_pick,
+           dispatch_final}
+
+    regs = [
+        (go_start, lambda c: c.data in {"private:start", "final:start"}),
+        (manage_game, lambda c: c.data == "manage_game"),
+        (manage_game_back, lambda c: c.data == "finalgm:back"),
+        (scenarios, lambda c: c.data in {"final:scenarios", "private:scenarios", "manage_scenarios", "change_scenario"}),
+        (scenario_list, lambda c: c.data == "private_scenario:list"),
+        (scenario_add, lambda c: c.data in {"private_scenario:add", "final:scenario:add"}),
+        (scenario_remove, lambda c: c.data in {"private_scenario:remove", "final:scenario:remove"}),
+        (scenario_delete, lambda c: str(c.data or "").startswith(("private_scenario:delete:", "final:scenario:delete:"))),
+        (scenario_edit, lambda c: c.data == "private_scenario:edit"),
+        (scenario_edit_pick, lambda c: str(c.data or "").startswith("private_scenario:edit:")),
+        (addons_back, lambda c: c.data == "addons:back"),
+        (dispatch_final, lambda c: str(c.data or "").startswith("finalgm:") and c.data != "finalgm:back"),
+    ]
+    for fn, filt in regs:
+        dp.register_callback_query_handler(fn, filt, state="*")
+
+    dp.register_message_handler(edit_roles, state=EditScenario.waiting_for_roles)
+    dp.register_message_handler(edit_min, state=EditScenario.waiting_for_min_players)
 
     async def group_start(message):
         if message.chat.type not in ("group", "supergroup"):
             return
+        app.group_chat_id = int(message.chat.id)
         try:
-            app.group_chat_id = int(message.chat.id)
+            kb = app.main_menu_keyboard()
         except Exception:
-            return
-        try:
-            keyboard = app.main_menu_keyboard()
-        except Exception:
-            keyboard = InlineKeyboardMarkup().add(
-                InlineKeyboardButton("🎮 بازی جدید", callback_data="new_game")
-            )
-        await message.answer(
-            "🎭 <b>Mafia Nights</b>\n\nبرای شروع بازی از دکمه زیر استفاده کنید:",
-            reply_markup=keyboard,
-            parse_mode="HTML",
-        )
+            kb = InlineKeyboardMarkup().add(InlineKeyboardButton("🎮 بازی جدید", callback_data="new_game"))
+        await message.answer("🎭 <b>Mafia Nights</b>\n\nبرای شروع بازی از دکمه زیر استفاده کنید:", reply_markup=kb, parse_mode="HTML")
         raise CancelHandler()
 
-    async def message_edit_roles(message):
-        state = await dp.current_state(user=message.from_user.id, chat=message.chat.id)
-        current = await state.get_state()
-        if current == EditScenario.waiting_for_roles.state:
-            await scenario_edit_roles(message, state)
-            raise CancelHandler()
-
-    async def message_edit_min_players(message):
-        state = await dp.current_state(user=message.from_user.id, chat=message.chat.id)
-        current = await state.get_state()
-        if current == EditScenario.waiting_for_min_players.state:
-            await scenario_edit_min_players(message, state)
-            raise CancelHandler()
-
-    # Callback routes owned by this authority.
-    registrations = [
-        (scenarios, lambda c: c.data == "final:scenarios"),
-        (private_start, lambda c: c.data == "private:start"),
-        (manage_game_back, lambda c: c.data in {"back_manage_game", "back_main"}),
-        (addons_back, lambda c: c.data == "addons:back"),
-        (scenario_list, lambda c: c.data == "private_scenario:list"),
-        (scenario_add, lambda c: c.data == "private_scenario:add"),
-        (scenario_remove, lambda c: c.data == "private_scenario:remove"),
-        (scenario_delete, lambda c: str(c.data or "").startswith("private_scenario:delete:")),
-        (scenario_edit, lambda c: c.data == "private_scenario:edit"),
-        (scenario_edit_pick, lambda c: str(c.data or "").startswith("private_scenario:edit:")),
-        (dispatch_final, lambda c: str(c.data or "").startswith("finalgm:") and c.data != "finalgm:back"),
-    ]
-    for fn, filt in registrations:
-        dp.register_callback_query_handler(fn, filt, state="*")
-
-    dp.register_message_handler(message_edit_roles, state=EditScenario.waiting_for_roles)
-    dp.register_message_handler(message_edit_min_players, state=EditScenario.waiting_for_min_players)
     dp.register_message_handler(group_start, commands=["start"], state="*")
 
-    owned_callbacks = {
-        scenarios, private_start, manage_game_back, addons_back,
-        scenario_list, scenario_add, scenario_remove, scenario_delete,
-        scenario_edit, scenario_edit_pick, dispatch_final,
-    }
+    # Promote only this authority. Do not run another private reordering layer
+    # after this function; that was the source of several route reversions.
     for i in range(len(cq) - 1, -1, -1):
-        if handler_fn(cq[i]) in owned_callbacks:
+        if handler_fn(cq[i]) in OWN:
             cq.insert(0, cq.pop(i))
     for i in range(len(mh) - 1, -1, -1):
-        if handler_fn(mh[i]) in {group_start, message_edit_roles, message_edit_min_players}:
+        if handler_fn(mh[i]) is group_start:
             mh.insert(0, mh.pop(i))
 
     app._private_navigation_authority_installed = True
-    logging.info("Private navigation authority installed: callbacks=%d messages=%d", len(cq), len(mh))
+    logging.info("PRIVATE NAVIGATION AUTHORITY: installed callbacks=%d messages=%d", len(cq), len(mh))
     return True
