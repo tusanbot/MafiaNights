@@ -28,33 +28,6 @@ def install(main):
                 registry.insert(0, registry.pop(i))
                 return
 
-    def replace_by_name(name, replacement):
-        replaced = False
-        for item in handlers():
-            callback = getattr(item, "callback", None)
-            if getattr(callback, "__name__", None) != name:
-                continue
-            if getattr(callback, "_ui_cleanup_v2", False):
-                continue
-            if hasattr(item, "callback"):
-                item.callback = replacement
-                replaced = True
-        return replaced
-
-    def player_list_text():
-        lines = ["👥 <b>لیست بازیکنان</b>", ""]
-        for seat, uid in sorted((main.player_slots or {}).items()):
-            try:
-                name = main.display_name(uid, main.players.get(uid, "❓"))
-            except Exception:
-                name = main.players.get(uid, str(uid))
-            lines.append(
-                f"{seat:02d}. <a href='tg://user?id={uid}'>{html.escape(str(name))}</a>"
-            )
-        if len(lines) == 2:
-            lines.append("— بازیکنی ثبت نشده است.")
-        return "\n".join(lines)
-
     def challenge_status_keyboard():
         kb = InlineKeyboardMarkup(row_width=1)
         kb.add(InlineKeyboardButton("⚔️ وضعیت چالش", callback_data="lv6_challenge_status"))
@@ -77,18 +50,9 @@ def install(main):
         main.current_turn_index = 0
         first_seat = main.turn_order[0]
 
-        # Do not create another status message. Reuse the existing role/start
-        # message as the permanent player-list message for the round.
-        try:
-            await callback.message.edit_text(
-                player_list_text(),
-                reply_markup=challenge_status_keyboard(),
-                parse_mode="HTML",
-            )
-            main.game_message_id = callback.message.message_id
-        except Exception:
-            logging.exception("could not convert round setup message to player list")
-
+        # The head-selection handler already rendered the canonical formatted
+        # player list. Do NOT replace it with a second/simple player list here.
+        # Keeping that message intact gives the day exactly one player-list UI.
         await main.start_turn(first_seat)
         await callback.answer("✅ دور شروع شد")
 
@@ -153,8 +117,8 @@ def install(main):
         main.group_chat_id = group_id
 
         # Reset exactly once, then immediately render the new-day controls in
-        # the message the moderator just clicked. This removes the historical
-        # two-click behaviour where the first click only reset state.
+        # the message the moderator just clicked. Head selection is responsible
+        # for the single formatted player list rendered for the new day.
         try:
             main.reset_round_data()
         except Exception:
