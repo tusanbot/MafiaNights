@@ -60,10 +60,13 @@ install_private_ui_bootstrap(main)
 # every legacy/bridge layer so its routes win in webhook mode as well.
 from runtime.private_navigation_authority import install as install_private_navigation_authority
 install_private_navigation_authority(main)
-from runtime.private_authority_reorder import install as install_private_authority_reorder
 
 # The richer private menu remains available for polling/startup environments.
 from runtime.final_private_ui import install as install_final_private_ui
+from runtime.private_authority_reorder import install as install_private_authority_reorder
+# Install the back-navigation owner immediately as well: webhook requests do
+# not run aiogram's startup hook.
+install_private_authority_reorder(main)
 
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.stable_round_policy import install as install_stable_round_policy
@@ -103,9 +106,8 @@ async def on_startup(dp):
     logging.info("Stable round engine installed as the sole turn/round authority")
 
     await install_final_private_ui(main)
-    # final_private_ui promotes its own handlers during startup. Re-promote the
-    # exact navigation owner afterwards so Back and scenario routes cannot fall
-    # through to legacy handlers.
+    # final_private_ui promotes its own handlers during startup; promote the
+    # exact navigation owner afterwards so Back cannot fall through to legacy.
     install_private_authority_reorder(main)
     install_role_distribution_notice(main)
     logging.info("FINAL UI AUTHORITY ACTIVE: private start + management are isolated from lobby")
