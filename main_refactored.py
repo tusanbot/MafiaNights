@@ -51,6 +51,9 @@ class MafiaApplication:
         self.scenarios = self._load_scenarios()
         self.challenge_enabled: dict[int, bool] = {}
         self.roles: dict[int, dict[int, str]] = {}
+        # Tracks users who explicitly requested to enter/change a lobby game number.
+        # The value is the group id; the key is (group_id, user_id).
+        self.pending_event_number: dict[tuple[int, int], int] = {}
         self.recovery = EphemeralRecoveryManager(self.runtime, self)
         self._register_handlers()
 
@@ -110,20 +113,28 @@ class MafiaApplication:
 
     def _keyboard_lobby(self, scenario: Optional[str], group_id: int):
         kb = InlineKeyboardMarkup(row_width=5)
+        game = self.runtime.state.active_game(group_id) or {}
+        event_number = game.get("event_number") or 1
         occupied = self._players_by_seat(group_id)
         for seat in range(1, self._max_players(scenario) + 1):
             label = str(seat) if seat not in occupied else f"{seat} ({self._name(int(occupied[seat]['player_id']))})"
             kb.insert(InlineKeyboardButton(label, callback_data=f"slot_{seat}"))
         kb.row(InlineKeyboardButton("✅ ورود", callback_data="join_game"), InlineKeyboardButton("❌ خروج", callback_data="leave_game"))
-        kb.add(InlineKeyboardButton("📝 انتخاب سناریو", callback_data="choose_scenario"), InlineKeyboardButton("🚫 لغو بازی", callback_data="cancel_game"))
+        kb.add(
+            InlineKeyboardButton("📝 انتخاب سناریو", callback_data="choose_scenario"),
+            InlineKeyboardButton(f"🔢 شماره بازی: {event_number}", callback_data="set_event_number"),
+        )
+        kb.add(InlineKeyboardButton("🚫 لغو بازی", callback_data="cancel_game"))
         return kb
 
     async def _render_lobby(self, group_id: int):
         snapshot = self.runtime.lobby_snapshot(group_id)
-        game = snapshot.get("game") or {}
+        game = snapshot.get("game") or self.runtime.state.active_game(group_id) or {}
         scenario = game.get("scenario_id")
+        event_number = game.get("event_number") or 1
         players = snapshot.get("players") or []
         text = "📋 <b>لابی Mafia Nights</b>\n\n"
+        text += f"🔢 <b>شماره بازی:</b> {event_number}\n"
         text += f"🗓 سناریو: {html.escape(str(scenario or 'انتخاب نشده'))}\n\n"
         for row in sorted(players, key=lambda x: (x.get("seat") is None, x.get("seat") or 999)):
             uid = int(row["player_id"]); seat = row.get("seat")
@@ -161,6 +172,49 @@ class MafiaApplication:
                 await callback.message.answer("❌ اجرای بازی جدید با خطا مواجه شد. خطا در لاگ ثبت شد.")
             except Exception:
                 logging.exception("failed to send new_game error message")
+
+    async def set_event_number(self, callback):
+        """Ask the initiating user for an explicit lobby game/event number."""
+        group_id = int(callback.message.chat.id)
+        game = self.runtime.state.active_game(group_id)
+        if not game or game.get("status") != Phase.LOBBY.value:
+            await callback.answer("❌ لابی فعال نیست.", show_alert=True)
+            return
+        key = (group_id, int(callback.from_user.id))
+        self.pending_event_number[key] = group_id
+        current = int(game.get("event_number") or 1)
+        await callback.answer()
+        await callback.message.answer(
+            f"🔢 شماره بازی را ارسال کنید.\nشماره فعلی: <b>{current}</b>\n\nفقط یک عدد مثبت ارسال کنید.",
+            parse_mode="HTML",
+        )
+
+    async def _event_number_input(self, message: types.Message):
+        group_id = int(message.chat.id)
+        key = (group_id, int(message.from_user.id))
+        if key not in self.pending_event_number:
+            return
+        self.pending_event_number.pop(key, None)
+        raw = (message.text or "").strip()
+        try:
+            number = int(raw)
+        except ValueError:
+            await message.answer("❌ شماره بازی باید فقط عدد باشد. دوباره از دکمه «شماره بازی» استفاده کنید.")
+            return
+        if number < 1:
+            await message.answer("❌ شماره بازی باید حداقل ۱ باشد.")
+            return
+        game = self.runtime.state.active_game(group_id)
+        if not game or game.get("status") != Phase.LOBBY.value:
+            await message.answer("❌ لابی فعال نیست.")
+            return
+        try:
+            self.runtime.state.lobby.set_event_number(game["id"], number)
+            await self._render_lobby(group_id)
+            await message.answer(f"✅ شماره بازی روی <b>{number}</b> ثبت شد.", parse_mode="HTML")
+        except Exception:
+            logging.exception("failed to update event number for game %s", game.get("id"))
+            await message.answer("❌ ثبت شماره بازی انجام نشد. خطا در لاگ ثبت شد.")
 
     async def join(self, callback):
         group_id = int(callback.message.chat.id); user = callback.from_user
@@ -217,8 +271,10 @@ class MafiaApplication:
         self.dp.register_callback_query_handler(self.leave, lambda c: c.data in {"leave", "leave_game"})
         self.dp.register_callback_query_handler(self.choose_scenario, lambda c: c.data == "choose_scenario")
         self.dp.register_callback_query_handler(self.scenario_selected, lambda c: c.data.startswith("scenario:"))
+        self.dp.register_callback_query_handler(self.set_event_number, lambda c: c.data == "set_event_number")
         self.dp.register_callback_query_handler(self.toggle_challenge, lambda c: c.data in {"toggle_challenge", "challenge_toggle"})
         self.dp.register_callback_query_handler(self.cancel_game, lambda c: c.data == "cancel_game")
+        self.dp.register_message_handler(self._event_number_input, lambda m: bool(m.chat and m.from_user and (int(m.chat.id), int(m.from_user.id)) in self.pending_event_number), content_types=types.ContentTypes.TEXT)
         self.dp.register_message_handler(self._start_command, commands=["start"])
 
     async def cancel_game(self, callback):
