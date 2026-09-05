@@ -48,11 +48,7 @@ class PlayerService:
         self._display_cache.pop(int(user_id), None)
 
     def ensure_player(self, user):
-        return self.ensure_player_data(
-            user_id=user.id,
-            full_name=getattr(user, "full_name", None),
-            username=getattr(user, "username", None),
-        )
+        return self.ensure_player_data(user.id, getattr(user, "full_name", None), getattr(user, "username", None))
 
     def ensure_player_data(self, user_id, full_name=None, username=None):
         repo = self._get_repo()
@@ -60,13 +56,9 @@ class PlayerService:
             return None
         try:
             repo.upsert(user_id, full_name, username)
-            # Avoid an immediate second SELECT: Telegram already supplied the
-            # current display name. Nickname, when present, remains cached from
-            # an earlier lookup and is never overwritten by this fallback.
-            cached = self._display_cache.get(int(user_id))
-            if not cached or time.monotonic() - cached[0] >= self.CACHE_TTL:
-                self._cache(user_id, full_name or username or "❓")
-            return {"id": int(user_id), "username": username, "first_name": (full_name or "").split(None, 1)[0] or None}
+            # Do not cache Telegram's fallback here: the database may contain a
+            # nickname, and caching full_name would hide it for the TTL window.
+            return {"id": int(user_id), "username": username, "full_name": full_name}
         except Exception:
             return None
 
@@ -82,8 +74,7 @@ class PlayerService:
             row = repo.get(uid)
         except Exception:
             return fallback
-        value = self._row_name(row, fallback)
-        return self._cache(uid, value) or fallback
+        return self._cache(uid, self._row_name(row, fallback)) or fallback
 
     def set_nickname(self, user_id, nickname):
         repo = self._get_repo()
