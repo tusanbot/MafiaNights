@@ -5,11 +5,22 @@ from .base import DatabaseRepository
 class GameRepository(DatabaseRepository):
     """Persistence for mafia_games and mafia_game_players."""
 
+    def next_event_number(self, group_chat_id):
+        """Return the next sequential game/event number for a group."""
+        with self.SessionLocal() as session:
+            value = session.execute(
+                text("""
+                    select coalesce(max(event_number), 0) + 1
+                    from public.mafia_games
+                    where group_chat_id = :group_chat_id
+                """), {"group_chat_id": int(group_chat_id)}
+            ).scalar_one()
+            return int(value)
+
     def create_game(self, group_chat_id, moderator_id=None, scenario_id=None, event_number=None, state=None):
-        # A newly created game always starts at event/round number 1 when the
-        # caller has not supplied an explicit value. Keep this invariant here,
-        # at the repository boundary, so all callers are safe.
-        event_number = int(event_number) if event_number is not None else 1
+        # A newly created game starts at the next sequential event number when
+        # the caller has not supplied an explicit value.
+        event_number = int(event_number) if event_number is not None else self.next_event_number(group_chat_id)
         with self.SessionLocal() as session:
             row = session.execute(
                 text("""
@@ -49,8 +60,30 @@ class GameRepository(DatabaseRepository):
             ).mappings().all()
             return [dict(row) for row in rows]
 
+    def list_games(self, group_chat_id=None, limit=100):
+        """Return persisted game records for history/list/report views."""
+        with self.SessionLocal() as session:
+            if group_chat_id is None:
+                rows = session.execute(
+                    text("""
+                        select * from public.mafia_games
+                        order by created_at desc
+                        limit :limit
+                    """), {"limit": int(limit)}
+                ).mappings().all()
+            else:
+                rows = session.execute(
+                    text("""
+                        select * from public.mafia_games
+                        where group_chat_id = :group_chat_id
+                        order by created_at desc
+                        limit :limit
+                    """), {"group_chat_id": int(group_chat_id), "limit": int(limit)}
+                ).mappings().all()
+            return [dict(row) for row in rows]
+
     def update_game(self, game_id, **fields):
-        allowed = {"moderator_id", "scenario_id", "status", "current_turn_seat", "current_turn_index",
+        allowed = {"event_number", "moderator_id", "scenario_id", "status", "current_turn_seat", "current_turn_index",
                     "state", "started_at", "finished_at"}
         fields = {k: v for k, v in fields.items() if k in allowed}
         if not fields:
