@@ -35,6 +35,18 @@ async def on_startup(dp):
     logging.info("MafiaNights clean runtime startup; persistence=%s", persistence_status)
     await app.startup()
 
+    # Rehydrate the Telegram-facing group context from durable state. Without
+    # this, admin/game-management callbacks that rely on app.ui would be blind
+    # after a process restart until a new-game action happened.
+    try:
+        allowed_group_id = int(os.getenv("ALLOWED_GROUP_ID", "-1002356353761"))
+        active_game = app.runtime.state.active_game(allowed_group_id)
+        if active_game:
+            app.ui.group_chat_id = allowed_group_id
+            logging.info("Restored active game context for group %s", allowed_group_id)
+    except Exception:
+        logging.exception("Failed to restore active Telegram game context")
+
 
 async def on_shutdown(dp):
     await app.shutdown()
