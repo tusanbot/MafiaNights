@@ -17,7 +17,10 @@ class PersistentLobbyRuntime:
 
     def join(self, group_chat_id: int, player_id: int, seat: Optional[int] = None,
              moderator_id: Optional[int] = None, scenario_id: Optional[str] = None,
-             event_number: Optional[int] = None, is_substitute: bool = False) -> dict[str, Any]:
+             event_number: Optional[int] = None, is_substitute: bool = False,
+             substitute: Optional[bool] = None) -> dict[str, Any]:
+        if substitute is not None:
+            is_substitute = bool(substitute)
         game = self.ensure(group_chat_id, moderator_id, scenario_id, event_number)
         row_id = self.state.add_player(game["id"], player_id, seat, is_substitute)
         return {"game_id": game["id"], "game_player_id": row_id, "player_id": int(player_id),

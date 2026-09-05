@@ -24,22 +24,20 @@ def _authorized(environ: dict[str, Any]) -> bool:
 
 
 def _get_application() -> Any:
+    """Return the canonical clean production application."""
     global _app
     if _app is None:
-        from main_refactored_v4 import MafiaApplicationV4
-
-        token = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("API_TOKEN")
-        if not token:
-            raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured")
-        _app = MafiaApplicationV4(token)
+        import main
+        _app = main.app
     return _app
 
 
 async def _dispatch(payload: dict[str, Any]) -> None:
-    from aiogram import types
+    from aiogram import Bot, types
 
     app = _get_application()
     update = types.Update(**payload)
+    Bot.set_current(app.bot)
     await app.dp.process_update(update)
 
 
@@ -97,5 +95,6 @@ def app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
     return [body]
 
 
-# Explicit alias retained for deployments/tests that import ``handler``.
+# Compatibility exports for Vercel configurations and older integrations.
 handler = app
+main = app
