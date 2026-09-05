@@ -13,8 +13,6 @@ install_latency(main.dp)
 logging.info("PERSISTENCE_OPTIMIZATION_ACTIVE pool=serverless-safe identity-cache=60s active-game-cache=0.75s")
 logging.info("PRODUCTION_FAST_PATH active=1 legacy-lobby-middleware=off legacy-state-middleware=off identity-bridge=off")
 
-# Webhook workers are short-lived, so FSM, scenarios and settings must use
-# persistent storage rather than process memory or the read-only deployment FS.
 from runtime.postgres_fsm_storage import install as install_postgres_fsm_storage
 install_postgres_fsm_storage(main)
 from runtime.scenario_persistence_patch import install as install_scenario_persistence_patch
@@ -22,16 +20,11 @@ install_scenario_persistence_patch(main)
 
 from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
-# game_ui_bugfixes still provides useful callback bug fixes, but its historical
-# process_update wrapper performed a synchronous DB upsert for every update.
 from runtime.production_fastpath import install as install_production_fastpath
 install_production_fastpath(main)
 
 from runtime.lobby_ui_v6 import install as install_lobby_ui
 install_lobby_ui(main)
-# Old Telegram messages may still contain new_game/choose_scenario callbacks.
-# Route those callbacks into the already-installed v6 handlers instead of
-# reviving main1's legacy lobby.
 from runtime.lobby_callback_cutover import install as install_lobby_callback_cutover
 install_lobby_callback_cutover(main)
 from runtime.lobby_ui_v7_patch import install as install_lobby_v7_patch
@@ -58,20 +51,14 @@ install_start_profile_patch(main)
 from runtime.user_panel_back_patch import install as install_user_panel_back_patch
 install_user_panel_back_patch(main, user_panel)
 
-# Canonical standalone text commands. This must be registered on main1.dp;
-# commands.py intentionally no longer owns a second Dispatcher.
 from commands import register_commands as register_text_commands
 register_text_commands(main)
 
-# MafiaAddons is instantiated by main1 during import. Replace its filesystem
-# persistence with PostgreSQL before any add-on UI handler can read/write it.
 from runtime.addons_persistence_patch import install as install_addons_persistence_patch
 install_addons_persistence_patch(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 
-# Do not globally replace main.display_name here. main1 owns canonical nickname
-# resolution and stable round surfaces should use that implementation.
 from runtime.private_navigation_authority import install as install_private_navigation_authority
 install_private_navigation_authority(main)
 
@@ -82,13 +69,16 @@ from runtime.transition_ui_dedup import install as install_transition_ui_dedup
 from runtime.role_distribution_notice import install as install_role_distribution_notice
 from runtime.voting_runtime import install as install_voting_runtime
 
-# Callback-router/runtime registrations belong to import time so webhook and
-# polling workers use the same authoritative day/turn/voting flow.
 install_stable_round_engine(main)
 install_stable_round_policy(main)
 install_stable_challenge_button_guard(main)
 install_transition_ui_dedup(main)
 install_voting_runtime(main)
+
+# Final ownership pass: several compatibility modules register callbacks after
+# the first lobby cutover. Run the physical removal once more at the end so no
+# later registration can resurrect main1's old lobby handlers.
+install_lobby_callback_cutover(main)
 
 _original_startup = main.on_startup
 
@@ -108,6 +98,9 @@ async def on_startup(dp):
     from runtime.final_private_ui import install as install_final_private_ui
     await install_final_private_ui(main)
     install_role_distribution_notice(main)
+    # final_private_ui may register callback handlers, so enforce lobby
+    # ownership after it as well.
+    install_lobby_callback_cutover(main)
     logging.info("FINAL UI AUTHORITY ACTIVE")
 
 
