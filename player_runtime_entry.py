@@ -13,6 +13,7 @@ install_player_bridge(main)
 _bridge = install_persistent_bridge(main)
 main.player_service = player_service
 install_latency(main.dp)
+logging.info("PERSISTENCE_OPTIMIZATION_ACTIVE pool=serverless-safe identity-cache=60s active-game-cache=0.75s")
 
 # Webhook workers are short-lived, so FSM, scenarios and settings must use
 # persistent storage rather than process memory or the read-only deployment FS.
