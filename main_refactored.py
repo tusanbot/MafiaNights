@@ -6,7 +6,6 @@ import html
 import json
 import logging
 import os
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -25,7 +24,8 @@ from runtime.ephemeral_recovery import EphemeralRecoveryManager
 
 DEFAULT_TURN_DURATION = 120
 DEFAULT_CHALLENGE_DURATION = 60
-ALLOWED_GROUP_ID = int(os.getenv("ALLOWED_GROUP_ID", "-1002356353761"))
+# Optional restriction. When unset/0, the bot may start a game in any group.
+ALLOWED_GROUP_ID = int(os.getenv("ALLOWED_GROUP_ID", "0") or 0)
 SCENARIOS_FILE = Path("scenarios.json")
 
 @dataclass
@@ -140,7 +140,7 @@ class MafiaApplication:
 
     async def new_game(self, callback):
         group_id = int(callback.message.chat.id)
-        if group_id != ALLOWED_GROUP_ID:
+        if ALLOWED_GROUP_ID and group_id != ALLOWED_GROUP_ID:
             await callback.answer("❌ این ربات در این گروه فعال نیست.", show_alert=True); return
         self.ui.group_chat_id = group_id
         self.runtime.lobby.ensure(group_id)
@@ -185,7 +185,7 @@ class MafiaApplication:
         if not row: return
         order = self._turn_order(group_id); self._persist_turn_pointer(group_id, order, index)
         duration = DEFAULT_CHALLENGE_DURATION if challenge else DEFAULT_TURN_DURATION
-        turn = self.runtime.start_turn(group_id, max(1, index + 1), seat=int(seat), player_id=int(row["player_id"]), turn_type="challenge" if challenge else "main", duration_seconds=duration, current_turn_index=index, state={"challenge": challenge})
+        self.runtime.start_turn(group_id, max(1, index + 1), seat=int(seat), player_id=int(row["player_id"]), turn_type="challenge" if challenge else "main", duration_seconds=duration, current_turn_index=index, state={"challenge": challenge})
         await self.bot.send_message(group_id, f"{'⚔' if challenge else '🎙'} نوبت <a href='tg://user?id={int(row['player_id'])}'>{html.escape(self._name(int(row['player_id'])))}</a> است. ({duration} ثانیه)", parse_mode="HTML")
 
     async def startup(self):
