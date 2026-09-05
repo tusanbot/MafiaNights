@@ -5,7 +5,6 @@ import main1 as main
 from player_runtime_bridge import install as install_player_bridge
 from runtime.production_bridge import install as install_persistent_bridge, startup as persistent_startup
 from player_service import player_service
-
 from runtime.webhook_safety import install_latency, install_safe_callback_answer
 
 install_safe_callback_answer()
@@ -14,6 +13,7 @@ _bridge = install_persistent_bridge(main)
 main.player_service = player_service
 install_latency(main.dp)
 logging.info("PERSISTENCE_OPTIMIZATION_ACTIVE pool=serverless-safe identity-cache=60s active-game-cache=0.75s")
+logging.info("PRODUCTION_FAST_PATH active=1 legacy-lobby-middleware=off legacy-state-middleware=off")
 
 # Webhook workers are short-lived, so FSM, scenarios and settings must use
 # persistent storage rather than process memory or the read-only deployment FS.
@@ -26,10 +26,15 @@ from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
 from runtime.lobby_ui_v6 import install as install_lobby_ui
 install_lobby_ui(main)
+# Old Telegram messages may still contain new_game/choose_scenario callbacks.
+# Route those callbacks into the already-installed v6 handlers instead of
+# reviving main1's legacy lobby.
+from runtime.lobby_callback_cutover import install as install_lobby_callback_cutover
+install_lobby_callback_cutover(main)
 from runtime.lobby_ui_v7_patch import install as install_lobby_v7_patch
 install_lobby_v7_patch(main)
-from runtime.lobby_legacy_bridge import install as install_lobby_legacy_bridge
-install_lobby_legacy_bridge(main)
+# lobby_legacy_bridge is intentionally NOT installed: it recreated the old
+# lobby UX and competed with the canonical persistent lobby owner.
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 from runtime.game_flow_authority import install as install_game_flow_authority
@@ -62,14 +67,8 @@ install_addons_persistence_patch(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 
-# Do not globally replace main.display_name here. main1 already owns the
-# canonical nickname/players resolution and the stable round engine performs
-# its own safe fallback. A global wrapper changed the semantics of existing
-# turn/challenge surfaces and caused generic names to leak into several UIs.
-
-# SINGLE private-navigation owner for webhook mode. The old bootstrap and
-# reorder modules are intentionally not installed: duplicate registrations were
-# causing callbacks to fall through to legacy handlers.
+# Do not globally replace main.display_name here. main1 owns canonical nickname
+# resolution and stable round surfaces should use that implementation.
 from runtime.private_navigation_authority import install as install_private_navigation_authority
 install_private_navigation_authority(main)
 
@@ -80,9 +79,8 @@ from runtime.transition_ui_dedup import install as install_transition_ui_dedup
 from runtime.role_distribution_notice import install as install_role_distribution_notice
 from runtime.voting_runtime import install as install_voting_runtime
 
-# These are callback-router/runtime registrations, not polling-only startup
-# tasks. Install them at import time so webhook workers and polling both use the
-# same authoritative day/turn/voting flow.
+# Callback-router/runtime registrations belong to import time so webhook and
+# polling workers use the same authoritative day/turn/voting flow.
 install_stable_round_engine(main)
 install_stable_round_policy(main)
 install_stable_challenge_button_guard(main)
@@ -104,7 +102,6 @@ async def on_startup(dp):
     except Exception:
         logging.exception("Failed to initialize private UI group/admin authorization")
 
-    # Polling mode only: webhook mode already has the import-time router.
     from runtime.final_private_ui import install as install_final_private_ui
     await install_final_private_ui(main)
     install_role_distribution_notice(main)
