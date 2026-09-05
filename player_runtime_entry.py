@@ -6,9 +6,13 @@ from player_runtime_bridge import install as install_player_bridge
 from runtime.production_bridge import install as install_persistent_bridge, startup as persistent_startup
 from player_service import player_service
 
+from runtime.webhook_safety import install_latency, install_safe_callback_answer
+
+install_safe_callback_answer()
 install_player_bridge(main)
 _bridge = install_persistent_bridge(main)
 main.player_service = player_service
+install_latency(main.dp)
 
 # Webhook workers are short-lived, so FSM, scenarios and settings must use
 # persistent storage rather than process memory or the read-only deployment FS.
