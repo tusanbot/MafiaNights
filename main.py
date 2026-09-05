@@ -16,6 +16,7 @@ import os
 
 from main_refactored_v4 import MafiaApplicationV4
 from runtime.final_persistence import install as install_persistence
+from runtime.production_lobby import install as install_production_lobby
 
 
 TOKEN = os.getenv("API_TOKEN")
@@ -29,10 +30,12 @@ bot = app.bot
 dp = app.dp
 
 persistence_status = install_persistence(app)
+production_lobby_status = install_production_lobby(app)
+logging.info("PRODUCTION_RUNTIME_ACTIVE persistent=1 canonical_lobby=%s", production_lobby_status)
 
 
 async def on_startup(dp):
-    logging.info("MafiaNights clean runtime startup; persistence=%s", persistence_status)
+    logging.info("MafiaNights clean runtime startup; persistence=%s canonical_lobby=%s", persistence_status, production_lobby_status)
     await app.startup()
 
     # Rehydrate the Telegram-facing group context from durable state. Without
