@@ -139,12 +139,28 @@ class MafiaApplication:
             msg = await self.bot.send_message(group_id, text, parse_mode="HTML", reply_markup=self._keyboard_lobby(scenario, group_id)); self.ui.lobby_message_id = msg.message_id
 
     async def new_game(self, callback):
-        group_id = int(callback.message.chat.id)
-        if ALLOWED_GROUP_ID and group_id != ALLOWED_GROUP_ID:
-            await callback.answer("❌ این ربات در این گروه فعال نیست.", show_alert=True); return
-        self.ui.group_chat_id = group_id
-        self.runtime.lobby.ensure(group_id)
-        await self._render_lobby(group_id); await callback.answer("🎮 لابی جدید آماده شد.")
+        """Handle the canonical new-game callback without leaving Telegram spinning."""
+        try:
+            # Answer first: even if lobby/database rendering fails, Telegram gets
+            # an immediate callback response instead of an endless loading state.
+            await callback.answer("⏳ در حال آماده‌سازی بازی...")
+            if not callback.message or not callback.message.chat:
+                logging.error("new_game callback has no message/chat: %r", callback)
+                return
+            group_id = int(callback.message.chat.id)
+            logging.info("new_game callback received for group %s by user %s", group_id, getattr(callback.from_user, "id", None))
+            if ALLOWED_GROUP_ID and group_id != ALLOWED_GROUP_ID:
+                await callback.message.answer("❌ این ربات در این گروه فعال نیست.")
+                return
+            self.ui.group_chat_id = group_id
+            self.runtime.lobby.ensure(group_id)
+            await self._render_lobby(group_id)
+        except Exception:
+            logging.exception("new_game callback failed")
+            try:
+                await callback.message.answer("❌ اجرای بازی جدید با خطا مواجه شد. خطا در لاگ ثبت شد.")
+            except Exception:
+                logging.exception("failed to send new_game error message")
 
     async def join(self, callback):
         group_id = int(callback.message.chat.id); user = callback.from_user
