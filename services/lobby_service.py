@@ -16,8 +16,16 @@ class LobbyService:
         game = self.repository.get_active_game(group_chat_id)
         if game:
             return game
+
+        # event_number is NOT NULL in mafia_games. Generate it before crossing
+        # the repository boundary so every new lobby has a valid number even
+        # when legacy callers only provide the group id.
         if event_number is None:
             event_number = self.repository.next_event_number(group_chat_id)
+        event_number = int(event_number)
+        if event_number < 1:
+            raise ValueError("شماره بازی باید حداقل ۱ باشد")
+
         game_id = self.repository.create_game(
             group_chat_id=group_chat_id, moderator_id=moderator_id,
             scenario_id=scenario_id, event_number=event_number,
@@ -26,7 +34,7 @@ class LobbyService:
         return self.repository.get_active_game(group_chat_id) or {
             "id": game_id,
             "group_chat_id": group_chat_id,
-            "event_number": int(event_number),
+            "event_number": event_number,
         }
 
     def set_event_number(self, game_id: str, event_number: int) -> bool:
