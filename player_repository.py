@@ -1,31 +1,14 @@
-import os
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
+from repositories.base import DatabaseRepository
 
 
-class PlayerRepository:
+class PlayerRepository(DatabaseRepository):
     """دسترسی متمرکز به جدول mafia_players."""
 
-    def __init__(self, database_url=None):
-        self.database_url = database_url or os.getenv("DATABASE_URL")
-        if not self.database_url:
-            raise RuntimeError("DATABASE_URL تنظیم نشده است")
-
-        url = self.database_url
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql+psycopg2://", 1)
-        elif url.startswith("postgresql://"):
-            url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
-
-        self.engine = create_engine(url, pool_pre_ping=True)
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
-
     def upsert(self, user_id, full_name=None, username=None):
-        """ثبت بازیکن یا به‌روزرسانی اطلاعات پایه او."""
         user_id = int(user_id)
         full_name = (full_name or "").strip() or None
         username = (username or "").strip() or None
-
         first_name = None
         last_name = None
         if full_name:
@@ -46,12 +29,7 @@ class PlayerRepository:
                         last_name = coalesce(excluded.last_name, public.mafia_players.last_name),
                         updated_at = now()
                 """),
-                {
-                    "id": user_id,
-                    "username": username,
-                    "first_name": first_name,
-                    "last_name": last_name,
-                },
+                {"id": user_id, "username": username, "first_name": first_name, "last_name": last_name},
             )
             session.commit()
 
@@ -60,10 +38,8 @@ class PlayerRepository:
             row = session.execute(
                 text("""
                     select id, username, first_name, last_name, nickname
-                    from public.mafia_players
-                    where id = :id
-                """),
-                {"id": int(user_id)},
+                    from public.mafia_players where id = :id
+                """), {"id": int(user_id)}
             ).mappings().first()
             return dict(row) if row else None
 
@@ -71,29 +47,21 @@ class PlayerRepository:
         row = self.get(user_id)
         if not row:
             return fallback
-
         nickname = (row.get("nickname") or "").strip()
         if nickname:
             return nickname
-
         real_name = " ".join(
-            p for p in ((row.get("first_name") or "").strip(), (row.get("last_name") or "").strip())
-            if p
+            p for p in ((row.get("first_name") or "").strip(), (row.get("last_name") or "").strip()) if p
         )
-        return real_name or fallback
+        return real_name or (row.get("username") or fallback)
 
     def set_nickname(self, user_id, nickname):
         nickname = (nickname or "").strip()
         if not nickname:
             return False
-
         with self.SessionLocal() as session:
             result = session.execute(
-                text("""
-                    update public.mafia_players
-                    set nickname = :nickname, updated_at = now()
-                    where id = :id
-                """),
+                text("update public.mafia_players set nickname=:nickname, updated_at=now() where id=:id"),
                 {"id": int(user_id), "nickname": nickname},
             )
             session.commit()
@@ -102,11 +70,7 @@ class PlayerRepository:
     def delete_nickname(self, user_id):
         with self.SessionLocal() as session:
             result = session.execute(
-                text("""
-                    update public.mafia_players
-                    set nickname = null, updated_at = now()
-                    where id = :id
-                """),
+                text("update public.mafia_players set nickname=null, updated_at=now() where id=:id"),
                 {"id": int(user_id)},
             )
             session.commit()
@@ -116,8 +80,7 @@ class PlayerRepository:
         with self.SessionLocal() as session:
             rows = session.execute(
                 text("""
-                    select id, nickname
-                    from public.mafia_players
+                    select id, nickname from public.mafia_players
                     where nickname is not null and trim(nickname) <> ''
                     order by lower(nickname)
                 """)
