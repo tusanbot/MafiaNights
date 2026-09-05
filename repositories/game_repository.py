@@ -6,6 +6,10 @@ class GameRepository(DatabaseRepository):
     """Persistence for mafia_games and mafia_game_players."""
 
     def create_game(self, group_chat_id, moderator_id=None, scenario_id=None, event_number=None, state=None):
+        # A newly created game always starts at event/round number 1 when the
+        # caller has not supplied an explicit value. Keep this invariant here,
+        # at the repository boundary, so all callers are safe.
+        event_number = int(event_number) if event_number is not None else 1
         with self.SessionLocal() as session:
             row = session.execute(
                 text("""
