@@ -2,18 +2,16 @@
 
 import logging
 import main1 as main
-from player_runtime_bridge import install as install_player_bridge
 from runtime.production_bridge import install as install_persistent_bridge, startup as persistent_startup
 from player_service import player_service
 from runtime.webhook_safety import install_latency, install_safe_callback_answer
 
 install_safe_callback_answer()
-install_player_bridge(main)
 _bridge = install_persistent_bridge(main)
 main.player_service = player_service
 install_latency(main.dp)
 logging.info("PERSISTENCE_OPTIMIZATION_ACTIVE pool=serverless-safe identity-cache=60s active-game-cache=0.75s")
-logging.info("PRODUCTION_FAST_PATH active=1 legacy-lobby-middleware=off legacy-state-middleware=off")
+logging.info("PRODUCTION_FAST_PATH active=1 legacy-lobby-middleware=off legacy-state-middleware=off identity-bridge=off")
 
 # Webhook workers are short-lived, so FSM, scenarios and settings must use
 # persistent storage rather than process memory or the read-only deployment FS.
@@ -24,6 +22,11 @@ install_scenario_persistence_patch(main)
 
 from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
+# game_ui_bugfixes still provides useful callback bug fixes, but its historical
+# process_update wrapper performed a synchronous DB upsert for every update.
+from runtime.production_fastpath import install as install_production_fastpath
+install_production_fastpath(main)
+
 from runtime.lobby_ui_v6 import install as install_lobby_ui
 install_lobby_ui(main)
 # Old Telegram messages may still contain new_game/choose_scenario callbacks.
