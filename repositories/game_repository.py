@@ -12,7 +12,7 @@ class GameRepository(DatabaseRepository):
                     insert into public.mafia_games
                         (event_number, group_chat_id, moderator_id, scenario_id, status, state)
                     values
-                        (:event_number, :group_chat_id, :moderator_id, :scenario_id, 'lobby', :state::jsonb)
+                        (:event_number, :group_chat_id, :moderator_id, :scenario_id, 'lobby', CAST(:state AS jsonb))
                     returning id
                 """),
                 {"event_number": event_number, "group_chat_id": int(group_chat_id), "moderator_id": moderator_id,
@@ -55,7 +55,7 @@ class GameRepository(DatabaseRepository):
         assignments = []
         for key, value in fields.items():
             if key == "state":
-                assignments.append("state = :state::jsonb")
+                assignments.append("state = CAST(:state AS jsonb)")
                 params[key] = __import__("json").dumps(value or {}, ensure_ascii=False)
             else:
                 assignments.append(f"{key} = :{key}")
