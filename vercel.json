@@ -2,8 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "fluid": true,
-  "regions": ["sin1"],
-  "functionFailoverRegions": ["iad1"],
+  "regions": ["iad1"],
   "routes": [
     { "src": "/api/telegram/webhook", "dest": "/api/telegram_app.py" },
     { "src": "/api/telegram/setup", "dest": "/api/telegram_app.py" }
