@@ -85,8 +85,6 @@ class GameRepository(DatabaseRepository):
         with self.SessionLocal() as session:
             result = session.execute(text(f"update public.mafia_games set {', '.join(assignments)} where id=:game_id"), params)
             session.commit()
-        # The update is keyed only by game id; clearing the tiny active cache is
-        # safer than issuing another SELECT solely to discover group_chat_id.
         self._active_cache.clear()
         self._invalidate(game_id=game_id)
         return result.rowcount > 0
@@ -114,7 +112,7 @@ class GameRepository(DatabaseRepository):
         with self.SessionLocal() as session:
             rows = session.execute(text("""
                 select gp.*,p.username,p.first_name,p.last_name,p.nickname
-                from public.mafia_game_players gp join public.mafia_players p on p.id=gp.player_id
+                from public.mafia_game_players gp join public.mafia_players p on p.user_id=gp.player_id
                 where gp.game_id=:game_id order by gp.seat nulls last,gp.joined_at
             """), {"game_id": game_id}).mappings().all()
             value = [dict(row) for row in rows]
