@@ -13,7 +13,7 @@ class ScenarioRepository(DatabaseRepository):
                     from public.mafia_scenarios
                     where is_active = true
                     order by sort_order nulls last, id
-                """)
+                """")
             ).mappings().all()
             return [dict(row) for row in rows]
 
@@ -26,6 +26,18 @@ class ScenarioRepository(DatabaseRepository):
                     limit 1
                 """),
                 {"name": name},
+            ).mappings().first()
+            return dict(row) if row else None
+
+    def get_by_id(self, scenario_id):
+        with self.SessionLocal() as session:
+            row = session.execute(
+                text("""
+                    select * from public.mafia_scenarios
+                    where id = :scenario_id
+                    limit 1
+                """),
+                {"scenario_id": int(scenario_id)},
             ).mappings().first()
             return dict(row) if row else None
 
