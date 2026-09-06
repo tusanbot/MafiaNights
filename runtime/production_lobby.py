@@ -47,13 +47,21 @@ def install(app: Any) -> bool:
     def gid(callback: types.CallbackQuery) -> int:
         return int(callback.message.chat.id)
 
+    def scenario_info(value: Any) -> dict[str, Any] | None:
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return scenario_repo.get_by_id(value)
+        return app.scenarios.get(str(value)) or scenario_repo.get_by_name(str(value))
+
+    def scenario_name(value: Any) -> str:
+        row = scenario_info(value)
+        return str((row or {}).get("name") or value or "---")
+
     def capacity(snapshot: dict[str, Any]) -> int:
         game = snapshot.get("game") or {}
-        scenario = game.get("scenario_id")
-        if isinstance(scenario, int):
-            row = scenario_repo.get_by_name(str(scenario))
-            return len((row or {}).get("roles") or [])
-        return len((app.scenarios.get(scenario) or {}).get("roles") or [])
+        row = scenario_info(game.get("scenario_id"))
+        return len((row or {}).get("roles") or [])
 
     def name(row: dict[str, Any]) -> str:
         return str(row.get("nickname") or row.get("first_name") or row.get("username") or row.get("player_id") or "👤")
@@ -65,9 +73,7 @@ def install(app: Any) -> bool:
         return app.runtime.lobby_snapshot(int(group_id))
 
     def keyboard(snapshot_data: dict[str, Any]) -> InlineKeyboardMarkup:
-        game = snapshot_data.get("game") or {}
-        scenario = game.get("scenario_id")
-        cap = len((app.scenarios.get(scenario) or {}).get("roles") or [])
+        cap = capacity(snapshot_data)
         rows = snapshot_data.get("players") or []
         occupied = {
             int(r["seat"]): r for r in rows
@@ -94,29 +100,20 @@ def install(app: Any) -> bool:
 
     def text(snapshot_data: dict[str, Any]) -> str:
         game = snapshot_data.get("game") or {}
-        scenario = game.get("scenario_id") or "---"
-        scenario_label = scenario
-        cap = len((app.scenarios.get(scenario) or {}).get("roles") or [])
-        if isinstance(scenario, int):
-            row = scenario_repo.get_by_name(str(scenario))
-            scenario_label = (row or {}).get("name") or scenario
-            cap = len((row or {}).get("roles") or [])
+        scenario = game.get("scenario_id")
+        scenario_label = scenario_name(scenario)
+        cap = capacity(snapshot_data)
         rows = snapshot_data.get("players") or []
         active = [r for r in rows if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed", "dead"}]
         waiting = [r for r in rows if r.get("seat") is None and str(r.get("status") or "waiting") == "waiting"]
         moderator = game.get("moderator_id")
         lines = [
-            "༄",
-            "<b>🎭 MAFIA NIGHTS</b>",
-            "",
+            "༄", "<b>🎭 MAFIA NIGHTS</b>", "",
             f"📝 <b>سناریو:</b> {html.escape(str(scenario_label))}",
             f"🎩 <b>گرداننده:</b> {mention(int(moderator)) if moderator else '---'}",
-            f"👥 <b>بازیکنان:</b> {len(active)}/{cap}",
-            "",
-            "◤◢◣◥◤◢◣◥◤◢◣◥",
-            "      <b>صندلی‌های بازی</b>",
-            "◤◢◣◥◤◢◣◥◤◢◣◥",
-            "",
+            f"👥 <b>بازیکنان:</b> {len(active)}/{cap}", "",
+            "◤◢◣◥◤◢◣◥◤◢◣◥", "      <b>صندلی‌های بازی</b>",
+            "◤◢◣◥◤◢◣◥◤◢◣◥", "",
         ]
         if active:
             for row in sorted(active, key=lambda r: int(r.get("seat") or 999)):
@@ -180,11 +177,11 @@ def install(app: Any) -> bool:
 
     async def scenario_selected(callback):
         group_id = gid(callback)
-        scenario_name = str(callback.data).split(":", 1)[1]
-        if scenario_name not in app.scenarios:
+        scenario_name_value = str(callback.data).split(":", 1)[1]
+        if scenario_name_value not in app.scenarios:
             await callback.answer("سناریو نامعتبر است.", show_alert=True)
             return
-        scenario_row = scenario_repo.get_by_name(scenario_name)
+        scenario_row = scenario_repo.get_by_name(scenario_name_value)
         if not scenario_row or not scenario_row.get("is_active", True):
             await callback.answer("سناریو نامعتبر است.", show_alert=True)
             return
@@ -202,7 +199,7 @@ def install(app: Any) -> bool:
                 kb.add(InlineKeyboardButton(admin_name, callback_data=f"prod_moderator:{uid}"))
             await callback.message.edit_text("🎩 <b>انتخاب گرداننده</b>\n\nیکی از مدیران گروه را انتخاب کنید:", reply_markup=kb, parse_mode="HTML")
         except Exception:
-            logging.exception("production scenario selection failed: group=%s scenario=%s", group_id, scenario_name)
+            logging.exception("production scenario selection failed: group=%s scenario=%s", group_id, scenario_name_value)
             await callback.answer("❌ انتخاب سناریو انجام نشد.", show_alert=True)
 
     async def moderator_selected(callback):
