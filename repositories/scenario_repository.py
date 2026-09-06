@@ -12,7 +12,7 @@ class ScenarioRepository(DatabaseRepository):
                     select id, name, description, min_players, max_players, roles, config
                     from public.mafia_scenarios
                     where is_active = true
-                    order by name
+                    order by sort_order nulls last, id
                 """)
             ).mappings().all()
             return [dict(row) for row in rows]
