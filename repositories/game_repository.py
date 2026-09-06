@@ -90,16 +90,22 @@ class GameRepository(DatabaseRepository):
         return result.rowcount > 0
 
     def add_player(self, game_id, player_id, seat=None, role=None, status="active", is_substitute=False):
+        """Add a player and keep the compatibility identity columns synchronized."""
+        uid = int(player_id)
         with self.SessionLocal() as session:
-            existing = session.execute(text("select id from public.mafia_game_players where game_id=:game_id and player_id=:player_id limit 1"), {"game_id": game_id, "player_id": int(player_id)}).mappings().first()
+            existing = session.execute(text("""
+                select id from public.mafia_game_players
+                where game_id=:game_id and (player_id=:player_id or user_id=:user_id)
+                limit 1
+            """), {"game_id": game_id, "player_id": uid, "user_id": uid}).mappings().first()
             if existing:
                 return existing["id"]
             if seat is not None and session.execute(text("select 1 from public.mafia_game_players where game_id=:game_id and seat=:seat limit 1"), {"game_id": game_id, "seat": int(seat)}).first():
                 raise ValueError("این صندلی قبلاً رزرو شده است")
             row = session.execute(text("""
-                insert into public.mafia_game_players(game_id,player_id,seat,role,status,is_substitute)
-                values(:game_id,:player_id,:seat,:role,:status,:is_substitute) returning id
-            """), {"game_id": game_id, "player_id": int(player_id), "seat": seat, "role": role, "status": status, "is_substitute": is_substitute}).scalar_one()
+                insert into public.mafia_game_players(game_id,user_id,player_id,seat,role,status,is_substitute)
+                values(:game_id,:user_id,:player_id,:seat,:role,:status,:is_substitute) returning id
+            """), {"game_id": game_id, "user_id": uid, "player_id": uid, "seat": seat, "role": role, "status": status, "is_substitute": is_substitute}).scalar_one()
             session.commit()
         self._invalidate(game_id=game_id)
         return row
@@ -121,7 +127,7 @@ class GameRepository(DatabaseRepository):
 
     def remove_player(self, game_id, player_id):
         with self.SessionLocal() as session:
-            result = session.execute(text("delete from public.mafia_game_players where game_id=:game_id and player_id=:player_id"), {"game_id": game_id, "player_id": int(player_id)})
+            result = session.execute(text("delete from public.mafia_game_players where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id": game_id, "player_id": int(player_id)})
             session.commit()
         self._invalidate(game_id=game_id)
         return result.rowcount > 0
@@ -130,21 +136,21 @@ class GameRepository(DatabaseRepository):
         with self.SessionLocal() as session:
             if seat is not None and session.execute(text("select player_id from public.mafia_game_players where game_id=:game_id and seat=:seat and player_id<>:player_id limit 1"), {"game_id": game_id, "seat": int(seat), "player_id": int(player_id)}).first():
                 raise ValueError("این صندلی قبلاً رزرو شده است")
-            result = session.execute(text("update public.mafia_game_players set seat=:seat,status=:status where game_id=:game_id and player_id=:player_id"), {"game_id": game_id, "player_id": int(player_id), "seat": seat, "status": "waiting" if seat is None else "active"})
+            result = session.execute(text("update public.mafia_game_players set seat=:seat,status=:status where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id": game_id, "player_id": int(player_id), "seat": seat, "status": "waiting" if seat is None else "active"})
             session.commit()
         self._invalidate(game_id=game_id)
         return result.rowcount > 0
 
     def set_player_status(self, game_id, player_id, status):
         with self.SessionLocal() as session:
-            result = session.execute(text("update public.mafia_game_players set status=:status where game_id=:game_id and player_id=:player_id"), {"game_id": game_id, "player_id": int(player_id), "status": status})
+            result = session.execute(text("update public.mafia_game_players set status=:status where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id": game_id, "player_id": int(player_id), "status": status})
             session.commit()
         self._invalidate(game_id=game_id)
         return result.rowcount > 0
 
     def promote_waiting_player(self, game_id, seat):
         with self.SessionLocal() as session:
-            row = session.execute(text("select id,player_id from public.mafia_game_players where game_id=:game_id and seat is null and status='waiting' order by joined_at limit 1"), {"game_id": game_id}).mappings().first()
+            row = session.execute(text("select id,player_id,user_id from public.mafia_game_players where game_id=:game_id and seat is null and status='waiting' order by joined_at limit 1"), {"game_id": game_id}).mappings().first()
             if not row:
                 return None
             if session.execute(text("select 1 from public.mafia_game_players where game_id=:game_id and seat=:seat limit 1"), {"game_id": game_id, "seat": int(seat)}).first():
@@ -152,4 +158,4 @@ class GameRepository(DatabaseRepository):
             session.execute(text("update public.mafia_game_players set seat=:seat,status='active',is_substitute=false where id=:id"), {"id": row["id"], "seat": int(seat)})
             session.commit()
         self._invalidate(game_id=game_id)
-        return {"id": row["id"], "player_id": row["player_id"], "seat": int(seat)}
+        return {"id": row["id"], "player_id": row["player_id"] or row["user_id"], "seat": int(seat)}
