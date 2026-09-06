@@ -30,14 +30,6 @@ def _remove_handlers(dp, names: set[str]) -> list[str]:
     return removed
 
 
-def _front(dp, fn) -> None:
-    table = getattr(dp.callback_query_handlers, "handlers", [])
-    for i, item in enumerate(table):
-        if getattr(item, "callback", None) is fn:
-            table.insert(0, table.pop(i))
-            return
-
-
 def install(app: Any) -> bool:
     """Install the only lobby owner used by the Vercel production app."""
     dp = app.dp
@@ -75,7 +67,6 @@ def install(app: Any) -> bool:
             int(r["seat"]): r for r in rows
             if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed", "dead"}
         }
-        waiting = [r for r in rows if r.get("seat") is None and str(r.get("status") or "waiting") == "waiting"]
         kb = InlineKeyboardMarkup(row_width=3)
         for seat in range(1, cap + 1):
             row = occupied.get(seat)
@@ -129,9 +120,6 @@ def install(app: Any) -> bool:
         return "\n".join(lines)
 
     async def render(group_id: int, message: types.Message | None = None):
-        # Exactly one persistent snapshot per render. The previous production
-        # implementation performed a snapshot, active-game query and another
-        # snapshot while also doing a DB name lookup for every seat.
         snap = snapshot(group_id)
         body = text(snap)
         markup = keyboard(snap)
@@ -144,8 +132,8 @@ def install(app: Any) -> bool:
                 msg = await bot.send_message(group_id, body, parse_mode="HTML", reply_markup=markup)
                 app.ui.lobby_message_id = msg.message_id
         except Exception as exc:
-            logging.warning("production lobby render failed: %s", exc)
             if "message is not modified" not in str(exc).lower():
+                logging.warning("production lobby render failed: %s", exc)
                 try:
                     msg = await bot.send_message(group_id, body, parse_mode="HTML", reply_markup=markup)
                     app.ui.lobby_message_id = msg.message_id
@@ -166,7 +154,6 @@ def install(app: Any) -> bool:
 
     async def new_game(callback):
         group_id = gid(callback)
-        # Answer before any synchronous PostgreSQL work.
         await callback.answer("🎮 آماده‌سازی لابی...")
         if getattr(app, "ui", None):
             app.ui.group_chat_id = group_id
@@ -214,7 +201,7 @@ def install(app: Any) -> bool:
             snap = snapshot(group_id)
             rows = snap.get("players") or []
             if any(int(r["player_id"]) == int(user.id) for r in rows):
-                await callback.answer("⚠️ شما قبلاً وارد شده‌اید.", show_alert=True)
+                logging.info("production lobby join ignored: user %s already in group %s", user.id, group_id)
                 return
             cap = capacity(snap)
             occupied = {int(r["seat"]) for r in rows if r.get("seat") is not None}
@@ -223,7 +210,10 @@ def install(app: Any) -> bool:
             await render(group_id, callback.message)
         except Exception:
             logging.exception("production lobby join failed")
-            await callback.answer("❌ ورود به بازی انجام نشد.", show_alert=True)
+            try:
+                await callback.message.answer("❌ ورود به بازی انجام نشد.")
+            except Exception:
+                logging.exception("failed to send lobby join error")
 
     async def leave(callback):
         group_id = gid(callback); uid = int(callback.from_user.id)
@@ -278,48 +268,46 @@ def install(app: Any) -> bool:
         await show_scenarios(callback, change=True)
 
     async def change_moderator(callback):
-        await callback.answer()
         group_id = gid(callback)
         admins = await bot.get_chat_administrators(group_id)
         kb = InlineKeyboardMarkup(row_width=1)
         for admin in admins:
             kb.add(InlineKeyboardButton(admin.user.full_name, callback_data=f"prod_moderator:{int(admin.user.id)}"))
-        await callback.message.edit_text("🎩 <b>تغییر گرداننده</b>", reply_markup=kb, parse_mode="HTML")
+        await callback.answer()
+        await callback.message.edit_text("🎩 <b>تغییر گرداننده</b>\n\nمدیر جدید را انتخاب کنید:", reply_markup=kb, parse_mode="HTML")
 
-    async def cancel(callback):
+    async def cancel_game(callback):
         group_id = gid(callback)
-        game = app.runtime.state.active_game(group_id)
-        if game:
-            app.runtime.state.games.update_game(game["id"], status="finished")
-        app.ui.lobby_message_id = None
-        await callback.answer("بازی لغو شد")
-        await callback.message.edit_text("🚫 <b>بازی لغو شد.</b>", parse_mode="HTML")
+        app.runtime.state.games.update_game((app.runtime.state.active_game(group_id) or {})["id"], status="finished")
+        await callback.answer("🛑 بازی لغو شد")
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
 
-    # Legacy callback data is routed to the canonical implementation as well,
-    # so old Telegram messages cannot resurrect the old lobby.
-    dp.register_callback_query_handler(new_game, lambda c: c.data in {"new_game", "start_game"})
-    dp.register_callback_query_handler(join, lambda c: c.data in {"join", "join_game"})
-    dp.register_callback_query_handler(leave, lambda c: c.data in {"leave", "leave_game"})
-    dp.register_callback_query_handler(choose_scenario, lambda c: c.data == "choose_scenario")
-    dp.register_callback_query_handler(scenario_selected, lambda c: str(c.data).startswith("scenario:"))
-    dp.register_callback_query_handler(lambda c: show_scenarios(c, True), lambda c: c.data == "prod_change_scenario")
-    dp.register_callback_query_handler(scenario_selected, lambda c: str(c.data).startswith("prod_scenario:"))
-    dp.register_callback_query_handler(moderator_selected, lambda c: str(c.data).startswith("prod_moderator:"))
-    dp.register_callback_query_handler(join, lambda c: c.data == "prod_join")
-    dp.register_callback_query_handler(leave, lambda c: c.data == "prod_leave")
-    dp.register_callback_query_handler(seat, lambda c: str(c.data).startswith("prod_seat:"))
-    dp.register_callback_query_handler(reserve, lambda c: c.data == "prod_reserve")
-    dp.register_callback_query_handler(change_moderator, lambda c: c.data == "prod_change_moderator")
-    dp.register_callback_query_handler(cancel, lambda c: c.data in {"cancel_game", "prod_cancel"})
+    async def start_game(callback):
+        await callback.answer("⏳ شروع بازی...")
+        await callback.message.answer("🎲 شروع بازی در حال آماده‌سازی است...")
 
-    # Keep the menu itself on canonical callback data. Old messages are still
-    # handled above, so users do not need to regenerate /start manually.
-    def main_menu():
-        return InlineKeyboardMarkup(row_width=1).add(
-            InlineKeyboardButton("🎮 بازی جدید", callback_data="new_game"),
-            InlineKeyboardButton("📖 راهنما", callback_data="help"),
-        )
-    app._keyboard_main = main_menu
+    def register(filter_fn, fn):
+        dp.register_callback_query_handler(fn, filter_fn)
 
+    register(lambda c: c.data == "new_game", new_game)
+    register(lambda c: c.data in {"join", "join_game", "prod_join"}, join)
+    register(lambda c: c.data in {"leave", "leave_game", "prod_leave"}, leave)
+    register(lambda c: c.data in {"choose_scenario"}, choose_scenario)
+    register(lambda c: str(c.data).startswith("scenario:"), scenario_selected)
+    register(lambda c: str(c.data).startswith("prod_scenario:"), scenario_selected)
+    register(lambda c: str(c.data).startswith("prod_moderator:"), moderator_selected)
+    register(lambda c: str(c.data).startswith("prod_seat:"), seat)
+    register(lambda c: c.data == "prod_reserve", reserve)
+    register(lambda c: c.data == "prod_change_scenario", change_scenario)
+    register(lambda c: c.data == "prod_change_moderator", change_moderator)
+    register(lambda c: c.data in {"cancel_game", "prod_cancel"}, cancel_game)
+
+    app._keyboard_main = lambda: InlineKeyboardMarkup(row_width=1).add(
+        InlineKeyboardButton("🎮 بازی جدید", callback_data="new_game"),
+        InlineKeyboardButton("📖 راهنما", callback_data="help"),
+    )
     logging.info("PRODUCTION_CANONICAL_LOBBY_ACTIVE removed=%s handlers=%d", removed, len(dp.callback_query_handlers.handlers))
     return True
