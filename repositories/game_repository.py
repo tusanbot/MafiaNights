@@ -125,6 +125,18 @@ class GameRepository(DatabaseRepository):
         self._players_cache[key] = (time.monotonic(), value)
         return [dict(row) for row in value]
 
+    def set_player_role(self, game_id, player_id, role):
+        """Persist a role assignment for a player in a game."""
+        with self.SessionLocal() as session:
+            result = session.execute(text("""
+                update public.mafia_game_players
+                set role=:role, updated_at=now()
+                where game_id=:game_id and (player_id=:player_id or user_id=:player_id)
+            """), {"game_id": game_id, "player_id": int(player_id), "role": role})
+            session.commit()
+        self._invalidate(game_id=game_id)
+        return result.rowcount > 0
+
     def remove_player(self, game_id, player_id):
         with self.SessionLocal() as session:
             result = session.execute(text("delete from public.mafia_game_players where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id": game_id, "player_id": int(player_id)})
