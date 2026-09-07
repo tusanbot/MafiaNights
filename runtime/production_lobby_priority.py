@@ -1,24 +1,26 @@
-"""Make the canonical production lobby handlers win aiogram dispatch order."""
+"""Make canonical production lobby handlers win aiogram dispatch order."""
 from __future__ import annotations
 
 import logging
 from typing import Any
 
 
-# These are the callback function names created by runtime.production_lobby.
-# Do not rely on a hard-coded tail count: new gameplay handlers are installed
-# after the lobby, so a fixed count can accidentally move unrelated handlers.
+# Every callback owner defined by runtime.production_lobby is kept together so
+# legacy handlers cannot intercept production lobby callbacks first.
 CANONICAL_LOBBY_HANDLER_NAMES = {
     "new_game",
-    "join",
-    "leave",
-    "choose_scenario",
     "scenario_selected",
     "moderator_selected",
+    "toggle_join",
     "seat",
     "reserve",
     "change_scenario",
     "change_moderator",
+    "management",
+    "event_number_menu",
+    "event_number_adjust",
+    "refresh_lobby",
+    "back_lobby",
     "cancel_game",
 }
 
@@ -45,10 +47,5 @@ def install(app: Any) -> bool:
     canonical_ids = {id(item) for item in canonical}
     kept = [item for item in table if id(item) not in canonical_ids]
     table[:] = canonical + kept
-
-    logging.info(
-        "CANONICAL_LOBBY_PRIORITY_ACTIVE moved=%d total=%d",
-        len(canonical),
-        len(table),
-    )
+    logging.info("CANONICAL_LOBBY_PRIORITY_ACTIVE moved=%d total=%d", len(canonical), len(table))
     return True
