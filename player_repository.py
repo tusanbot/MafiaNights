@@ -20,16 +20,22 @@ class PlayerRepository(DatabaseRepository):
             session.execute(
                 text("""
                     insert into public.mafia_players
-                        (id, username, first_name, last_name, updated_at)
+                        (user_id, id, username, first_name, last_name, updated_at)
                     values
-                        (:id, :username, :first_name, :last_name, now())
-                    on conflict (id) do update set
+                        (:user_id, :id, :username, :first_name, :last_name, now())
+                    on conflict (user_id) do update set
                         username = coalesce(excluded.username, public.mafia_players.username),
                         first_name = coalesce(excluded.first_name, public.mafia_players.first_name),
                         last_name = coalesce(excluded.last_name, public.mafia_players.last_name),
                         updated_at = now()
                 """),
-                {"id": user_id, "username": username, "first_name": first_name, "last_name": last_name},
+                {
+                    "user_id": user_id,
+                    "id": user_id,
+                    "username": username,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                },
             )
             session.commit()
 
@@ -37,9 +43,10 @@ class PlayerRepository(DatabaseRepository):
         with self.SessionLocal() as session:
             row = session.execute(
                 text("""
-                    select id, username, first_name, last_name, nickname
-                    from public.mafia_players where id = :id
-                """), {"id": int(user_id)}
+                    select user_id, id, username, first_name, last_name, nickname
+                    from public.mafia_players
+                    where user_id = :user_id
+                """), {"user_id": int(user_id)}
             ).mappings().first()
             return dict(row) if row else None
 
@@ -61,8 +68,8 @@ class PlayerRepository(DatabaseRepository):
             return False
         with self.SessionLocal() as session:
             result = session.execute(
-                text("update public.mafia_players set nickname=:nickname, updated_at=now() where id=:id"),
-                {"id": int(user_id), "nickname": nickname},
+                text("update public.mafia_players set nickname=:nickname, updated_at=now() where user_id=:user_id"),
+                {"user_id": int(user_id), "nickname": nickname},
             )
             session.commit()
             return result.rowcount > 0
@@ -70,8 +77,8 @@ class PlayerRepository(DatabaseRepository):
     def delete_nickname(self, user_id):
         with self.SessionLocal() as session:
             result = session.execute(
-                text("update public.mafia_players set nickname=null, updated_at=now() where id=:id"),
-                {"id": int(user_id)},
+                text("update public.mafia_players set nickname=null, updated_at=now() where user_id=:user_id"),
+                {"user_id": int(user_id)},
             )
             session.commit()
             return result.rowcount > 0
@@ -80,9 +87,9 @@ class PlayerRepository(DatabaseRepository):
         with self.SessionLocal() as session:
             rows = session.execute(
                 text("""
-                    select id, nickname from public.mafia_players
+                    select user_id, nickname from public.mafia_players
                     where nickname is not null and trim(nickname) <> ''
                     order by lower(nickname)
                 """)
             ).mappings().all()
-            return {int(row["id"]): row["nickname"] for row in rows}
+            return {int(row["user_id"]): row["nickname"] for row in rows}
