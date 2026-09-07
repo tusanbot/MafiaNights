@@ -13,6 +13,38 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from repositories.scenario_repository import ScenarioRepository
 
 
+def _sync_gameplay_bridge(app: Any, group_id: int, game: dict[str, Any], players: list[dict[str, Any]]) -> None:
+    """Expose durable lobby state to the Telegram gameplay engine.
+
+    The database/runtime remains authoritative. The stable round engine still
+    consumes a few legacy-compatible attributes, so hydrate them at the exact
+    cut-over point instead of maintaining a second game state during the lobby.
+    """
+    app.group_chat_id = int(group_id)
+    app.ui.group_chat_id = int(group_id)
+    app.moderator_id = int(game.get("moderator_id") or 0) or None
+    app.player_slots = {
+        int(row["seat"]): int(row["player_id"])
+        for row in players
+        if row.get("seat") is not None
+    }
+    app.players = {
+        int(row["player_id"]): str(
+            row.get("nickname") or row.get("first_name") or row.get("username") or row["player_id"]
+        )
+        for row in players
+    }
+    app.turn_order = sorted(app.player_slots)
+    app.current_turn_index = 0
+    app.game_running = True
+    app._stable_day_active = False
+    app._stable_day_ended = False
+    app._stable_phase = "normal"
+    app.challenge_mode = False
+    app.pending_challenges = {}
+    app.active_challenger_seats = set()
+
+
 def install(app: Any) -> bool:
     """Register the production role-distribution callback."""
     dp = app.dp
@@ -97,7 +129,22 @@ def install(app: Any) -> bool:
             for row in players
         }
         state["roles_distributed"] = True
-        app.runtime.state.games.update_game(game_id, state=state)
+        state["gameplay_ready"] = True
+        state["turn_order"] = [int(row["seat"]) for row in players]
+        state["current_turn_index"] = 0
+
+        # Role distribution is the lobby -> gameplay cut-over. Persist it before
+        # sending Telegram messages so a restart cannot leave a half-transitioned
+        # game marked as a lobby.
+        app.runtime.state.games.update_game(
+            game_id,
+            status="running",
+            state=state,
+            current_turn_index=0,
+            current_turn_seat=None,
+        )
+        game = app.runtime.state.active_game(group_id) or game
+        _sync_gameplay_bridge(app, group_id, game, players)
 
         sent = 0
         for player in players:
@@ -132,9 +179,31 @@ def install(app: Any) -> bool:
             except Exception:
                 logging.exception("failed to send moderator role roster: game=%s", game_id)
 
-        await callback.answer(f"✅ نقش‌ها پخش شد ({sent}/{len(players)} ارسال موفق)")
-        logging.info("roles distributed: game=%s scenario=%s players=%d sent=%d", game_id, scenario.get("name"), len(players), sent)
+        # The previous production flow stopped here with no next action. Always
+        # leave a visible, actionable group message and wire it to the stable
+        # round engine that is installed by main.py.
+        start_markup = InlineKeyboardMarkup(row_width=1).add(
+            InlineKeyboardButton("▶️ شروع دور اول", callback_data="start_round")
+        )
+        await bot.send_message(
+            group_id,
+            "🎭 <b>نقش‌ها پخش شد.</b>\n\n"
+            f"👥 بازیکنان: {len(players)}\n"
+            f"📨 ارسال خصوصی موفق: {sent}/{len(players)}\n\n"
+            "گرداننده برای شروع فاز روز روی «▶️ شروع دور اول» بزند.",
+            parse_mode="HTML",
+            reply_markup=start_markup,
+        )
 
-    dp.register_callback_query_handler(distribute_roles, lambda c: c.data == "distribute_roles")
+        await callback.answer(f"✅ نقش‌ها پخش شد ({sent}/{len(players)} ارسال موفق)")
+        logging.info(
+            "roles distributed and gameplay armed: game=%s scenario=%s players=%d sent=%d",
+            game_id,
+            scenario.get("name"),
+            len(players),
+            sent,
+        )
+
+    dp.register_callback_query_handler(distribute_roles, lambda c: c.data == "distribute_roles", state="*")
     logging.info("PRODUCTION_ROLE_DISTRIBUTION_ACTIVE")
     return True
