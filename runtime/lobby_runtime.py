@@ -51,19 +51,29 @@ class PersistentLobbyRuntime:
         if not game:
             return {"game": None, "players": [], "seats": {}, "waiting": []}
         return {
-            "game": {"id": game["id"], "group_chat_id": game["group_chat_id"],
-                     "moderator_id": game.get("moderator_id"), "scenario_id": game.get("scenario_id"),
-                     "status": game.get("status")},
+            "game": {
+                "id": game["id"],
+                "group_chat_id": game["group_chat_id"],
+                "moderator_id": game.get("moderator_id"),
+                "scenario_id": game.get("scenario_id"),
+                "event_number": game.get("event_number"),
+                "status": game.get("status"),
+                "state": game.get("state") or {},
+            },
             **self.state.lobby.snapshot(game["id"]),
         }
 
     def set_moderator(self, group_chat_id: int, moderator_id: int) -> bool:
-        game = self.ensure(group_chat_id)
-        return self.state.lobby.set_moderator(game["id"], moderator_id)
+        game = self.state.active_game(group_chat_id)
+        return bool(game and self.state.lobby.set_moderator(game["id"], moderator_id))
 
     def set_scenario(self, group_chat_id: int, scenario_id: str) -> bool:
-        game = self.ensure(group_chat_id)
-        return self.state.lobby.set_scenario(game["id"], scenario_id)
+        game = self.state.active_game(group_chat_id)
+        return bool(game and self.state.lobby.set_scenario(game["id"], scenario_id))
+
+    def set_event_number(self, group_chat_id: int, event_number: int) -> bool:
+        game = self.state.active_game(group_chat_id)
+        return bool(game and self.state.lobby.set_event_number(game["id"], int(event_number)))
 
     def persist_legacy_state(self, group_chat_id: int, *, state: Optional[dict[str, Any]] = None,
                              current_turn_index: Optional[int] = None,
