@@ -18,6 +18,7 @@ from main_refactored_v4 import MafiaApplicationV4
 from runtime.final_persistence import install as install_persistence
 from runtime.production_lobby import install as install_production_lobby
 from runtime.production_lobby_priority import install as install_lobby_priority
+from runtime.role_distribution import install as install_role_distribution
 
 
 TOKEN = os.getenv("API_TOKEN")
@@ -33,19 +34,22 @@ dp = app.dp
 persistence_status = install_persistence(app)
 production_lobby_status = install_production_lobby(app)
 production_lobby_priority_status = install_lobby_priority(app)
+role_distribution_status = install_role_distribution(app)
 logging.info(
-    "PRODUCTION_RUNTIME_ACTIVE persistent=1 canonical_lobby=%s priority=%s",
+    "PRODUCTION_RUNTIME_ACTIVE persistent=1 canonical_lobby=%s priority=%s role_distribution=%s",
     production_lobby_status,
     production_lobby_priority_status,
+    role_distribution_status,
 )
 
 
 async def on_startup(dp):
     logging.info(
-        "MafiaNights clean runtime startup; persistence=%s canonical_lobby=%s priority=%s",
+        "MafiaNights clean runtime startup; persistence=%s canonical_lobby=%s priority=%s role_distribution=%s",
         persistence_status,
         production_lobby_status,
         production_lobby_priority_status,
+        role_distribution_status,
     )
     await app.startup()
 
