@@ -28,7 +28,7 @@ def test_lobby_has_explicit_stale_game_guard_and_seat_bounds():
     source = (ROOT / "runtime" / "production_lobby.py").read_text(encoding="utf-8")
     assert "expected_id is not None" in source
     assert "target < 1 or target > cap" in source
-    assert "status") or \"\") != \"lobby\"" in source
+    assert 'str(game.get("status") or "") != "lobby"' in source
 
 
 def test_lobby_message_id_is_durable_per_game():
