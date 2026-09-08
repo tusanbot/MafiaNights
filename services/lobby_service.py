@@ -37,6 +37,43 @@ class LobbyService:
             "event_number": event_number,
         }
 
+    def start_new(self, group_chat_id: int, event_number: Optional[int] = None) -> Dict[str, Any]:
+        """Create a fresh draft for the New Game flow.
+
+        A previous draft lobby is closed so scenario selection can never reuse
+        stale scenario/moderator/player data. Running or paused games are
+        preserved and block a new game instead of being overwritten.
+        """
+        active = self.repository.get_active_game(group_chat_id)
+        if active:
+            status = str(active.get("status") or "")
+            if status in {"running", "paused"}:
+                raise RuntimeError("یک بازی در حال اجراست و امکان ایجاد بازی جدید وجود ندارد")
+            if status == "lobby":
+                self.repository.update_game(active["id"], status="finished")
+
+        if event_number is None:
+            event_number = self.repository.next_event_number(group_chat_id)
+        number = int(event_number)
+        if number < 1:
+            raise ValueError("شماره بازی باید حداقل ۱ باشد")
+
+        game_id = self.repository.create_game(
+            group_chat_id=group_chat_id,
+            moderator_id=None,
+            scenario_id=None,
+            event_number=number,
+            state={"phase": "scenario_selection", "waiting": [], "seat_count": 0},
+        )
+        return self.repository.get_active_game(group_chat_id) or {
+            "id": game_id,
+            "group_chat_id": int(group_chat_id),
+            "event_number": number,
+            "status": "lobby",
+            "scenario_id": None,
+            "moderator_id": None,
+        }
+
     def set_event_number(self, game_id: str, event_number: int) -> bool:
         number = int(event_number)
         if number < 1:
