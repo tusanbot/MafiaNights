@@ -6,32 +6,14 @@ from typing import Any
 
 
 CANONICAL_LOBBY_HANDLER_NAMES = {
-    "new_game",
-    "scenario_selected",
-    "moderator_selected",
-    "toggle_join",
-    "seat",
-    "reserve",
-    "change_scenario",
-    "change_moderator",
-    "management",
-    "event_number_menu",
-    "event_number_adjust",
-    "refresh_lobby",
-    "back_lobby",
-    "cancel_game",
+    "new_game", "scenario_selected", "moderator_selected", "toggle_join", "seat",
+    "reserve", "change_scenario", "change_moderator", "management",
+    "event_number_menu", "event_number_adjust", "refresh_lobby", "back_lobby", "cancel_game",
 }
 
-# These are the lobby entry/configuration methods on the old MafiaApplication
-# surface.  They must never remain ahead of the canonical production flow.
 LEGACY_LOBBY_HANDLER_NAMES = {
-    "new_game",
-    "join",
-    "leave",
-    "choose_scenario",
-    "scenario_selected",
-    "set_event_number",
-    "_event_number_input",
+    "new_game", "join", "leave", "choose_scenario", "scenario_selected",
+    "set_event_number", "_event_number_input",
 }
 LEGACY_APP_MODULE = "main_refactored"
 
@@ -43,18 +25,41 @@ def _callback(item: Any) -> Any:
     return callback
 
 
-def _callback_name(item: Any) -> str:
-    return str(getattr(_callback(item), "__name__", ""))
-
-
-def _is_legacy_app_handler(item: Any) -> bool:
-    callback = _callback(item)
+def _matches_legacy(callback: Any, seen: set[int] | None = None) -> bool:
+    """Detect direct, partial and lambda-wrapped legacy application handlers."""
     if callback is None:
         return False
+    seen = seen or set()
+    ident = id(callback)
+    if ident in seen:
+        return False
+    seen.add(ident)
+
     name = str(getattr(callback, "__name__", ""))
+    qualname = str(getattr(callback, "__qualname__", ""))
     owner = getattr(callback, "__self__", None)
     owner_module = str(getattr(owner.__class__, "__module__", "")) if owner is not None else ""
-    return name in LEGACY_LOBBY_HANDLER_NAMES and owner_module == LEGACY_APP_MODULE
+    if name in LEGACY_LOBBY_HANDLER_NAMES and owner_module == LEGACY_APP_MODULE:
+        return True
+    if LEGACY_APP_MODULE in qualname and any(name == n for n in LEGACY_LOBBY_HANDLER_NAMES):
+        return True
+
+    # aiogram integrations may wrap callbacks in a partial or closure.
+    func = getattr(callback, "func", None)
+    if func is not None and _matches_legacy(func, seen):
+        return True
+    for cell in getattr(callback, "__closure__", ()) or ():
+        try:
+            value = cell.cell_contents
+        except ValueError:
+            continue
+        if _matches_legacy(value, seen):
+            return True
+    return False
+
+
+def _callback_name(item: Any) -> str:
+    return str(getattr(_callback(item), "__name__", ""))
 
 
 def install(app: Any) -> bool:
@@ -64,11 +69,8 @@ def install(app: Any) -> bool:
         logging.error("CANONICAL_LOBBY_PRIORITY failed: handler table unavailable")
         return False
 
-    # Hard boundary: remove the old application's lobby entry/configuration
-    # callbacks entirely. Merely moving the canonical handlers to the front is
-    # insufficient when another callback can create/render the old lobby.
     before = len(table)
-    table[:] = [item for item in table if not _is_legacy_app_handler(item)]
+    table[:] = [item for item in table if not _matches_legacy(_callback(item))]
     purged = before - len(table)
 
     canonical = [item for item in table if _callback_name(item) in CANONICAL_LOBBY_HANDLER_NAMES]
