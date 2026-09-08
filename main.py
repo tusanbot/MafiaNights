@@ -6,6 +6,7 @@ import os
 
 from main_refactored_v4 import MafiaApplicationV4
 from runtime.final_persistence import install as install_persistence
+from runtime.game_management import GameManagement
 from runtime.production_lobby import install as install_production_lobby
 from runtime.role_distribution import install as install_role_distribution
 from runtime.stable_round_engine import install as install_stable_round_engine
@@ -22,12 +23,15 @@ bot = app.bot
 dp = app.dp
 
 persistence_status = install_persistence(app)
+# Management is installed before the canonical lobby so its game-management
+# callback owns the same lobby button both before and after game start.
+GameManagement(app).install()
 production_lobby_status = install_production_lobby(app)
 role_distribution_status = install_role_distribution(app)
 stable_round_status = install_stable_round_engine(app)
 voting_runtime_status = install_voting_runtime(app)
 logging.info(
-    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s role_distribution=%s stable_round=%s voting=%s",
+    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s management=active role_distribution=%s stable_round=%s voting=%s",
     persistence_status,
     production_lobby_status,
     role_distribution_status,
@@ -38,7 +42,7 @@ logging.info(
 
 async def on_startup(dp):
     logging.info(
-        "MafiaNights production startup; persistence=%s canonical_lobby=%s role_distribution=%s stable_round=%s voting=%s",
+        "MafiaNights production startup; persistence=%s canonical_lobby=%s management=active role_distribution=%s stable_round=%s voting=%s",
         persistence_status,
         production_lobby_status,
         role_distribution_status,
