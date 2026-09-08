@@ -26,7 +26,7 @@ def _callback(item: Any) -> Any:
 
 
 def _matches_legacy(callback: Any, seen: set[int] | None = None) -> bool:
-    """Detect direct, partial and lambda-wrapped legacy application handlers."""
+    """Detect direct, inherited, partial and lambda-wrapped legacy handlers."""
     if callback is None:
         return False
     seen = seen or set()
@@ -37,16 +37,23 @@ def _matches_legacy(callback: Any, seen: set[int] | None = None) -> bool:
 
     name = str(getattr(callback, "__name__", ""))
     qualname = str(getattr(callback, "__qualname__", ""))
+    func = getattr(callback, "__func__", None)
+    func_module = str(getattr(func, "__module__", "")) if func is not None else ""
     owner = getattr(callback, "__self__", None)
     owner_module = str(getattr(owner.__class__, "__module__", "")) if owner is not None else ""
-    if name in LEGACY_LOBBY_HANDLER_NAMES and owner_module == LEGACY_APP_MODULE:
+
+    # Bound inherited methods keep the subclass as __self__.__class__, while
+    # the actual function lives in main_refactored. Check both locations.
+    if name in LEGACY_LOBBY_HANDLER_NAMES and (
+        owner_module == LEGACY_APP_MODULE or func_module == LEGACY_APP_MODULE
+    ):
         return True
-    if LEGACY_APP_MODULE in qualname and any(name == n for n in LEGACY_LOBBY_HANDLER_NAMES):
+    if LEGACY_APP_MODULE in qualname and name in LEGACY_LOBBY_HANDLER_NAMES:
         return True
 
-    # aiogram integrations may wrap callbacks in a partial or closure.
-    func = getattr(callback, "func", None)
-    if func is not None and _matches_legacy(func, seen):
+    # aiogram integrations may wrap callbacks in partials or closures.
+    wrapped = getattr(callback, "func", None)
+    if wrapped is not None and _matches_legacy(wrapped, seen):
         return True
     for cell in getattr(callback, "__closure__", ()) or ():
         try:
