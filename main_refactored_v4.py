@@ -9,9 +9,31 @@ from runtime.feature_parity_v4 import FeatureParityV4
 
 class MafiaApplicationV4(MafiaApplication):
     def __init__(self, token: str):
+        # MafiaApplication historically registers its legacy lobby callbacks
+        # from _register_handlers(). Production must never let those handlers
+        # enter the Dispatcher. Remove that registration batch at the source,
+        # then keep only the non-lobby compatibility callback still used by
+        # gameplay.
         super().__init__(token)
+        self._disable_legacy_lobby_handlers()
         self.feature_parity = FeatureParityV4(self)
         self.feature_parity.register()
+
+    def _disable_legacy_lobby_handlers(self) -> None:
+        handler = self.dp.callback_query_handlers
+        table = getattr(handler, "handlers", None)
+        if table is None:
+            return
+
+        # main_refactored._register_handlers() contains the old Lobby
+        # registrations plus the gameplay-only challenge toggle. Production
+        # Lobby owns all Lobby callbacks, so discard the complete legacy
+        # callback table and restore only the gameplay challenge toggle.
+        handler.handlers[:] = []
+        self.dp.register_callback_query_handler(
+            self.toggle_challenge,
+            lambda c: c.data in {"toggle_challenge", "challenge_toggle"},
+        )
 
 
 TOKEN = os.getenv("API_TOKEN")
