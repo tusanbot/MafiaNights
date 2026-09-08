@@ -18,6 +18,7 @@ from main_refactored_v4 import MafiaApplicationV4
 from runtime.final_persistence import install as install_persistence
 from runtime.production_lobby import install as install_production_lobby
 from runtime.production_lobby_priority import install as install_lobby_priority
+from runtime.new_game_guard import install as install_new_game_guard
 from runtime.role_distribution import install as install_role_distribution
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.voting_runtime import install as install_voting_runtime
@@ -36,14 +37,16 @@ dp = app.dp
 persistence_status = install_persistence(app)
 production_lobby_status = install_production_lobby(app)
 production_lobby_priority_status = install_lobby_priority(app)
+new_game_guard_status = install_new_game_guard(app)
 role_distribution_status = install_role_distribution(app)
 stable_round_status = install_stable_round_engine(app)
 voting_runtime_status = install_voting_runtime(app)
 logging.info(
-    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s priority=%s role_distribution=%s stable_round=%s voting=%s",
+    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s priority=%s new_game_guard=%s role_distribution=%s stable_round=%s voting=%s",
     persistence_status,
     production_lobby_status,
     production_lobby_priority_status,
+    new_game_guard_status,
     role_distribution_status,
     stable_round_status,
     voting_runtime_status,
@@ -52,10 +55,11 @@ logging.info(
 
 async def on_startup(dp):
     logging.info(
-        "MafiaNights clean runtime startup; persistence=%s canonical_lobby=%s priority=%s role_distribution=%s stable_round=%s voting=%s",
+        "MafiaNights clean runtime startup; persistence=%s canonical_lobby=%s priority=%s new_game_guard=%s role_distribution=%s stable_round=%s voting=%s",
         persistence_status,
         production_lobby_status,
         production_lobby_priority_status,
+        new_game_guard_status,
         role_distribution_status,
         stable_round_status,
         voting_runtime_status,
