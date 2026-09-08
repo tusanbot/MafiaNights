@@ -7,6 +7,7 @@ import os
 from main_refactored_v4 import MafiaApplicationV4
 from runtime.final_persistence import install as install_persistence
 from runtime.game_management import GameManagement
+from runtime.game_management_compat import install as install_management_compat
 from runtime.production_lobby import install as install_production_lobby
 from runtime.role_distribution import install as install_role_distribution
 from runtime.stable_round_engine import install as install_stable_round_engine
@@ -23,34 +24,25 @@ bot = app.bot
 dp = app.dp
 
 persistence_status = install_persistence(app)
-# Management is installed before the canonical lobby so its game-management
-# callback owns the same lobby button both before and after game start.
-GameManagement(app).install()
+management = GameManagement(app)
+management.install()
+install_management_compat(app, management)
 production_lobby_status = install_production_lobby(app)
 role_distribution_status = install_role_distribution(app)
 stable_round_status = install_stable_round_engine(app)
 voting_runtime_status = install_voting_runtime(app)
 logging.info(
     "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s management=active role_distribution=%s stable_round=%s voting=%s",
-    persistence_status,
-    production_lobby_status,
-    role_distribution_status,
-    stable_round_status,
-    voting_runtime_status,
+    persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_runtime_status,
 )
 
 
 async def on_startup(dp):
     logging.info(
         "MafiaNights production startup; persistence=%s canonical_lobby=%s management=active role_distribution=%s stable_round=%s voting=%s",
-        persistence_status,
-        production_lobby_status,
-        role_distribution_status,
-        stable_round_status,
-        voting_runtime_status,
+        persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_runtime_status,
     )
     await app.startup()
-
     try:
         allowed_group_id = int(os.getenv("ALLOWED_GROUP_ID", "-1002356353761"))
         active_game = app.runtime.state.active_game(allowed_group_id)
@@ -58,12 +50,7 @@ async def on_startup(dp):
             app.group_chat_id = allowed_group_id
             app.ui.group_chat_id = allowed_group_id
             rows = app.runtime.lobby_snapshot(allowed_group_id).get("players") or []
-            app.player_slots = {
-                int(row["seat"]): int(row["player_id"])
-                for row in rows
-                if row.get("seat") is not None
-                and str(row.get("status") or "active") not in {"removed", "dead"}
-            }
+            app.player_slots = {int(row["seat"]): int(row["player_id"]) for row in rows if row.get("seat") is not None and str(row.get("status") or "active") not in {"removed", "dead"}}
             app.moderator_id = int(active_game.get("moderator_id") or 0) or None
             app.game_running = str(active_game.get("status") or "") in {"running", "paused", "turn"}
             state = dict(active_game.get("state") or {})
@@ -79,10 +66,4 @@ async def on_shutdown(dp):
 
 if __name__ == "__main__":
     from aiogram.utils import executor
-
-    executor.start_polling(
-        dp,
-        skip_updates=True,
-        on_startup=on_startup,
-        on_shutdown=on_shutdown,
-    )
+    executor.start_polling(dp, skip_updates=True, on_startup=on_startup, on_shutdown=on_shutdown)
