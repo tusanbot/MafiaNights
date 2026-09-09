@@ -359,6 +359,7 @@ class GameManagement:
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         if not hasattr(self.app, "challenge_enabled"): self.app.challenge_enabled = {}
         self.app.challenge_enabled[gid] = not self.app.challenge_enabled.get(gid, True)
+        self.app.challenge_active = self.app.challenge_enabled[gid]
         await callback.answer("⚔ وضعیت چالش تغییر کرد.")
         await self.challenge(callback)
 

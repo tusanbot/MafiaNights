@@ -167,7 +167,11 @@ class MafiaApplication:
         scenario = callback.data.split(":", 1)[1]; group_id = int(callback.message.chat.id)
         if scenario not in self.scenarios: await callback.answer("⚠️ سناریو وجود ندارد.", show_alert=True); return
         self.runtime.lobby.set_scenario(group_id, scenario); await self._render_lobby(group_id); await callback.answer("✅ سناریو انتخاب شد.")
-    async def toggle_challenge(self, callback): self.challenge_enabled[int(callback.message.chat.id)] = not self.challenge_enabled.get(int(callback.message.chat.id), True); await callback.answer("⚔ چالش " + ("روشن شد." if self.challenge_enabled[int(callback.message.chat.id)] else "خاموش شد."))
+    async def toggle_challenge(self, callback):
+        gid = int(callback.message.chat.id)
+        self.challenge_enabled[gid] = not self.challenge_enabled.get(gid, True)
+        self.challenge_active = self.challenge_enabled[gid]
+        await callback.answer("⚔ چالش " + ("روشن شد." if self.challenge_enabled[gid] else "خاموش شد."))
     async def start_turn(self, group_id: int, seat: int, index: int, *, challenge: bool = False):
         row = self._players_by_seat(group_id).get(int(seat))
         if not row: return

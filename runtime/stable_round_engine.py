@@ -143,6 +143,14 @@ def _ensure(main):
         "_stable_challenge_locked": set(),
         "_stable_challenge_requests": {},
         "_stable_challenge_request_messages": {},
+        "_gm_extra_next_round": set(),
+        "_gm_muted_next_round": set(),
+        "_gm_muted_active": set(),
+        "_gm_extra_phase": False,
+        "_gm_extra_turn_active": False,
+        "_gm_extra_seats": set(),
+        "_gm_normal_order": [],
+        "challenge_active": True,
     }
     for key, value in defaults.items():
         if not hasattr(main, key):
@@ -395,6 +403,7 @@ def install(main):
         main._stable_challenge_locked = set()
         main._stable_challenge_requests = {}
         main._stable_challenge_request_messages = {}
+        main.challenge_active = bool(getattr(main, "challenge_enabled", {}).get(_gid(main), True))
         main.challenge_mode = False
         main.pending_challenges = {}
         main.active_challenger_seats = set()
@@ -404,6 +413,17 @@ def install(main):
         main._gm_extra_turn_active = False
         main._gm_extra_seats = set()
         main._gm_normal_order = list(base)
+        roster = []
+        for seat in base:
+            uid = _uid(main, seat)
+            name = await _resolve_name(main, uid)
+            roster.append(f"{int(seat):02d}. <a href=\"tg://user?id={int(uid)}\">{html.escape(name)}</a>")
+        if roster:
+            await main.bot.send_message(
+                _gid(main),
+                "📋 <b>لیست بازیکنان</b>\n\n" + "\n".join(roster),
+                parse_mode="HTML",
+            )
         await _advance(main)
         await callback.answer("✅ دور شروع شد.")
         raise CancelHandler()
