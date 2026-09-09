@@ -1,0 +1,42 @@
+name: fix-voting-wait
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - runtime/voting_runtime.py
+      - .github/workflows/fix-voting-wait.yml
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Apply exact voting wait fix'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Patch voting wait
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('runtime/voting_runtime.py')
+          s = p.read_text(encoding='utf-8')
+          marker = '''    main._voting_task = None\n\n\nasync def _end_target(main):'''
+          replacement = '''    main._voting_task = None\n    # Vercel webhook invocations do not reliably preserve detached asyncio tasks.\n    # Keep the exact wait inside the active invocation; maxDuration is 60s.\n    await asyncio.sleep(max(0, float(deadline) - time.time()))\n    current = _v(main)\n    if current.get("phase") == "waiting" and current.get("deadline") == deadline:\n        await _start_target(main)\n\n\nasync def _end_target(main):'''
+          if marker not in s:
+              raise SystemExit('voting wait marker not found')
+          if 'Keep the exact wait inside the active invocation' in s:
+              raise SystemExit(0)
+          p.write_text(s.replace(marker, replacement, 1), encoding='utf-8')
+          PY
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add runtime/voting_runtime.py .github/workflows/fix-voting-wait.yml
+          git rm .github/workflows/fix-voting-wait.yml
+          git commit -m 'Apply exact voting wait fix'
+          git push origin main
