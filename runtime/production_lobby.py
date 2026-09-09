@@ -51,8 +51,6 @@ def install(app: Any) -> bool:
     removed = _remove_legacy_handlers(dp)
     logging.info("CANONICAL_LOBBY_INSTALL removed_legacy_handlers=%d", removed)
 
-    # TelegramRuntime is retained for gameplay compatibility. Lobby message
-    # identity is durable and per-game instead of being stored globally in it.
     if not hasattr(app, "_lobby_render_locks"):
         app._lobby_render_locks = {}
 
@@ -113,8 +111,7 @@ def install(app: Any) -> bool:
         return game, None
 
     def parse_callback(callback: types.CallbackQuery, prefix: str, parts: int) -> list[str] | None:
-        data = str(callback.data or "")
-        values = data.split(":")
+        values = str(callback.data or "").split(":")
         if len(values) != parts or values[0] != prefix:
             return None
         return values
@@ -147,14 +144,8 @@ def install(app: Any) -> bool:
         game = data.get("game") or game
         cap = capacity(game)
         rows = data.get("players") or []
-        active = [
-            r for r in rows
-            if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed", "dead"}
-        ]
-        waiting = [
-            r for r in rows
-            if r.get("seat") is None and str(r.get("status") or "waiting") == "waiting"
-        ]
+        active = [r for r in rows if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed", "dead"}]
+        waiting = [r for r in rows if r.get("seat") is None and str(r.get("status") or "waiting") == "waiting"]
         active.sort(key=lambda r: int(r.get("seat") or 999))
         occupied = {int(r["seat"]): r for r in active}
 
@@ -163,12 +154,8 @@ def install(app: Any) -> bool:
             f"📅 <b>تاریخ:</b> {datetime.now(ZoneInfo('Asia/Tehran')).strftime('%Y/%m/%d')}",
             f"🎭 <b>سناریو:</b> {html.escape(scenario_name(game.get('scenario_id')))}",
             f"🔢 <b>شماره بازی:</b> {int(game.get('event_number') or 1)}",
-            f"🎩 <b>گرداننده:</b> {mention(int(game['moderator_id']))}",
-            "",
-            "━━━━━━━━━━━━━━━━━━",
-            f"👥 <b>بازیکنان:</b> {len(active)}/{cap}",
-            "",
-            "🪑 <b>لیست صندلی‌ها</b>",
+            f"🎩 <b>گرداننده:</b> {mention(int(game['moderator_id']))}", "",
+            "━━━━━━━━━━━━━━━━━━", f"👥 <b>بازیکنان:</b> {len(active)}/{cap}", "", "🪑 <b>لیست صندلی‌ها</b>",
         ]
         for seat_no in range(1, cap + 1):
             row = occupied.get(seat_no)
@@ -195,31 +182,24 @@ def install(app: Any) -> bool:
         message_id = state.get("lobby_message_id")
         try:
             if message_id:
-                await bot.edit_message_text(
-                    "\n".join(lines), gid, int(message_id), parse_mode="HTML", reply_markup=kb
-                )
+                await bot.edit_message_text("\n".join(lines), gid, int(message_id), parse_mode="HTML", reply_markup=kb)
             else:
-                msg = await bot.send_message(
-                    gid, "\n".join(lines), parse_mode="HTML", reply_markup=kb
-                )
+                msg = await bot.send_message(gid, "\n".join(lines), parse_mode="HTML", reply_markup=kb)
                 save_lobby_state(game, lobby_message_id=int(msg.message_id))
             return True
         except Exception as exc:
             if "message is not modified" in str(exc).lower():
                 return True
-            # Only a missing/uneditable stored message is allowed to create a
-            # replacement. The new id is persisted immediately, preventing a
-            # repeated fallback from creating an unbounded message chain.
             logging.warning("lobby render failed game=%s group=%s: %s", game.get("id"), gid, exc)
             try:
-                msg = await bot.send_message(
-                    gid, "\n".join(lines), parse_mode="HTML", reply_markup=kb
-                )
+                msg = await bot.send_message(gid, "\n".join(lines), parse_mode="HTML", reply_markup=kb)
                 save_lobby_state(game, lobby_message_id=int(msg.message_id))
                 return True
             except Exception:
                 logging.exception("lobby replacement send failed game=%s group=%s", game.get("id"), gid)
                 return False
+
+    app._render_production_lobby = render
 
     async def new_game(callback: types.CallbackQuery):
         gid = group_id(callback)
@@ -228,12 +208,8 @@ def install(app: Any) -> bool:
             return
         try:
             game = app.runtime.lobby.start_new(gid)
-            # The selection screen itself belongs to this durable game.
             msg = callback.message
-            await msg.edit_text(
-                "📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:",
-                parse_mode="HTML", reply_markup=scenario_keyboard(int(game["id"])),
-            )
+            await msg.edit_text("📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:", parse_mode="HTML", reply_markup=scenario_keyboard(int(game["id"])))
             save_lobby_state(game, selection_message_id=int(msg.message_id), lobby_message_id=int(msg.message_id))
             app.ui.group_chat_id = gid
             await callback.answer("🎮 بازی جدید ایجاد شد؛ سناریو را انتخاب کنید.")
@@ -246,8 +222,7 @@ def install(app: Any) -> bool:
     async def scenario_selected(callback: types.CallbackQuery):
         parts = parse_callback(callback, "lobby", 4)
         if not parts or parts[2] != "scenario":
-            await callback.answer("⚠️ درخواست نامعتبر.", show_alert=True)
-            return
+            await callback.answer("⚠️ درخواست نامعتبر.", show_alert=True); return
         gid = group_id(callback); game_id = int(parts[1]); scenario_id = int(parts[3])
         game, error = require_game(callback, game_id)
         if error:
@@ -265,10 +240,7 @@ def install(app: Any) -> bool:
         for admin in admins:
             uid = int(admin.user.id)
             kb.add(InlineKeyboardButton(admin.user.full_name, callback_data=f"lobby:{game_id}:moderator:{uid}"))
-        await callback.message.edit_text(
-            "🎩 <b>انتخاب گرداننده</b>\n\nیکی از مدیران گروه را انتخاب کنید:",
-            parse_mode="HTML", reply_markup=kb,
-        )
+        await callback.message.edit_text("🎩 <b>انتخاب گرداننده</b>\n\nیکی از مدیران گروه را انتخاب کنید:", parse_mode="HTML", reply_markup=kb)
 
     async def moderator_selected(callback: types.CallbackQuery):
         parts = parse_callback(callback, "lobby", 4)
@@ -281,8 +253,7 @@ def install(app: Any) -> bool:
         if not await is_manager(callback, game):
             await callback.answer("⛔ فقط مدیر گروه می‌تواند گرداننده را تعیین کند.", show_alert=True); return
         admins = await bot.get_chat_administrators(gid)
-        admin_ids = {int(a.user.id) for a in admins}
-        if moderator_id not in admin_ids:
+        if moderator_id not in {int(a.user.id) for a in admins}:
             await callback.answer("❌ این کاربر دیگر مدیر گروه نیست.", show_alert=True); return
         if not app.runtime.state.lobby.set_moderator(game_id, moderator_id):
             await callback.answer("❌ ذخیره گرداننده انجام نشد.", show_alert=True); return
@@ -366,7 +337,8 @@ def install(app: Any) -> bool:
             await app._ensure_player(callback.from_user)
             try:
                 app.runtime.state.lobby.join(game_id, uid, None, is_substitute=True)
-            except Exception:
+            except Exception as exc:
+                logging.warning("reserve rejected game=%s user=%s: %s", game_id, uid, exc)
                 await callback.answer("❌ ثبت رزرو انجام نشد.", show_alert=True); return
             await callback.answer("🎟 به لیست رزرو اضافه شدید.")
         await render(gid, current_game(gid))
@@ -402,11 +374,7 @@ def install(app: Any) -> bool:
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         number = int(game.get("event_number") or 1)
         kb = InlineKeyboardMarkup(row_width=3)
-        kb.row(
-            InlineKeyboardButton("➖", callback_data=f"lobby:{game_id}:event:-1"),
-            InlineKeyboardButton(f"🔢 {number}", callback_data=f"lobby:{game_id}:event:nochange"),
-            InlineKeyboardButton("➕", callback_data=f"lobby:{game_id}:event:1"),
-        )
+        kb.row(InlineKeyboardButton("➖", callback_data=f"lobby:{game_id}:event:-1"), InlineKeyboardButton(f"🔢 {number}", callback_data=f"lobby:{game_id}:event:nochange"), InlineKeyboardButton("➕", callback_data=f"lobby:{game_id}:event:1"))
         kb.add(InlineKeyboardButton("⬅️ بازگشت", callback_data=f"lobby:{game_id}:management"))
         await callback.message.edit_text("🔢 <b>شماره بازی</b>", parse_mode="HTML", reply_markup=kb)
         await callback.answer()
@@ -421,129 +389,81 @@ def install(app: Any) -> bool:
             await callback.answer(error, show_alert=True); return
         if not await is_manager(callback, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
-        if delta == "nochange":
-            await callback.answer(); return
-        try:
-            new_number = max(1, int(game.get("event_number") or 1) + int(delta))
+        if delta == "nochange": await callback.answer(); return
+        try: new_number = max(1, int(game.get("event_number") or 1) + int(delta))
         except ValueError:
             await callback.answer("❌ مقدار نامعتبر.", show_alert=True); return
         if not app.runtime.state.lobby.set_event_number(game_id, new_number):
             await callback.answer("❌ تغییر شماره انجام نشد.", show_alert=True); return
-        await callback.answer(f"✅ شماره بازی: {new_number}")
-        await event_menu(callback)
+        await callback.answer(f"✅ شماره بازی: {new_number}"); await event_menu(callback)
 
     async def change_scenario(callback: types.CallbackQuery):
         parts = parse_callback(callback, "lobby", 3)
-        if not parts or parts[2] != "change_scenario":
-            await callback.answer("⚠️ درخواست نامعتبر.", show_alert=True); return
+        if not parts or parts[2] != "change_scenario": return
         gid = group_id(callback); game_id = int(parts[1]); game, error = require_game(callback, game_id)
-        if error:
-            await callback.answer(error, show_alert=True); return
-        if not await is_manager(callback, game):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
-        await callback.message.edit_text("📝 <b>تغییر سناریو</b>\n\nسناریوی جدید را انتخاب کنید:", parse_mode="HTML", reply_markup=scenario_keyboard(game_id))
-        await callback.answer()
+        if error: await callback.answer(error, show_alert=True); return
+        if not await is_manager(callback, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        await callback.message.edit_text("📝 <b>تغییر سناریو</b>\n\nسناریوی جدید را انتخاب کنید:", parse_mode="HTML", reply_markup=scenario_keyboard(game_id)); await callback.answer()
 
     async def change_moderator(callback: types.CallbackQuery):
         parts = parse_callback(callback, "lobby", 3)
-        if not parts or parts[2] != "change_moderator":
-            await callback.answer("⚠️ درخواست نامعتبر.", show_alert=True); return
+        if not parts or parts[2] != "change_moderator": return
         gid = group_id(callback); game_id = int(parts[1]); game, error = require_game(callback, game_id)
-        if error:
-            await callback.answer(error, show_alert=True); return
-        if not await is_manager(callback, game):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        if error: await callback.answer(error, show_alert=True); return
+        if not await is_manager(callback, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         kb = InlineKeyboardMarkup(row_width=1)
-        for admin in await bot.get_chat_administrators(gid):
-            kb.add(InlineKeyboardButton(admin.user.full_name, callback_data=f"lobby:{game_id}:moderator:{int(admin.user.id)}"))
-        await callback.message.edit_text("🎩 <b>تغییر گرداننده</b>", parse_mode="HTML", reply_markup=kb)
-        await callback.answer()
+        for admin in await bot.get_chat_administrators(gid): kb.add(InlineKeyboardButton(admin.user.full_name, callback_data=f"lobby:{game_id}:moderator:{int(admin.user.id)}"))
+        await callback.message.edit_text("🎩 <b>تغییر گرداننده</b>", parse_mode="HTML", reply_markup=kb); await callback.answer()
 
     async def refresh(callback: types.CallbackQuery):
         parts = parse_callback(callback, "lobby", 3)
-        if not parts or parts[2] != "refresh":
-            await callback.answer("⚠️ درخواست نامعتبر.", show_alert=True); return
+        if not parts or parts[2] != "refresh": return
         gid = group_id(callback); game_id = int(parts[1]); game, error = require_game(callback, game_id)
-        if error:
-            await callback.answer(error, show_alert=True); return
-        if not await is_manager(callback, game):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
-        state = lobby_state(game)
-        state.pop("selection_message_id", None)
-        save_lobby_state(game, **state)
-        await render(gid, current_game(gid))
-        await callback.answer("🔄 پیام لابی بازسازی شد.")
+        if error: await callback.answer(error, show_alert=True); return
+        if not await is_manager(callback, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        ok = await render(gid, current_game(gid))
+        await callback.answer("🔄 پیام لابی بازسازی شد." if ok else "❌ بازسازی لابی انجام نشد.", show_alert=not ok)
 
     async def back(callback: types.CallbackQuery):
         parts = parse_callback(callback, "lobby", 3)
-        if not parts or parts[2] != "back":
-            await callback.answer("⚠️ درخواست نامعتبر.", show_alert=True); return
+        if not parts or parts[2] != "back": return
         gid = group_id(callback); game_id = int(parts[1]); game, error = require_game(callback, game_id)
-        if error:
-            await callback.answer(error, show_alert=True); return
-        if not await is_manager(callback, game):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
-        await render(gid, game)
-        await callback.answer()
+        if error: await callback.answer(error, show_alert=True); return
+        if not await is_manager(callback, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        await render(gid, game); await callback.answer()
 
     async def cancel(callback: types.CallbackQuery):
         parts = parse_callback(callback, "lobby", 3)
-        if not parts or parts[2] != "cancel":
-            await callback.answer("⚠️ درخواست نامعتبر.", show_alert=True); return
+        if not parts or parts[2] != "cancel": return
         gid = group_id(callback); game_id = int(parts[1]); game, error = require_game(callback, game_id)
-        if error:
-            await callback.answer(error, show_alert=True); return
-        if not await is_manager(callback, game):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
-        if not app.runtime.state.games.update_game(game_id, status="finished"):
+        if error: await callback.answer(error, show_alert=True); return
+        if not await is_manager(callback, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        if not app.runtime.state.games.update_game(game_id, status="finished", state={}):
             await callback.answer("❌ لغو بازی انجام نشد.", show_alert=True); return
+        try:
+            app.runtime.state.games.clear_game_players(game_id)
+        except Exception:
+            logging.exception("failed to clear cancelled lobby players game=%s", game_id)
         message_id = lobby_state(game).get("lobby_message_id")
         if message_id:
-            try:
-                await bot.edit_message_text("🚫 <b>این بازی لغو شد.</b>", gid, int(message_id), parse_mode="HTML", reply_markup=None)
-            except Exception:
-                logging.info("cancelled lobby message could not be edited game=%s", game_id)
+            try: await bot.edit_message_text("🚫 <b>این بازی لغو شد.</b>", gid, int(message_id), parse_mode="HTML", reply_markup=None)
+            except Exception: logging.info("cancelled lobby message could not be edited game=%s", game_id)
         await callback.answer("🚫 بازی لغو شد.")
 
     async def distribute(callback: types.CallbackQuery):
         parts = parse_callback(callback, "lobby", 3)
-        if not parts or parts[2] != "distribute":
-            await callback.answer("⚠️ درخواست نامعتبر.", show_alert=True); return
+        if not parts or parts[2] != "distribute": return
         gid = group_id(callback); game_id = int(parts[1]); game, error = require_game(callback, game_id)
-        if error:
-            await callback.answer(error, show_alert=True); return
-        if not await is_manager(callback, game):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
-        # Delegate to the authoritative role-distribution handler. It verifies
-        # capacity and performs the lobby -> gameplay transition atomically at
-        # the game-state level. A game-bound callback is also accepted by the
-        # handler below through the optional parser installed there.
+        if error: await callback.answer(error, show_alert=True); return
+        if not await is_manager(callback, game): await callback.answer("⛔ فقط گرداننده یا مدیر گروه می‌تواند نقش‌ها را پخش کند.", show_alert=True); return
         await callback.answer("⏳ در حال پخش نقش‌ها...")
-        # Keep the established callback contract for the role module while the
-        # lobby itself remains game-bound. The module is invoked by a synthetic
-        # callback-compatible flag stored only for this request.
         setattr(callback, "_canonical_lobby_game_id", game_id)
         await app._canonical_distribute_roles(callback)
 
-    # Store the role callback entry point without importing/duplicating the
-    # role-distribution implementation. main.py installs it after this module.
-    async def canonical_distribute_roles(callback):
-        await distribute(callback)
+    app._render_production_lobby = render
+    app._production_lobby_render = render
+    app._production_lobby_game_id = current_game
 
-    app._canonical_distribute_roles = getattr(app, "_canonical_distribute_roles", None) or (lambda c: None)
-
-    # The actual role module replaces this hook with its handler; when it does
-    # not, the button still fails closed rather than executing a wrong game.
-    async def dispatch_distribute(callback):
-        handler = getattr(app, "_role_distribution_handler", None)
-        if handler:
-            await handler(callback)
-        else:
-            await callback.answer("❌ سرویس پخش نقش آماده نیست.", show_alert=True)
-
-    app._canonical_distribute_roles = dispatch_distribute
-
-    # Exact canonical callback surface. No aliases are intentionally accepted.
     dp.register_callback_query_handler(new_game, lambda c: c.data == "new_game", state="*")
     dp.register_callback_query_handler(scenario_selected, lambda c: str(c.data or "").startswith("lobby:") and ":scenario:" in str(c.data), state="*")
     dp.register_callback_query_handler(moderator_selected, lambda c: str(c.data or "").startswith("lobby:") and ":moderator:" in str(c.data), state="*")
@@ -560,8 +480,6 @@ def install(app: Any) -> bool:
     dp.register_callback_query_handler(cancel, lambda c: str(c.data or "").startswith("lobby:") and c.data.endswith(":cancel"), state="*")
     dp.register_callback_query_handler(distribute, lambda c: str(c.data or "").startswith("lobby:") and c.data.endswith(":distribute"), state="*")
 
-    # Main menu is canonical too; the legacy MafiaApplication handler is
-    # removed by _remove_legacy_handlers above.
     app._keyboard_main = lambda: InlineKeyboardMarkup(row_width=1).add(
         InlineKeyboardButton("🎮 بازی جدید", callback_data="new_game"),
         InlineKeyboardButton("📖 راهنما", callback_data="help"),
