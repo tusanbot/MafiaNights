@@ -29,7 +29,7 @@ def _name(management: GameManagement, row: dict[str, Any]) -> str:
 
 def _mention(row: dict[str, Any]) -> str:
     uid = int(row["player_id"])
-    label = row.get("nickname") or row.get("first_name") or row.get("username") or uid
+    label = row.get("nickname") or row.get("first_name") or row.get("username") or row.get("name") or uid
     return f'<a href="tg://user?id={uid}"><b>{html.escape(str(label))}</b></a>'
 
 
@@ -39,6 +39,27 @@ def _active_players(management: GameManagement, game: dict[str, Any]) -> list[di
 
 def _attendance_state(management: GameManagement, game: dict[str, Any]) -> dict[str, Any]:
     return dict(management._state(game).get("attendance") or {})
+
+
+def _substitute_state(management: GameManagement, game: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Persistent text-command substitute list; this is the canonical source for replacement."""
+    raw = management._state(game).get("substitutes") or {}
+    return {str(k): dict(v or {}) for k, v in raw.items() if str(k).lstrip("-").isdigit()}
+
+
+def _substitute_rows(management: GameManagement, game: dict[str, Any]) -> list[dict[str, Any]]:
+    """Merge the persistent text-command list with DB waiting/substitute rows."""
+    merged: dict[int, dict[str, Any]] = {}
+    for key, info in _substitute_state(management, game).items():
+        uid = int(key)
+        merged[uid] = {"player_id": uid, "seat": None, "status": "waiting", "is_substitute": True,
+                       "nickname": info.get("nickname"), "first_name": info.get("first_name"),
+                       "username": info.get("username"), "name": info.get("name")}
+    for row in _rows(management, game):
+        uid = int(row["player_id"])
+        if row.get("seat") is None and str(row.get("status") or "") in {"waiting", "substitute"} and bool(row.get("is_substitute", False)):
+            merged[uid] = row
+    return list(merged.values())
 
 
 def _day_control_markup(game_id: int) -> InlineKeyboardMarkup:
@@ -149,13 +170,14 @@ def install(app: Any, management: GameManagement) -> bool:
         gid = int(callback.message.chat.id); game = self._game(gid)
         if not game or not await self._allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
-        substitutes = [r for r in _rows(self, game) if r.get("seat") is None and str(r.get("status") or "") in {"waiting", "substitute"} and bool(r.get("is_substitute", False))]
+        substitutes = _substitute_rows(self, game)
         kb = InlineKeyboardMarkup(row_width=2)
         for row in substitutes:
             kb.insert(InlineKeyboardButton(_name(self, row), callback_data=f"mgmt:{int(game['id'])}:replace_sub:{int(row['player_id'])}"))
         kb.row(InlineKeyboardButton("⬅️ مدیریت", callback_data=f"mgmt:{int(game['id'])}:open"))
         text = "🔄 <b>جایگزین بازیکن</b>\n\nابتدا بازیکن جایگزین را انتخاب کنید:"
-        if not substitutes: text += "\n\n❌ در حال حاضر بازیکن جایگزین/رزرو شده‌ای وجود ندارد."
+        if not substitutes:
+            text += "\n\n❌ در حال حاضر بازیکن جایگزین/رزرو شده‌ای وجود ندارد."
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb); await callback.answer()
 
     async def replace_sub(self: GameManagement, callback: Any):
@@ -163,9 +185,10 @@ def install(app: Any, management: GameManagement) -> bool:
         if len(parts) != 4 or parts[0] != "mgmt" or parts[2] != "replace_sub": return
         gid = int(callback.message.chat.id); game = self._game(gid); substitute_id = int(parts[3])
         if not game or not await self._allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
-        rows = _rows(self, game); substitute = next((r for r in rows if int(r["player_id"]) == substitute_id), None)
-        if not substitute or substitute.get("seat") is not None or not bool(substitute.get("is_substitute", False)):
+        substitute = next((r for r in _substitute_rows(self, game) if int(r["player_id"]) == substitute_id), None)
+        if not substitute:
             await callback.answer("❌ بازیکن جایگزین معتبر نیست.", show_alert=True); return
+        rows = _rows(self, game)
         targets = [r for r in rows if r.get("seat") is not None and str(r.get("status") or "") not in {"removed", "dead", "finished"}]
         kb = InlineKeyboardMarkup(row_width=2)
         for row in sorted(targets, key=lambda r: int(r.get("seat") or 999)):
@@ -178,17 +201,31 @@ def install(app: Any, management: GameManagement) -> bool:
         if len(parts) != 5 or parts[0] != "mgmt" or parts[2] != "replace_target": return
         gid = int(callback.message.chat.id); game = self._game(gid); substitute_id, target_id = int(parts[3]), int(parts[4])
         if not game or not await self._allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
-        rows = _rows(self, game); substitute = next((r for r in rows if int(r["player_id"]) == substitute_id), None); target = next((r for r in rows if int(r["player_id"]) == target_id), None)
-        if not substitute or not target or substitute.get("seat") is not None or target.get("seat") is None: await callback.answer("❌ اطلاعات جایگزینی نامعتبر است.", show_alert=True); return
+        substitute = next((r for r in _substitute_rows(self, game) if int(r["player_id"]) == substitute_id), None)
+        target = next((r for r in _rows(self, game) if int(r["player_id"]) == target_id), None)
+        if not substitute or not target or target.get("seat") is None:
+            await callback.answer("❌ اطلاعات جایگزینی نامعتبر است.", show_alert=True); return
         seat = int(target["seat"])
         try:
+            # Remove the old player from the active seat.
             self.app.runtime.state.games.set_player_seat(game["id"], target_id, None)
             self.app.runtime.state.games.set_player_status(game["id"], target_id, "removed")
-            self.app.runtime.state.games.set_player_seat(game["id"], substitute_id, seat)
-            self.app.runtime.state.games.set_player_status(game["id"], substitute_id, "active")
-            if target.get("role"): self.app.runtime.state.games.set_player_role(game["id"], substitute_id, target.get("role"))
+            # A text-command substitute may not have a DB membership row yet; create it here.
+            existing_sub = next((r for r in _rows(self, game) if int(r["player_id"]) == substitute_id), None)
+            if existing_sub:
+                self.app.runtime.state.games.set_player_seat(game["id"], substitute_id, seat)
+                self.app.runtime.state.games.set_player_status(game["id"], substitute_id, "active")
+            else:
+                self.app.runtime.state.lobby.join(game["group_chat_id"], substitute_id, seat, is_substitute=False)
+            if target.get("role"):
+                self.app.runtime.state.games.set_player_role(game["id"], substitute_id, target.get("role"))
             self.app.runtime.state.games.set_player_alive(game["id"], substitute_id, True)
-            attendance = _attendance_state(self, game); attendance.pop(str(target_id), None); attendance[str(substitute_id)] = False; self._save(game, attendance=attendance)
+            state = self._state(game)
+            subs = dict(state.get("substitutes") or {})
+            subs.pop(str(substitute_id), None)
+            attendance = dict(state.get("attendance") or {})
+            attendance.pop(str(target_id), None); attendance[str(substitute_id)] = False
+            self._save(game, substitutes=subs, attendance=attendance)
         except Exception:
             logging.exception("management replacement failed game=%s", game.get("id")); await callback.answer("❌ جایگزینی انجام نشد.", show_alert=True); return
         await callback.message.edit_text(f"✅ {_mention(target)} با {_mention(substitute)} جایگزین شد.\n💺 صندلی {seat}", parse_mode="HTML", reply_markup=self.panel(game["id"]))
