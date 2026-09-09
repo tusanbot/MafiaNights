@@ -149,12 +149,22 @@ def install(app: Any) -> bool:
         active.sort(key=lambda r: int(r.get("seat") or 999))
         occupied = {int(r["seat"]): r for r in active}
 
+        moderator_id = int(game["moderator_id"])
+        moderator_row = next((r for r in rows if int(r.get("player_id") or 0) == moderator_id), None)
+        moderator_name = player_name(moderator_row) if moderator_row else None
+        if not moderator_name or moderator_name == str(moderator_id):
+            try:
+                moderator_member = await bot.get_chat_member(gid, moderator_id)
+                moderator_name = moderator_member.user.full_name or moderator_member.user.username or str(moderator_id)
+            except Exception:
+                moderator_name = str(moderator_id)
+
         lines = [
             "༄ <b>لیست بازی Mafia Nights</b>", "",
             f"📅 <b>تاریخ:</b> {datetime.now(ZoneInfo('Asia/Tehran')).strftime('%Y/%m/%d')}",
             f"🎭 <b>سناریو:</b> {html.escape(scenario_name(game.get('scenario_id')))}",
             f"🔢 <b>شماره بازی:</b> {int(game.get('event_number') or 1)}",
-            f"🎩 <b>گرداننده:</b> {mention(int(game['moderator_id']))}", "",
+            f"🎩 <b>گرداننده:</b> {mention(moderator_id, moderator_name)}", "",
             "━━━━━━━━━━━━━━━━━━", f"👥 <b>بازیکنان:</b> {len(active)}/{cap}", "", "🪑 <b>لیست صندلی‌ها</b>",
         ]
         for seat_no in range(1, cap + 1):

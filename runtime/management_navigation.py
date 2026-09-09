@@ -209,14 +209,14 @@ def install(app: Any, management: GameManagement) -> bool:
         try:
             # Remove the old player from the active seat.
             self.app.runtime.state.games.set_player_seat(game["id"], target_id, None)
-            self.app.runtime.state.games.set_player_status(game["id"], target_id, "removed")
+            self.app.runtime.state.games.set_player_status(game["id"], target_id, "substituted")
             # A text-command substitute may not have a DB membership row yet; create it here.
             existing_sub = next((r for r in _rows(self, game) if int(r["player_id"]) == substitute_id), None)
             if existing_sub:
                 self.app.runtime.state.games.set_player_seat(game["id"], substitute_id, seat)
                 self.app.runtime.state.games.set_player_status(game["id"], substitute_id, "active")
             else:
-                self.app.runtime.state.lobby.join(game["group_chat_id"], substitute_id, seat, is_substitute=False)
+                self.app.runtime.state.lobby.join(game["id"], substitute_id, seat, is_substitute=False)
             if target.get("role"):
                 self.app.runtime.state.games.set_player_role(game["id"], substitute_id, target.get("role"))
             self.app.runtime.state.games.set_player_alive(game["id"], substitute_id, True)

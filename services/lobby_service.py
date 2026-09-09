@@ -43,7 +43,13 @@ class LobbyService:
 
     def set_scenario(self, game_id: str, scenario_id: str) -> bool: return self.repository.update_game(game_id, scenario_id=scenario_id)
     def set_moderator(self, game_id: str, moderator_id: int) -> bool: return self.repository.update_game(game_id, moderator_id=int(moderator_id))
-    def join(self, game_id: str, player_id: int, seat: Optional[int] = None, is_substitute: bool = False) -> int: return self.repository.add_player(game_id=game_id, player_id=player_id, seat=seat, status="waiting" if seat is None else "active", is_substitute=is_substitute)
+    def join(self, game_id: str, player_id: int, seat: Optional[int] = None, is_substitute: bool = False) -> int:
+        resolved_game_id = int(game_id)
+        # Backward compatibility: older handlers passed group_chat_id here.
+        active = self.repository.get_active_game(int(game_id))
+        if active:
+            resolved_game_id = int(active["id"])
+        return self.repository.add_player(game_id=resolved_game_id, player_id=player_id, seat=seat, status="waiting" if seat is None else "active", is_substitute=is_substitute)
     def leave(self, game_id: str, player_id: int) -> bool: return self.repository.remove_player(game_id, player_id)
     def assign_seat(self, game_id: str, player_id: int, seat: int) -> bool: return self.repository.set_player_seat(game_id, player_id, seat)
     def clear_seat(self, game_id: str, player_id: int) -> bool: return self.repository.set_player_seat(game_id, player_id, None)

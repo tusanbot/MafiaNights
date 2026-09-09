@@ -303,7 +303,7 @@ class FeatureParity:
             await message.reply("ℹ️ شما قبلاً در لیست جایگزین هستید.")
             return
         subs[str(uid)] = {"id": uid, "name": message.from_user.full_name}
-        await self._save_state(group_id, substitutes=subs)
+        self._save_state(group_id, substitutes=subs)
         await message.reply(f"✅ {html.escape(message.from_user.full_name)} به لیست جایگزین اضافه شد.")
 
     async def seat_command(self, message: types.Message):
