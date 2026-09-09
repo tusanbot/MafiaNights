@@ -1,0 +1,90 @@
+name: fix live challenge next and serverless voting flow
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fix-live-round-voting.yml'
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch runtime
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('runtime/stable_round_engine.py')
+          s = p.read_text()
+
+          old = '''        if uid != int(getattr(main, "moderator_id", -1) or -1) and uid != int(owner or -1) and uid not in challenger_uids:\n            await callback.answer("⛔ فقط صاحب نوبت، چالش‌گر یا گرداننده می‌تواند نکست بزند.", show_alert=True)\n            raise CancelHandler()\n'''
+          new = '''        # NEXT permissions are persisted in the game state so a management change\n        # applies immediately, including during the current turn/day.\n        game = None\n        try:\n            game = main.runtime.state.active_game(_gid(main))\n        except Exception:\n            game = None\n        next_settings = dict((game or {}).get("state", {}).get("next_settings") or {})\n        allow_players = bool(next_settings.get("allow_players_next", True))\n        allow_moderator = bool(next_settings.get("allow_moderator_next", True))\n        is_moderator = uid == int(getattr(main, "moderator_id", -1) or -1)\n        is_owner = uid == int(owner or -1)\n        is_challenger = uid in challenger_uids\n        if is_moderator and not allow_moderator:\n            await callback.answer("⛔ نکست برای گرداننده توسط مدیریت بازی غیرفعال است.", show_alert=True)\n            raise CancelHandler()\n        if (is_owner or is_challenger) and not allow_players:\n            await callback.answer("⛔ نکست بازیکنان توسط مدیریت بازی غیرفعال است.", show_alert=True)\n            raise CancelHandler()\n        if not is_moderator and not is_owner and not is_challenger:\n            await callback.answer("⛔ فقط صاحب نوبت، چالش‌گر یا گرداننده می‌تواند نکست بزند.", show_alert=True)\n            raise CancelHandler()\n'''
+          if old not in s:
+              raise SystemExit('next permission block not found')
+          s = s.replace(old, new, 1)
+
+          old = '''        reqs = main._stable_challenge_requests.get(target_seat, {})\n        if reqs.get(challenger_id) != "pending":\n            await callback.answer("⚠️ این درخواست دیگر فعال نیست.", show_alert=True)\n            raise CancelHandler()\n'''
+          new = '''        reqs = main._stable_challenge_requests.get(target_seat, {})\n        pending_row = None\n        try:\n            rows = main.runtime.state.challenges.list_challenges((main.runtime.state.active_game(_gid(main)) or {}).get("id"))\n            pending_row = next((r for r in rows if int(r.get("challenger_id")) == challenger_id and int(r.get("target_id")) == target_id and str(r.get("status")) == "pending"), None)\n        except Exception:\n            pending_row = None\n        if reqs.get(challenger_id) != "pending" and not pending_row:\n            await callback.answer("⚠️ این درخواست دیگر فعال نیست.", show_alert=True)\n            raise CancelHandler()\n        if reqs.get(challenger_id) != "pending":\n            reqs[challenger_id] = "pending"\n'''
+          if old not in s:
+              raise SystemExit('challenge response block not found')
+          s = s.replace(old, new, 1)
+
+          old = '''        if timing is None:\n            reqs.pop(challenger_id, None)\n            await main.bot.send_message(_gid(main), f"🚫 {html.escape(target_name)} درخواست چالش {html.escape(challenger_name)} را رد کرد.", parse_mode="HTML")\n            await callback.answer("❌ درخواست رد شد.")\n            raise CancelHandler()\n'''
+          new = '''        if timing is None:\n            reqs.pop(challenger_id, None)\n            if pending_row:\n                try:\n                    main.runtime.state.challenges.resolve(str(pending_row.get("id")), "rejected")\n                except Exception:\n                    pass\n            await main.bot.send_message(_gid(main), f"🚫 {html.escape(target_name)} درخواست چالش {html.escape(challenger_name)} را رد کرد.", parse_mode="HTML")\n            await callback.answer("❌ درخواست رد شد.")\n            raise CancelHandler()\n'''
+          if old not in s:
+              raise SystemExit('challenge reject block not found')
+          s = s.replace(old, new, 1)
+
+          old = '''        # Accept exactly one challenge for this target.\n        reqs.clear()\n        main._stable_challenge_request_messages.clear()\n        main._stable_challenge_locked.add(target_seat)\n'''
+          new = '''        # Accept exactly one challenge for this target and persist the decision.\n        reqs.clear()\n        main._stable_challenge_request_messages.clear()\n        main._stable_challenge_locked.add(target_seat)\n        if pending_row:\n            try:\n                main.runtime.state.challenges.update_mode(str(pending_row.get("id")), timing)\n                main.runtime.state.challenges.resolve(str(pending_row.get("id")), "accepted")\n            except Exception:\n                logging.exception("stable round: failed to persist challenge acceptance")\n'''
+          if old not in s:
+              raise SystemExit('challenge accept block not found')
+          s = s.replace(old, new, 1)
+
+          old = '''            InlineKeyboardButton("🌙 شروع فاز شب", callback_data="start_night")\n        ),\n'''
+          new = '''            InlineKeyboardButton("🌙 شروع فاز شب", callback_data="start_night"),\n            InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"),\n        ),\n'''
+          if old not in s:
+              raise SystemExit('day end keyboard block not found')
+          s = s.replace(old, new, 1)
+
+          marker = '''    dp.register_callback_query_handler(start_round, lambda c: c.data in {"start_round", "start_turn"}, state="*")\n'''
+          insertion = '''    async def end_game(callback):\n        if callback.message and callback.message.chat.type == "private":\n            await callback.answer("این عملیات فقط داخل گروه انجام می‌شود.", show_alert=True)\n            raise CancelHandler()\n        if int(callback.from_user.id) != int(getattr(main, "moderator_id", -1) or -1):\n            await callback.answer("⛔ فقط گرداننده می‌تواند بازی را تمام کند.", show_alert=True)\n            raise CancelHandler()\n        game = None\n        try:\n            game = main.runtime.state.active_game(_gid(main))\n        except Exception:\n            pass\n        if not game:\n            await callback.answer("⚠️ بازی فعالی وجود ندارد.", show_alert=True)\n            raise CancelHandler()\n        try:\n            main.runtime.state.games.update_game(game["id"], status="finished")\n        except Exception:\n            logging.exception("stable round: failed to finish game")\n        await _cancel_timer(main)\n        main._stable_day_ended = True\n        main._stable_day_active = False\n        main._stable_phase = "finished"\n        main.game_running = False\n        await _delete_turn_message(main)\n        await main.bot.send_message(_gid(main), "🏁 <b>بازی به دستور گرداننده به پایان رسید.</b>", parse_mode="HTML")\n        await callback.answer("🏁 بازی تمام شد.")\n        raise CancelHandler()\n\n''' + marker
+          if marker not in s:
+              raise SystemExit('handler marker not found')
+          s = s.replace(marker, insertion, 1)
+          s = s.replace('    dp.register_callback_query_handler(start_round, lambda c: c.data in {"start_round", "start_turn"}, state="*")\n', '    dp.register_callback_query_handler(end_game, lambda c: c.data == "end_game", state="*")\n    dp.register_callback_query_handler(start_round, lambda c: c.data in {"start_round", "start_turn"}, state="*")\n', 1)
+
+          p.write_text(s)
+
+          # Make voting timers serverless-safe: persist the due time and expose a
+          # lightweight HTTP tick endpoint rather than relying on asyncio.create_task
+          # surviving asyncio.run()/Vercel invocation teardown.
+          v = Path('runtime/voting_runtime.py')
+          s = v.read_text()
+          s = s.replace('''    main._voting_task = asyncio.create_task(_timer(main, deadline, "voting"))\n''', '''    # The webhook event loop is closed when the request returns. Keep the deadline\n    # in durable game state; the scheduled tick endpoint advances it.\n    main._voting_task = None\n''', 1)
+          s = s.replace('''    main._voting_task = asyncio.create_task(_timer(main, deadline, "waiting"))\n''', '''    main._voting_task = None\n''', 1)
+          v.write_text(s)
+
+          cron = Path('api/telegram/tick.py')
+          cron.parent.mkdir(parents=True, exist_ok=True)
+          cron.write_text('''"""Serverless-safe scheduler tick for persistent voting deadlines."""\nfrom __future__ import annotations\n\nimport asyncio\nimport json\nimport os\nimport time\n\n\ndef _response(body, status="200 OK"):\n    raw = json.dumps(body, ensure_ascii=False).encode("utf-8")\n    return status, [("Content-Type", "application/json; charset=utf-8"), ("Content-Length", str(len(raw)))], raw\n\n\ndef app(environ, start_response):\n    secret = os.getenv("CRON_SECRET")\n    if secret and environ.get("HTTP_AUTHORIZATION") != f"Bearer {secret}":\n        status, headers, body = _response({"ok": False, "error": "unauthorized"}, "401 Unauthorized")\n        start_response(status, headers)\n        return [body]\n    try:\n        import main\n        from runtime.voting_runtime import _v, _start_target, _end_target\n        gid = int(os.getenv("ALLOWED_GROUP_ID", "-1002356353761"))\n        game = main.app.runtime.state.active_game(gid)\n        if not game:\n            result = {"ok": True, "processed": False, "reason": "no_active_game"}\n        else:\n            main.app.group_chat_id = gid\n            main.app.ui.group_chat_id = gid\n            state = dict(game.get("state") or {})\n            voting = state.get("voting")\n            if not isinstance(voting, dict):\n                result = {"ok": True, "processed": False, "reason": "no_voting"}\n            elif voting.get("deadline") and float(voting["deadline"]) <= time.time():\n                phase = str(voting.get("phase") or "")\n                if phase == "waiting":\n                    asyncio.run(_start_target(main.app))\n                elif phase == "voting":\n                    asyncio.run(_end_target(main.app))\n                result = {"ok": True, "processed": True, "phase": phase}\n            else:\n                result = {"ok": True, "processed": False, "phase": voting.get("phase")}\n    except Exception as exc:\n        result = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}\n    status, headers, body = _response(result)\n    start_response(status, headers)\n    return [body]\n\n\nhandler = app\n''')
+
+          # Add a cron route. Vercel's cron is minute-granularity; the persisted
+          # deadline means a 15s setting remains semantically correct, though the
+          # tick can execute slightly after the deadline on serverless hosting.\n          z = Path('vercel.json')\n          data = z.read_text()\n          if '"crons"' not in data:\n              data = data.replace('  "fluid": true,\n', '  "fluid": true,\n  "crons": [{"path": "/api/telegram/tick", "schedule": "* * * * *"}],\n')\n          if '"api/telegram/tick.py"' not in data:\n              data = data.replace('    "api/telegram_app.py": {\n      "maxDuration": 60\n    }', '    "api/telegram_app.py": {\n      "maxDuration": 60\n    },\n    "api/telegram/tick.py": {\n      "maxDuration": 60\n    }')\n          z.write_text(data)\n          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add runtime/stable_round_engine.py runtime/voting_runtime.py api/telegram/tick.py vercel.json
+          git commit -m 'fix live challenge next and serverless voting flow'
+          git push
+      - name: Remove temporary workflow
+        if: always()
+        run: |
+          git rm -f .github/workflows/fix-live-round-voting.yml || true
+          git commit -m 'remove temporary live round patch workflow' || true
+          git push || true
