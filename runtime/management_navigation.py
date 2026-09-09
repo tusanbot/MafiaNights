@@ -58,7 +58,15 @@ def _substitute_rows(management: GameManagement, game: dict[str, Any]) -> list[d
     for row in _rows(management, game):
         uid = int(row["player_id"])
         if row.get("seat") is None and str(row.get("status") or "") in {"waiting", "substitute"} and bool(row.get("is_substitute", False)):
-            merged[uid] = row
+            existing = merged.get(uid, {})
+            for key in ("nickname", "first_name", "last_name", "username", "name"):
+                if row.get(key):
+                    existing[key] = row[key]
+            existing["player_id"] = uid
+            existing["seat"] = row.get("seat")
+            existing["status"] = row.get("status") or existing.get("status") or "waiting"
+            existing["is_substitute"] = True
+            merged[uid] = existing
     return list(merged.values())
 
 
