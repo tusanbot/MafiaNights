@@ -250,7 +250,7 @@ async def _start_target(main):
         parse_mode="HTML",
         reply_markup=markup,
     )
-    main._voting_task = asyncio.create_task(_timer(main, deadline, "voting"))
+    main._voting_task = None
 
 
 async def _timer(main, deadline, expected):
@@ -279,7 +279,7 @@ async def _start_wait(main):
         f"🚫 <b>بازیکنانی که حق رای ندارند:</b>\n{blocked_text}",
         parse_mode="HTML",
     )
-    main._voting_task = asyncio.create_task(_timer(main, deadline, "waiting"))
+    main._voting_task = None
 
 
 async def _end_target(main):

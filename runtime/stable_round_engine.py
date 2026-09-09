@@ -289,7 +289,8 @@ async def _end_day(main):
             gid,
             "✅ همه بازیکنا صحبت کردن. فاز روز تموم شد.",
             reply_markup=InlineKeyboardMarkup(row_width=1).add(
-                InlineKeyboardButton("🌙 شروع فاز شب", callback_data="start_night")
+                InlineKeyboardButton("🌙 شروع فاز شب", callback_data="start_night"),
+                InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game")
             ),
         )
 
@@ -452,7 +453,24 @@ def install(main):
         owner = _uid(main, active)
         challenger_seats = {int(x) for x in getattr(main, "active_challenger_seats", set()) or set()}
         challenger_uids = {int(_uid(main, s) or -1) for s in challenger_seats}
-        if uid != int(getattr(main, "moderator_id", -1) or -1) and uid != int(owner or -1) and uid not in challenger_uids:
+        game = None
+        try:
+            game = main.runtime.state.active_game(_gid(main))
+        except Exception:
+            pass
+        next_settings = dict((game or {}).get("state", {}).get("next_settings") or {})
+        allow_players = bool(next_settings.get("allow_players_next", True))
+        allow_moderator = bool(next_settings.get("allow_moderator_next", True))
+        is_moderator = uid == int(getattr(main, "moderator_id", -1) or -1)
+        is_owner = uid == int(owner or -1)
+        is_challenger = uid in challenger_uids
+        if is_moderator and not allow_moderator:
+            await callback.answer("⛔ نکست برای گرداننده توسط مدیریت بازی غیرفعال است.", show_alert=True)
+            raise CancelHandler()
+        if (is_owner or is_challenger) and not allow_players:
+            await callback.answer("⛔ نکست بازیکنان توسط مدیریت بازی غیرفعال است.", show_alert=True)
+            raise CancelHandler()
+        if not is_moderator and not is_owner and not is_challenger:
             await callback.answer("⛔ فقط صاحب نوبت، چالش‌گر یا گرداننده می‌تواند نکست بزند.", show_alert=True)
             raise CancelHandler()
         now = time.time()
@@ -529,6 +547,14 @@ def install(main):
         main._stable_challenge_used.add(requester)
         reqs = main._stable_challenge_requests.setdefault(target, {})
         reqs[requester] = "pending"
+        try:
+            active_game = main.runtime.state.active_game(_gid(main))
+            if active_game:
+                main.runtime.state.challenges.create_challenge(
+                    game_id=active_game["id"], challenger_id=requester, target_id=int(_uid(main, target)), mode="before", status="pending"
+                )
+        except Exception:
+            logging.exception("stable round: failed to persist challenge request")
         target_id = int(_uid(main, target))
         challenger_name = await _resolve_name(main, requester)
         target_name = await _resolve_name(main, target_id)
@@ -567,20 +593,39 @@ def install(main):
             await callback.answer("❌ فقط صاحب نوبت می‌تواند درخواست را مدیریت کند.", show_alert=True)
             raise CancelHandler()
         reqs = main._stable_challenge_requests.get(target_seat, {})
-        if reqs.get(challenger_id) != "pending":
+        pending_row = None
+        try:
+            active_game = main.runtime.state.active_game(_gid(main))
+            if active_game:
+                rows = main.runtime.state.challenges.list_challenges(active_game["id"])
+                pending_row = next((r for r in rows if int(r.get("challenger_id")) == challenger_id and int(r.get("target_id")) == target_id and str(r.get("status")) == "pending"), None)
+        except Exception:
+            pass
+        if reqs.get(challenger_id) != "pending" and not pending_row:
             await callback.answer("⚠️ این درخواست دیگر فعال نیست.", show_alert=True)
             raise CancelHandler()
         target_name = await _resolve_name(main, target_id)
         challenger_name = await _resolve_name(main, challenger_id)
         if timing is None:
             reqs.pop(challenger_id, None)
+            if pending_row:
+                try:
+                    main.runtime.state.challenges.resolve(str(pending_row.get("id")), "rejected")
+                except Exception:
+                    pass
             await main.bot.send_message(_gid(main), f"🚫 {html.escape(target_name)} درخواست چالش {html.escape(challenger_name)} را رد کرد.", parse_mode="HTML")
             await callback.answer("❌ درخواست رد شد.")
             raise CancelHandler()
-        # Accept exactly one challenge for this target.
+        # Accept exactly one challenge for this target and persist the decision.
         reqs.clear()
         main._stable_challenge_request_messages.clear()
         main._stable_challenge_locked.add(target_seat)
+        if pending_row:
+            try:
+                main.runtime.state.challenges.update_mode(str(pending_row.get("id")), timing)
+                main.runtime.state.challenges.resolve(str(pending_row.get("id")), "accepted")
+            except Exception:
+                logging.exception("stable round: failed to persist challenge acceptance")
         await _cancel_timer(main)
         if timing == "before":
             main.paused_main_player = target_seat
@@ -641,6 +686,29 @@ def install(main):
         await callback.answer(f"{('سکوت' if mode == 'mute' else 'ترن اضافه')} {status}.")
         await manage(callback, mode)
 
+    async def end_game(callback):
+        if callback.message and callback.message.chat.type == "private":
+            await callback.answer("این عملیات فقط داخل گروه انجام می‌شود.", show_alert=True)
+            raise CancelHandler()
+        if int(callback.from_user.id) != int(getattr(main, "moderator_id", -1) or -1):
+            await callback.answer("⛔ فقط گرداننده می‌تواند بازی را تمام کند.", show_alert=True)
+            raise CancelHandler()
+        game = main.runtime.state.active_game(_gid(main))
+        if not game:
+            await callback.answer("⚠️ بازی فعالی وجود ندارد.", show_alert=True)
+            raise CancelHandler()
+        main.runtime.state.games.update_game(game["id"], status="finished")
+        await _cancel_timer(main)
+        main._stable_day_ended = True
+        main._stable_day_active = False
+        main._stable_phase = "finished"
+        main.game_running = False
+        await _delete_turn_message(main)
+        await main.bot.send_message(_gid(main), "🏁 <b>بازی به دستور گرداننده به پایان رسید.</b>", parse_mode="HTML")
+        await callback.answer("🏁 بازی تمام شد.")
+        raise CancelHandler()
+
+    dp.register_callback_query_handler(end_game, lambda c: c.data == "end_game", state="*")
     dp.register_callback_query_handler(start_round, lambda c: c.data in {"start_round", "start_turn"}, state="*")
     dp.register_callback_query_handler(next_handler, lambda c: str(c.data or "").startswith(NEXT_PREFIX), state="*")
     dp.register_callback_query_handler(challenge_request, lambda c: str(c.data or "").startswith(CHALLENGE_REQUEST_PREFIX), state="*")
