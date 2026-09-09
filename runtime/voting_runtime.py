@@ -280,6 +280,12 @@ async def _start_wait(main):
         parse_mode="HTML",
     )
     main._voting_task = None
+    # Vercel webhook invocations do not reliably preserve detached asyncio tasks.
+    # Keep the exact wait inside the active invocation; maxDuration is 60s.
+    await asyncio.sleep(max(0, float(deadline) - time.time()))
+    current = _v(main)
+    if current.get("phase") == "waiting" and current.get("deadline") == deadline:
+        await _start_target(main)
 
 
 async def _end_target(main):
