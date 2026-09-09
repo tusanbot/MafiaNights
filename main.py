@@ -31,6 +31,10 @@ management.install()
 install_management_compat(app, management)
 production_lobby_status = install_production_lobby(app)
 role_distribution_status = install_role_distribution(app)
+# Production lobby delegates the "پخش نقش" callback to this canonical handler.
+# Keep a stable application-level alias so the two installation layers cannot
+# drift apart or leave an AttributeError at callback time.
+app._canonical_distribute_roles = app._role_distribution_handler
 stable_round_status = install_stable_round_engine(app)
 voting_runtime_status = install_voting_runtime(app)
 logging.info(
