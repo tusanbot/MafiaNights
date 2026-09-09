@@ -8,6 +8,7 @@ from main_refactored_v4 import MafiaApplicationV4
 from runtime.final_persistence import install as install_persistence
 from runtime.game_management import GameManagement
 from runtime.game_management_compat import install as install_management_compat
+from runtime.management_navigation import install as install_management_navigation
 from runtime.production_lobby import install as install_production_lobby
 from runtime.role_distribution import install as install_role_distribution
 from runtime.stable_round_engine import install as install_stable_round_engine
@@ -25,6 +26,7 @@ dp = app.dp
 
 persistence_status = install_persistence(app)
 management = GameManagement(app)
+install_management_navigation(app, management)
 management.install()
 install_management_compat(app, management)
 production_lobby_status = install_production_lobby(app)
