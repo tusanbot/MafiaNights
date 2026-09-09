@@ -5,6 +5,7 @@ import logging
 import os
 
 from main_refactored_v4 import MafiaApplicationV4
+from runtime.cancel_command import install as install_cancel_command
 from runtime.final_persistence import install as install_persistence
 from runtime.game_management import GameManagement
 from runtime.game_management_compat import install as install_management_compat
@@ -29,6 +30,7 @@ management = GameManagement(app)
 install_management_navigation(app, management)
 management.install()
 install_management_compat(app, management)
+install_cancel_command(app)
 production_lobby_status = install_production_lobby(app)
 role_distribution_status = install_role_distribution(app)
 # Production lobby delegates the "پخش نقش" callback to this canonical handler.
