@@ -108,6 +108,14 @@ class GameRepository(DatabaseRepository):
             result=session.execute(text("delete from public.mafia_game_players where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id":game_id,"player_id":int(player_id)});session.commit()
         self._invalidate(game_id=game_id);return result.rowcount>0
 
+    def clear_game_players(self, game_id):
+        """Delete all transient player membership rows when a game is cancelled."""
+        with self.SessionLocal() as session:
+            result = session.execute(text("delete from public.mafia_game_players where game_id=:game_id"), {"game_id": int(game_id)})
+            session.commit()
+        self._invalidate(game_id=game_id)
+        return result.rowcount
+
     def set_player_seat(self, game_id, player_id, seat):
         with self.SessionLocal() as session:
             if seat is not None and session.execute(text("select player_id from public.mafia_game_players where game_id=:game_id and seat=:seat and player_id<>:player_id limit 1"), {"game_id":game_id,"seat":int(seat),"player_id":int(player_id)}).first(): raise ValueError("این صندلی قبلاً رزرو شده است")
