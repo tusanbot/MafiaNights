@@ -5,7 +5,8 @@
   "regions": ["iad1"],
   "routes": [
     { "src": "/api/telegram/webhook", "dest": "/api/telegram_app.py" },
-    { "src": "/api/telegram/setup", "dest": "/api/telegram_app.py" }
+    { "src": "/api/telegram/setup", "dest": "/api/telegram_app.py" },
+    { "src": "/api/telegram/tick", "dest": "/api/telegram/tick.py" }
   ],
   "functions": {
     "api/telegram_app.py": {
