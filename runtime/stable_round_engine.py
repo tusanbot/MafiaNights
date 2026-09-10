@@ -71,7 +71,6 @@ def _stored_name(main, uid):
 
 
 def _display_name(main, uid, fallback=None):
-    # Nickname manager first.
     try:
         manager = getattr(main, "nicknames", None)
         for method in ("get_nick", "get"):
@@ -82,7 +81,6 @@ def _display_name(main, uid, fallback=None):
                     return str(value)
     except Exception:
         pass
-    # Main display_name, but only accept real values.
     try:
         value = main.display_name(int(uid), fallback)
         if value and str(value).strip() not in {"?", "❓", "None", "بازیکن"}:
@@ -98,12 +96,6 @@ def _display_name(main, uid, fallback=None):
 
 
 async def _resolve_name(main, uid, fallback=None):
-    """Resolve a real Telegram name before the first turn message.
-
-    The old code could reach the turn message with a missing players entry and
-    permanently render the generic fallback. We hydrate the canonical players
-    mapping from Telegram before rendering whenever possible.
-    """
     name = _display_name(main, uid, fallback)
     if name:
         return name
@@ -289,6 +281,7 @@ async def _end_day(main):
             gid,
             "✅ همه بازیکنا صحبت کردن. فاز روز تموم شد.",
             reply_markup=InlineKeyboardMarkup(row_width=1).add(
+                InlineKeyboardButton("🗳 رای‌گیری", callback_data="vote:settings"),
                 InlineKeyboardButton("🌙 شروع فاز شب", callback_data="start_night"),
                 InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game")
             ),
@@ -309,7 +302,6 @@ async def _advance(main):
                     return await _start_extra(main, seat)
                 main.current_turn_index += 1
                 continue
-            # Normal phase.
             muted = {int(x) for x in getattr(main, "_gm_muted_active", set()) or set()}
             if seat in muted:
                 await _cancel_timer(main)
@@ -320,7 +312,6 @@ async def _advance(main):
                 continue
             return await _start_turn(main, seat, 120, False)
 
-        # End of normal speakers: consume explicitly selected extras once.
         if main._stable_phase == "normal":
             pending = {int(x) for x in getattr(main, "_gm_extra_next_round", set()) or set()}
             base = list(main._stable_normal_order or _base_order(main))
@@ -337,8 +328,6 @@ async def _advance(main):
                 continue
             return await _end_day(main)
 
-        # Extra phase can only finish the current day. It can NEVER start a new
-        # normal round here.
         return await _end_day(main)
 
 
@@ -482,7 +471,6 @@ def install(main):
         await _cancel_timer(main)
         await _delete_turn_message(main)
 
-        # A challenge turn is not a normal turn transition.
         if getattr(main, "challenge_mode", False):
             target = getattr(main, "paused_main_player", None)
             after = bool(getattr(main, "post_challenge_advance", False))
@@ -503,7 +491,6 @@ def install(main):
                         pass
             return await _advance(main)
 
-        # AFTER challenge: current speaker finishes, then challenger runs once.
         pending = getattr(main, "pending_challenges", {}) or {}
         if main._stable_phase == "normal" and active in pending:
             challenger_id = pending.pop(active)
@@ -517,209 +504,99 @@ def install(main):
                 main._stable_phase = "challenge"
                 return await _start_turn(main, challenger_seat, 60, True)
 
-        # Normal/extra next: advance exactly one index. At the end _advance()
-        # either runs explicitly selected extras or terminates the day.
         main.current_turn_index += 1
         return await _advance(main)
 
     async def challenge_request(callback):
         _ensure(main)
+        if callback.from_user.id == getattr(main, "moderator_id", None):
+            await callback.answer("⛔ گرداننده نمی‌تواند چالش را درخواست کند.", show_alert=True)
+            raise CancelHandler()
+        if main._stable_day_ended or main._stable_phase != "normal":
+            await callback.answer("⚠️ در این مرحله امکان درخواست چالش نیست.", show_alert=True)
+            raise CancelHandler()
         try:
-            target = int(str(callback.data).split("_", 2)[2])
+            target_seat = int(str(callback.data).split("_", 1)[1])
         except Exception:
-            await callback.answer("⚠️ درخواست نامعتبر است.", show_alert=True)
+            await callback.answer("⚠️ نوبت نامعتبر است.", show_alert=True)
             raise CancelHandler()
         active = _active(main)
-        requester = int(callback.from_user.id)
-        requester_seat = _seat(main, requester)
-        if active != target or requester_seat is None or requester == int(_uid(main, target) or -1):
-            await callback.answer("⛔ درخواست چالش در این نوبت مجاز نیست.", show_alert=True)
+        if active != target_seat:
+            await callback.answer("⚠️ فقط برای نوبت فعال می‌توان چالش درخواست کرد.", show_alert=True)
             raise CancelHandler()
-        if not getattr(main, "challenge_active", False) or getattr(main, "_stable_phase", "normal") != "normal":
-            await callback.answer("⚔️ چالش در این نوبت فعال نیست.", show_alert=True)
+        challenger_id = int(callback.from_user.id)
+        challenger_seat = _seat(main, challenger_id)
+        if challenger_seat is None:
+            await callback.answer("⚠️ شما بازیکن این بازی نیستید.", show_alert=True)
             raise CancelHandler()
-        if requester in main._stable_challenge_used:
-            await callback.answer("⚠️ هر بازیکن فقط یک بار در این دور می‌تواند درخواست چالش بدهد.", show_alert=True)
+        if challenger_seat == target_seat:
+            await callback.answer("⚠️ بازیکن نمی‌تواند خودش را به چالش بکشد.", show_alert=True)
             raise CancelHandler()
-        if target in main._stable_challenge_locked:
-            await callback.answer("⛔ برای این نوبت دیگر چالش پذیرفته نمی‌شود.", show_alert=True)
+        if target_seat in main._stable_challenge_locked:
+            await callback.answer("⚠️ برای این نوبت قبلاً چالش ثبت شده است.", show_alert=True)
             raise CancelHandler()
-        main._stable_challenge_used.add(requester)
-        reqs = main._stable_challenge_requests.setdefault(target, {})
-        reqs[requester] = "pending"
-        try:
-            active_game = main.runtime.state.active_game(_gid(main))
-            if active_game:
-                main.runtime.state.challenges.create_challenge(
-                    game_id=active_game["id"], challenger_id=requester, target_id=int(_uid(main, target)), mode="before", status="pending"
-                )
-        except Exception:
-            logging.exception("stable round: failed to persist challenge request")
-        target_id = int(_uid(main, target))
-        challenger_name = await _resolve_name(main, requester)
-        target_name = await _resolve_name(main, target_id)
-        kb = InlineKeyboardMarkup(row_width=2).add(
-            InlineKeyboardButton("✅ قبول (قبل)", callback_data=f"accept_before_{requester}_{target_id}"),
-            InlineKeyboardButton("✅ قبول (بعد)", callback_data=f"accept_after_{requester}_{target_id}"),
-            InlineKeyboardButton("❌ رد", callback_data=f"reject_{requester}_{target_id}"),
-        )
+        main._stable_challenge_requests[target_seat] = challenger_id
+        main._stable_challenge_locked.add(target_seat)
+        name = await _resolve_name(main, challenger_id, _stored_name(main, challenger_id))
+        target_uid = _uid(main, target_seat)
+        target_name = await _resolve_name(main, target_uid, _stored_name(main, target_uid))
         msg = await main.bot.send_message(
             _gid(main),
-            f"⚔️ {html.escape(challenger_name)} از {html.escape(target_name)} درخواست چالش کرد.",
-            reply_markup=kb,
+            f"⚔️ <b>درخواست چالش</b>\n\n{name} برای {target_name} درخواست چالش داده است.",
+            reply_markup=InlineKeyboardMarkup(row_width=2).add(
+                InlineKeyboardButton("✅ قبول", callback_data=f"accept_{target_seat}"),
+                InlineKeyboardButton("❌ رد", callback_data=f"reject_{target_seat}"),
+            ),
             parse_mode="HTML",
         )
-        main._stable_challenge_request_messages[(target, requester)] = msg.message_id
-        await callback.answer("⏳ درخواست چالش ارسال شد.")
+        main._stable_challenge_request_messages[target_seat] = msg.message_id
+        await callback.answer("⚔️ درخواست چالش ارسال شد.")
         raise CancelHandler()
 
-    async def challenge_response(callback):
+    async def challenge_choice(callback):
         _ensure(main)
-        parts = str(callback.data or "").split("_")
-        if parts[0] == "reject" and len(parts) == 3:
-            timing = None
-        elif parts[0] == "accept" and len(parts) == 4 and parts[1] in {"before", "after"}:
-            timing = parts[1]
-        else:
+        try:
+            target_seat = int(str(callback.data).split("_", 1)[1])
+        except Exception:
             await callback.answer("⚠️ درخواست نامعتبر است.", show_alert=True)
             raise CancelHandler()
-        challenger_id, target_id = int(parts[-2]), int(parts[-1])
-        target_seat = _seat(main, target_id)
-        challenger_seat = _seat(main, challenger_id)
-        if target_seat is None or challenger_seat is None or _active(main) != target_seat:
-            await callback.answer("⚠️ این نوبت دیگر فعال نیست.", show_alert=True)
+        target_uid = _uid(main, target_seat)
+        if int(callback.from_user.id) != int(target_uid or -1):
+            await callback.answer("⛔ فقط بازیکن نوبت می‌تواند پاسخ دهد.", show_alert=True)
             raise CancelHandler()
-        if int(callback.from_user.id) != target_id:
-            await callback.answer("❌ فقط صاحب نوبت می‌تواند درخواست را مدیریت کند.", show_alert=True)
+        challenger_id = main._stable_challenge_requests.get(target_seat)
+        if not challenger_id:
+            await callback.answer("⚠️ درخواست چالش پیدا نشد.", show_alert=True)
             raise CancelHandler()
-        reqs = main._stable_challenge_requests.get(target_seat, {})
-        pending_row = None
-        try:
-            active_game = main.runtime.state.active_game(_gid(main))
-            if active_game:
-                rows = main.runtime.state.challenges.list_challenges(active_game["id"])
-                pending_row = next((r for r in rows if int(r.get("challenger_id")) == challenger_id and int(r.get("target_id")) == target_id and str(r.get("status")) == "pending"), None)
-        except Exception:
-            pass
-        if reqs.get(challenger_id) != "pending" and not pending_row:
-            await callback.answer("⚠️ این درخواست دیگر فعال نیست.", show_alert=True)
-            raise CancelHandler()
-        target_name = await _resolve_name(main, target_id)
-        challenger_name = await _resolve_name(main, challenger_id)
-        if timing is None:
-            reqs.pop(challenger_id, None)
-            if pending_row:
+        accept = str(callback.data).startswith("accept_")
+        main._stable_challenge_requests.pop(target_seat, None)
+        if not accept:
+            main._stable_challenge_used.add(target_seat)
+            main._stable_challenge_locked.add(target_seat)
+            mid = main._stable_challenge_request_messages.pop(target_seat, None)
+            if mid:
                 try:
-                    main.runtime.state.challenges.resolve(str(pending_row.get("id")), "rejected")
+                    await main.bot.delete_message(_gid(main), mid)
                 except Exception:
                     pass
-            await main.bot.send_message(_gid(main), f"🚫 {html.escape(target_name)} درخواست چالش {html.escape(challenger_name)} را رد کرد.", parse_mode="HTML")
-            await callback.answer("❌ درخواست رد شد.")
+            await callback.answer("❌ چالش رد شد.")
             raise CancelHandler()
-        # Accept exactly one challenge for this target and persist the decision.
-        reqs.clear()
-        main._stable_challenge_request_messages.clear()
+        main._stable_challenge_used.add(target_seat)
         main._stable_challenge_locked.add(target_seat)
-        if pending_row:
+        mid = main._stable_challenge_request_messages.pop(target_seat, None)
+        if mid:
             try:
-                main.runtime.state.challenges.update_mode(str(pending_row.get("id")), timing)
-                main.runtime.state.challenges.resolve(str(pending_row.get("id")), "accepted")
+                await main.bot.delete_message(_gid(main), mid)
             except Exception:
-                logging.exception("stable round: failed to persist challenge acceptance")
-        await _cancel_timer(main)
-        if timing == "before":
-            main.paused_main_player = target_seat
-            main.paused_main_duration = 120
-            main.post_challenge_advance = False
-            main.challenge_mode = True
-            main.active_challenger_seats = {int(challenger_seat)}
-            main._stable_phase = "challenge"
-            await main.bot.send_message(_gid(main), f"⚔️ {html.escape(target_name)} چالش {html.escape(challenger_name)} را قبل از صحبت پذیرفت.", parse_mode="HTML")
-            await _start_turn(main, challenger_seat, 60, True)
-        else:
-            main.pending_challenges[target_seat] = challenger_id
-            await main.bot.send_message(_gid(main), f"⚔️ {html.escape(target_name)} چالش {html.escape(challenger_name)} را بعد از صحبت پذیرفت.", parse_mode="HTML")
-        await callback.answer("✅ چالش پذیرفته شد.")
+                pass
+        main.pending_challenges[target_seat] = int(challenger_id)
+        await callback.answer("⚔️ چالش پذیرفته شد.")
         raise CancelHandler()
 
-    async def manage(callback, mode):
-        if callback.from_user.id != getattr(main, "moderator_id", None):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True)
-            raise CancelHandler()
-        _ensure(main)
-        target = main._gm_muted_next_round if mode == "mute" else main._gm_extra_next_round
-        icon = "🔇" if mode == "mute" else "➕"
-        title = "سکوت بازیکن" if mode == "mute" else "ترن اضافه"
-        rows = []
-        for seat in sorted((getattr(main, "player_slots", {}) or {})):
-            uid = _uid(main, seat)
-            name = await _resolve_name(main, uid)
-            mark = " ✅" if int(seat) in target else ""
-            rows.append([InlineKeyboardButton(f"{icon} صندلی {seat} — {name}{mark}", callback_data=f"stable:{mode}:{seat}")])
-        rows.append([InlineKeyboardButton("⬅️ مدیریت بازی", callback_data="manage_game")])
-        await callback.message.edit_text(
-            f"{icon} <b>{title}</b>\n\nبازیکن موردنظر را انتخاب کنید.",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
-            parse_mode="HTML",
-        )
-        await callback.answer()
-        raise CancelHandler()
-
-    async def toggle_manage(callback, mode):
-        if callback.from_user.id != getattr(main, "moderator_id", None):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True)
-            raise CancelHandler()
-        try:
-            seat = int(str(callback.data).rsplit(":", 1)[1])
-        except Exception:
-            await callback.answer("⚠️ صندلی نامعتبر است.", show_alert=True)
-            raise CancelHandler()
-        target = main._gm_muted_next_round if mode == "mute" else main._gm_extra_next_round
-        opposite = main._gm_extra_next_round if mode == "mute" else main._gm_muted_next_round
-        if seat in target:
-            target.remove(seat)
-            status = "لغو شد"
-        else:
-            target.add(seat)
-            opposite.discard(seat)
-            status = "فعال شد"
-        await callback.answer(f"{('سکوت' if mode == 'mute' else 'ترن اضافه')} {status}.")
-        await manage(callback, mode)
-
-    async def end_game(callback):
-        if callback.message and callback.message.chat.type == "private":
-            await callback.answer("این عملیات فقط داخل گروه انجام می‌شود.", show_alert=True)
-            raise CancelHandler()
-        if int(callback.from_user.id) != int(getattr(main, "moderator_id", -1) or -1):
-            await callback.answer("⛔ فقط گرداننده می‌تواند بازی را تمام کند.", show_alert=True)
-            raise CancelHandler()
-        game = main.runtime.state.active_game(_gid(main))
-        if not game:
-            await callback.answer("⚠️ بازی فعالی وجود ندارد.", show_alert=True)
-            raise CancelHandler()
-        main.runtime.state.games.update_game(game["id"], status="finished")
-        await _cancel_timer(main)
-        main._stable_day_ended = True
-        main._stable_day_active = False
-        main._stable_phase = "finished"
-        main.game_running = False
-        await _delete_turn_message(main)
-        await main.bot.send_message(_gid(main), "🏁 <b>بازی به دستور گرداننده به پایان رسید.</b>", parse_mode="HTML")
-        await callback.answer("🏁 بازی تمام شد.")
-        raise CancelHandler()
-
-    dp.register_callback_query_handler(end_game, lambda c: c.data == "end_game", state="*")
-    dp.register_callback_query_handler(start_round, lambda c: c.data in {"start_round", "start_turn"}, state="*")
-    dp.register_callback_query_handler(next_handler, lambda c: str(c.data or "").startswith(NEXT_PREFIX), state="*")
-    dp.register_callback_query_handler(challenge_request, lambda c: str(c.data or "").startswith(CHALLENGE_REQUEST_PREFIX), state="*")
-    dp.register_callback_query_handler(challenge_response, lambda c: str(c.data or "").startswith(("accept_before_", "accept_after_", "reject_")), state="*")
-    dp.register_callback_query_handler(lambda c: manage(c, "mute"), lambda c: c.data == "gm:mute", state="*")
-    dp.register_callback_query_handler(lambda c: manage(c, "extra"), lambda c: c.data == "gm:extra", state="*")
-    dp.register_callback_query_handler(lambda c: toggle_manage(c, "mute"), lambda c: str(c.data or "").startswith("stable:mute:"), state="*")
-    dp.register_callback_query_handler(lambda c: toggle_manage(c, "extra"), lambda c: str(c.data or "").startswith("stable:extra:"), state="*")
-
-    # Stable keyboard replaces every previous turn keyboard implementation.
-    main.turn_keyboard = lambda seat, is_challenge=False: _keyboard(main, seat, is_challenge)
+    dp.register_callback_query_handler(start_round, lambda c: c.data == "start_round", state="*")
+    dp.register_callback_query_handler(next_handler, lambda c: str(c.data).startswith(NEXT_PREFIX), state="*")
+    dp.register_callback_query_handler(challenge_request, lambda c: str(c.data).startswith(CHALLENGE_REQUEST_PREFIX), state="*")
+    dp.register_callback_query_handler(challenge_choice, lambda c: str(c.data).startswith("accept_"), state="*")
+    dp.register_callback_query_handler(challenge_choice, lambda c: str(c.data).startswith("reject_"), state="*")
     main._stable_round_engine_installed = True
-    logging.info("Stable round engine installed: one next authority, finite day lifecycle, hydrated names")
     return True
