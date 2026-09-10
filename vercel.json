@@ -2,7 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "fluid": true,
-  "crons": [{"path": "/api/telegram/tick", "schedule": "* * * * *"}],
   "regions": ["iad1"],
   "routes": [
     { "src": "/api/telegram/webhook", "dest": "/api/telegram_app.py" },
