@@ -10,7 +10,7 @@
   ],
   "functions": {
     "api/telegram_app.py": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/telegram/tick.py": {
       "maxDuration": 60
