@@ -10,7 +10,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from main_refactored import MafiaApplication
 from repositories.scenario_repository import ScenarioRepository
 from runtime.feature_parity_v4 import FeatureParityV4
-from runtime.scenario_management_v3 import ScenarioManagementV3
+from runtime.scenario_management_v4 import ScenarioManagementV4
 from runtime.scenario_runtime import ScenarioRuntime
 
 
@@ -20,7 +20,7 @@ class MafiaApplicationV4(MafiaApplication):
         self._disable_legacy_lobby_handlers()
         self.scenario_repository = ScenarioRepository()
         self.scenario_runtime = ScenarioRuntime(self)
-        self.scenario_management = ScenarioManagementV3(self)
+        self.scenario_management = ScenarioManagementV4(self)
         self.scenario_management.register(self.dp)
         self.feature_parity = FeatureParityV4(self)
         self.feature_parity.register()
