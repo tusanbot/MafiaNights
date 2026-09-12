@@ -5,7 +5,6 @@ import os
 
 from main_refactored import MafiaApplication
 from runtime.feature_parity_v4 import FeatureParityV4
-from runtime.scenario_management_v2 import ScenarioManagementV2
 
 
 class MafiaApplicationV4(MafiaApplication):
@@ -13,10 +12,6 @@ class MafiaApplicationV4(MafiaApplication):
         super().__init__(token)
         self._disable_legacy_lobby_handlers()
         self.feature_parity = FeatureParityV4(self)
-        # Register the enhanced scenario surface before the legacy parity
-        # layer, so scenario CRUD/edit callbacks resolve to V2 first.
-        self.scenario_management = ScenarioManagementV2(self)
-        self.scenario_management.register(self.dp)
         self.feature_parity.register()
 
     def _disable_legacy_lobby_handlers(self) -> None:
