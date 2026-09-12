@@ -5,6 +5,7 @@ specific game; aggregate repositories add the 50-point starting balance.
 """
 from __future__ import annotations
 
+import html
 import logging
 from typing import Any
 
@@ -20,10 +21,9 @@ WARNING_PENALTIES = (1, 2, 3, 4, 5)
 
 def warning_penalty(count: int) -> int:
     count = max(0, int(count))
-    total = sum(WARNING_PENALTIES)
     if count <= len(WARNING_PENALTIES):
         return sum(WARNING_PENALTIES[:count])
-    return total + sum(range(len(WARNING_PENALTIES) + 1, count + 1))
+    return sum(WARNING_PENALTIES) + sum(range(len(WARNING_PENALTIES) + 1, count + 1))
 
 
 def _count_challenges(app: Any, game_id: int, user_id: int) -> int:
@@ -68,8 +68,7 @@ def score_game(app: Any, game: dict[str, Any], rows: list[dict[str, Any]], winne
         delta += challenge_count * CHALLENGE_POINTS
         warnings = _warning_count(row, state)
         delta -= warning_penalty(warnings)
-        kicked = _is_kicked(row, state)
-        if kicked:
+        if _is_kicked(row, state):
             delta -= KICK_PENALTY
         result = "draw" if winner == "draw" else ("win" if side == winner else "loss")
         try:
@@ -82,9 +81,31 @@ def score_game(app: Any, game: dict[str, Any], rows: list[dict[str, Any]], winne
     app.runtime.state.games.update_game(game["id"], state=state)
 
 
+def _patch_final_report() -> None:
+    if getattr(game_end, "_score_final_report_patched", False):
+        return
+    original = game_end._final_text
+
+    def final_text(game: dict[str, Any], rows: list[dict[str, Any]]) -> str:
+        text = original(game, rows)
+        state = dict(game.get("state") or {})
+        kicked = {str(k) for k, v in (state.get("kicked_players") or {}).items() if v}
+        for row in rows:
+            if str(int(row.get("player_id") or 0)) not in kicked:
+                continue
+            seat = int(row.get("seat") or 0)
+            name = str(row.get("nickname") or row.get("first_name") or row.get("username") or row.get("player_id") or "👤")
+            text = text.replace(f"{seat:02d} {html.escape(name)}", f"{seat:02d} 🚫 {html.escape(name)}", 1)
+        return text
+
+    game_end._final_text = final_text
+    game_end._score_final_report_patched = True
+
+
 def install(app: Any) -> bool:
-    """Replace the legacy end-game scorer with the full scoring rules."""
+    """Replace legacy end-game scoring and mark kicked players in reports."""
     game_end._score_players = lambda app_, game_, rows_, winner_: score_game(app_, game_, rows_, winner_)
+    _patch_final_report()
     app.player_scoring = {
         "base": BASE_SCORE,
         "win": WIN_POINTS,
