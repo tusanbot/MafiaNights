@@ -112,6 +112,13 @@ def install(app: Any) -> bool:
         except Exception:
             return False
 
+    async def show_finish_menu(callback: types.CallbackQuery, game: dict[str, Any]) -> None:
+        await callback.message.edit_text(
+            "🏁 <b>اتمام بازی</b>\n\nنتیجه نهایی بازی را انتخاب کنید:",
+            parse_mode="HTML", reply_markup=_finish_markup(int(game["id"])),
+        )
+        await callback.answer()
+
     async def finish_menu(callback: types.CallbackQuery):
         parts = str(callback.data or "").split(":")
         if len(parts) != 3 or parts[0] != "mgmt" or parts[2] != "finish":
@@ -127,11 +134,24 @@ def install(app: Any) -> bool:
         if str(game.get("status") or "") != "running":
             await callback.answer("❌ فقط بازی در حال اجرا قابل اتمام است.", show_alert=True)
             return
-        await callback.message.edit_text(
-            "🏁 <b>اتمام بازی</b>\n\nنتیجه نهایی بازی را انتخاب کنید:",
-            parse_mode="HTML", reply_markup=_finish_markup(int(game["id"])),
-        )
-        await callback.answer()
+        await show_finish_menu(callback, game)
+
+    async def end_game_legacy(callback: types.CallbackQuery):
+        """Bridge the legacy day-end callback into the canonical manual flow."""
+        if str(callback.data or "") != "end_game":
+            return
+        gid = int(callback.message.chat.id)
+        game = app.runtime.state.active_game(gid)
+        if not game:
+            await callback.answer("❌ بازی فعالی وجود ندارد.", show_alert=True)
+            return
+        if not await allowed(callback, game):
+            await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True)
+            return
+        if str(game.get("status") or "") != "running":
+            await callback.answer("❌ فقط بازی در حال اجرا قابل اتمام است.", show_alert=True)
+            return
+        await show_finish_menu(callback, game)
 
     async def finish(callback: types.CallbackQuery):
         parts = str(callback.data or "").split(":")
@@ -220,6 +240,11 @@ def install(app: Any) -> bool:
     dp.register_callback_query_handler(
         finish_menu,
         lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[-1] == "finish",
+        state="*",
+    )
+    dp.register_callback_query_handler(
+        end_game_legacy,
+        lambda c: str(c.data or "") == "end_game",
         state="*",
     )
     dp.register_callback_query_handler(
