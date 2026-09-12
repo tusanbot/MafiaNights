@@ -11,15 +11,13 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from runtime import voting_runtime
 
 
-# ----------------------------- scenario rules -----------------------------
-
 def _scenario(main):
     game = voting_runtime._game(main)
     if not game:
         return {}
     scenario_id = game.get("scenario_id")
-    repo = getattr(getattr(main, "runtime", None), "state", None)
-    repo = getattr(repo, "scenarios", None)
+    state = getattr(getattr(main, "runtime", None), "state", None)
+    repo = getattr(state, "scenarios", None)
     try:
         row = repo.get_by_id(int(scenario_id)) if repo and scenario_id else None
         return dict(row or {})
@@ -36,15 +34,11 @@ def _rules(main):
         voting = {}
     r1 = voting.get("round_1") or {}
     r2 = voting.get("round_2") or {}
-    if not isinstance(r1, dict):
-        r1 = {}
-    if not isinstance(r2, dict):
-        r2 = {}
     return {
         "enabled": bool(voting.get("enabled", True)),
         "self_vote": bool(voting.get("self_vote", False)),
-        "r1": r1,
-        "r2": r2,
+        "r1": r1 if isinstance(r1, dict) else {},
+        "r2": r2 if isinstance(r2, dict) else {},
     }
 
 
@@ -77,8 +71,7 @@ def _round2_mode(rules):
 
 
 def _round2_targets_automatic(rules, candidates, player_count):
-    r2 = rules.get("r2") or {}
-    rule = r2.get("target_count")
+    rule = (rules.get("r2") or {}).get("target_count")
     if rule in (None, "all", "all_candidates", "همه"):
         return list(candidates)
     if isinstance(rule, dict):
@@ -115,8 +108,6 @@ def _current_voters(main, v):
     return _round1_voters(main, v)
 
 
-# ----------------------------- common helpers -----------------------------
-
 async def _resolve_name(main, uid, seat=None):
     value = voting_runtime._name(main, uid, seat)
     if value and not str(value).startswith("بازیکن "):
@@ -138,18 +129,14 @@ def _row_map(main):
     return {int(x["player_id"]): x for x in voting_runtime._players(main)}
 
 
-def _names(main, ids):
-    rows = _row_map(main)
-    return ids, rows
-
-
 async def _send_round2_settings(main, callback=None):
     v = voting_runtime._v(main)
     rules = _rules(main)
     voters = _round2_voters(main, v, rules)
     targets = [int(x) for x in (v.get("round2_targets") or v.get("selected_round_two") or [])]
-    target_text = "\n".join(f"• {html.escape(await _resolve_name(main, uid, _row_map(main).get(uid, {}).get('seat')))}" for uid in targets) or "• هیچ‌کس"
-    voter_text = "\n".join(f"• {html.escape(await _resolve_name(main, uid, _row_map(main).get(uid, {}).get('seat')))}" for uid in sorted(voters)) or "• هیچ‌کس"
+    rows = _row_map(main)
+    target_text = "\n".join(f"• {html.escape(await _resolve_name(main, uid, rows.get(uid, {}).get('seat')))}" for uid in targets) or "• هیچ‌کس"
+    voter_text = "\n".join(f"• {html.escape(await _resolve_name(main, uid, rows.get(uid, {}).get('seat')))}" for uid in sorted(voters)) or "• هیچ‌کس"
     defender_vote = "دارند" if bool((rules.get("r2") or {}).get("defenders_can_vote", True)) else "ندارند"
     text = (
         "⚙️ <b>تنظیمات رأی‌گیری دور ۲</b>\n\n"
@@ -175,10 +162,11 @@ async def _send_round2_settings(main, callback=None):
 async def _durable_start_wait(main):
     v = voting_runtime._v(main)
     voters = _current_voters(main, v)
+    now = time.time()
     v.update(
         phase="waiting",
-        started_at=time.time(),
-        deadline=time.time() + int(v["wait_seconds"]),
+        started_at=now,
+        deadline=now + int(v["wait_seconds"]),
         target_index=0,
         votes={},
         eligible_voters=sorted(voters),
@@ -215,12 +203,7 @@ async def _start_target(main):
     v["eligible_voters"] = sorted(_current_voters(main, v))
     voting_runtime._put(main, v)
     markup = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رأی می‌دهم", callback_data="vote:cast")) if v.get("mode") == voting_runtime.AUTO else None
-    await main.bot.send_message(
-        voting_runtime._gid(main),
-        f"🗳 <b>رأی برای {html.escape(name)}</b>\n\n⏱ {int(v['vote_seconds'])} ثانیه فرصت دارید.",
-        parse_mode="HTML",
-        reply_markup=markup,
-    )
+    await main.bot.send_message(voting_runtime._gid(main), f"🗳 <b>رأی برای {html.escape(name)}</b>\n\n⏱ {int(v['vote_seconds'])} ثانیه فرصت دارید.", parse_mode="HTML", reply_markup=markup)
     main._voting_task = None
 
 
@@ -228,7 +211,6 @@ async def _finish_round(main):
     v = voting_runtime._v(main)
     round_no = int(v.get("round") or 1)
     v["phase"], v["deadline"] = "round_finished", None
-
     if round_no == 1:
         rules = _rules(main)
         threshold = _threshold(rules, len(voting_runtime._players(main)))
@@ -242,7 +224,6 @@ async def _finish_round(main):
         v["defense_candidates"] = candidates
         v["selected_round_two"] = []
         v["round2_targets"] = []
-
     voting_runtime._put(main, v)
 
     if round_no == 1:
@@ -409,8 +390,6 @@ def _remove_voting_handlers(main):
     reg = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
     if reg is None:
         return
-    # Remove every handler originating from voting_runtime. The replacement below
-    # owns the whole voting flow, so old callbacks cannot intercept round 2.
     kept = []
     for item in list(reg):
         fn = getattr(item, "handler", None)
@@ -427,7 +406,6 @@ def install(main):
     voting_runtime._start_target = _start_target
     voting_runtime._finish_round = _finish_round
     voting_runtime._round2 = _round2
-    voting_runtime._v = voting_runtime._v
     _remove_voting_handlers(main)
     dp = getattr(main, "dp", None)
     if dp is None:
@@ -469,10 +447,16 @@ def install(main):
 
     async def right_toggle(c):
         await only_mod(c)
-        uid = int(c.data.split(":")[-1]); v = voting_runtime._v(main); rights = voting_runtime._active_rights(v)
-        if uid in rights: rights.remove(uid)
-        else: rights.add(uid)
-        v["vote_rights_taken"] = sorted(rights); voting_runtime._put(main, v); await rights_handler(main, c) if False else rights(c)
+        uid = int(c.data.split(":")[-1])
+        v = voting_runtime._v(main)
+        rights_set = voting_runtime._active_rights(v)
+        if uid in rights_set:
+            rights_set.remove(uid)
+        else:
+            rights_set.add(uid)
+        v["vote_rights_taken"] = sorted(rights_set)
+        voting_runtime._put(main, v)
+        await rights(c)
 
     async def mode_handler(c):
         await only_mod(c)
@@ -492,13 +476,7 @@ def install(main):
             await c.answer("⛔ ابتدا بازیکنان دفاع دور ۲ را انتخاب کنید.", show_alert=True); raise CancelHandler()
         rules = _rules(main)
         fresh = dict(v)
-        fresh.update(
-            phase="settings",
-            target_index=0,
-            votes={},
-            deadline=None,
-            eligible_voters=sorted(_current_voters(main, fresh)),
-        )
+        fresh.update(phase="settings", target_index=0, votes={}, deadline=None, eligible_voters=sorted(_current_voters(main, fresh)))
         if int(fresh.get("round") or 1) == 1:
             fresh["targets"] = [int(x["player_id"]) for x in voting_runtime._players(main)]
         else:
@@ -512,10 +490,17 @@ def install(main):
         await _durable_start_wait(main)
         raise CancelHandler()
 
-    async def cast(c): await _cast(main, c)
-    async def r2(c): await only_mod(c); await _round2(main, c)
-    async def r2pick(c): await only_mod(c); await _round2_pick(main, c)
-    async def r2confirm(c): await only_mod(c); await _round2_confirm(main, c)
+    async def cast(c):
+        await _cast(main, c)
+
+    async def r2(c):
+        await only_mod(c); await _round2(main, c)
+
+    async def r2pick(c):
+        await only_mod(c); await _round2_pick(main, c)
+
+    async def r2confirm(c):
+        await only_mod(c); await _round2_confirm(main, c)
 
     handlers = [
         (lambda c: c.data == "vote:settings", settings_handler),
