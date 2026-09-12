@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from player_service import player_service
@@ -8,7 +9,15 @@ from sqlalchemy import text
 from runtime.profile_enhancements import ProfileEnhancements
 
 
+STRICT_PERSIAN_RE = re.compile(r"^[اآبپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی‌\u200c\s]+$")
+
+
 class FixedProfileEnhancements(ProfileEnhancements):
+    @classmethod
+    def _valid_nickname(cls, value: str) -> bool:
+        value = cls._normalize(value)
+        return 1 <= len(value) <= 32 and bool(STRICT_PERSIAN_RE.fullmatch(value)) and any(c in value for c in "اآبپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی")
+
     def transfer_account(self, source: int, target: int, actor: int, group_id: Optional[int]):
         source, target, actor = int(source), int(target), int(actor)
         if source == target:
