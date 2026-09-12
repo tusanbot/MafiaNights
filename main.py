@@ -14,6 +14,7 @@ from runtime.management_navigation import install as install_management_navigati
 from runtime.production_lobby import install as install_production_lobby
 from runtime.role_distribution import install as install_role_distribution
 from runtime.stable_round_engine import install as install_stable_round_engine
+from runtime.voting_end_game_patch import install as install_voting_end_game_patch
 from runtime.voting_runtime import install as install_voting_runtime
 from runtime.voting_timer_patch import install as install_voting_timer_patch
 from runtime.voting_serverless_patch import install as install_voting_serverless_patch
@@ -41,21 +42,22 @@ production_lobby_status = install_production_lobby(app)
 role_distribution_status = install_role_distribution(app)
 app._canonical_distribute_roles = app._role_distribution_handler
 stable_round_status = install_stable_round_engine(app)
+voting_end_game_status = install_voting_end_game_patch(app)
 voting_runtime_status = install_voting_runtime(app)
 voting_timer_status = install_voting_timer_patch(app)
 voting_serverless_status = install_voting_serverless_patch(app)
 voting_end_target_status = install_voting_end_target_patch(app)
 voting_postfix_status = install_voting_postfix(app)
 logging.info(
-    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s management=active game_end=active role_distribution=%s stable_round=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s",
-    persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status,
+    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s management=active game_end=active role_distribution=%s stable_round=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s",
+    persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status,
 )
 
 
 async def on_startup(dp):
     logging.info(
-        "MafiaNights production startup; persistence=%s canonical_lobby=%s management=active game_end=active role_distribution=%s stable_round=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s",
-        persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status,
+        "MafiaNights production startup; persistence=%s canonical_lobby=%s management=active game_end=active role_distribution=%s stable_round=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s",
+        persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status,
     )
     await app.startup()
     try:
