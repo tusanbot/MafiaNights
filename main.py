@@ -24,6 +24,7 @@ from runtime.voting_postfix import install as install_voting_postfix
 from runtime.user_stats import install as install_user_stats
 from runtime.player_scoring import install as install_player_scoring
 from runtime.player_kick import install as install_player_kick
+from runtime.text_commands import install as install_text_commands
 
 TOKEN = os.getenv("API_TOKEN")
 if not TOKEN:
@@ -56,16 +57,17 @@ voting_postfix_status = install_voting_postfix(app)
 user_stats_status = install_user_stats(app)
 player_scoring_status = install_player_scoring(app)
 player_discipline_status = install_player_kick(app)
+text_commands_status = install_text_commands(app)
 logging.info(
-    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s management=active game_end=active game_archive=%s role_distribution=%s stable_round=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s discipline=%s",
-    persistence_status, production_lobby_status, game_archive_status, role_distribution_status, stable_round_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status, player_discipline_status,
+    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s management=active game_end=active game_archive=%s role_distribution=%s stable_round=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s discipline=%s text_commands=%s",
+    persistence_status, production_lobby_status, game_archive_status, role_distribution_status, stable_round_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status, player_discipline_status, text_commands_status,
 )
 
 
 async def on_startup(dp):
     logging.info(
-        "MafiaNights production startup; persistence=%s canonical_lobby=%s management=active game_end=active game_archive=%s role_distribution=%s stable_round=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s discipline=%s",
-        persistence_status, production_lobby_status, game_archive_status, role_distribution_status, stable_round_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status, player_discipline_status,
+        "MafiaNights production startup; persistence=%s canonical_lobby=%s management=active game_end=active game_archive=%s role_distribution=%s stable_round=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s discipline=%s text_commands=%s",
+        persistence_status, production_lobby_status, game_archive_status, role_distribution_status, stable_round_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status, player_discipline_status, text_commands_status,
     )
     await app.startup()
     try:
