@@ -1,8 +1,4 @@
-"""Kick/warning controls for moderators.
-
-Kick is persisted in game state and the player status is changed to ``removed``
-so existing birthday/revive flows cannot bring a kicked player back.
-"""
+"""Kick/warning controls for moderators."""
 from __future__ import annotations
 
 import html
@@ -40,9 +36,6 @@ class PlayerDiscipline:
     def _name(row):
         return str(row.get("nickname") or row.get("first_name") or row.get("username") or row.get("player_id") or "👤")
 
-    def _management_panel(self, game_id: int):
-        return GameManagement.panel(self, game_id)
-
     def patch_panel(self):
         original = GameManagement.panel
         if getattr(GameManagement, "_discipline_panel_patched", False):
@@ -50,9 +43,8 @@ class PlayerDiscipline:
 
         def panel(instance, game_id):
             kb = original(instance, game_id)
-            # Keep the existing management layout and append discipline actions.
             kb.row(
-                InlineKeyboardButton("⚠️ اخطار بازیکن", callback_data=f"mgmt:{int(game_id)}:warning"),
+                InlineKeyboardButton("⚠️ تذکر بازیکن", callback_data=f"mgmt:{int(game_id)}:warning"),
                 InlineKeyboardButton("🚫 کیک از بازی", callback_data=f"mgmt:{int(game_id)}:kick"),
             )
             return kb
@@ -120,7 +112,7 @@ class PlayerDiscipline:
         await callback.answer("🚫 بازیکن کیک شد.")
 
     async def warning(self, callback):
-        await self.pick(callback, "warning_pick", "⚠️ <b>اخطار بازیکن</b>\n\nبازیکن را انتخاب کنید:")
+        await self.pick(callback, "warning_pick", "⚠️ <b>ثبت تذکر</b>\n\nبازیکن را انتخاب کنید:")
 
     async def warning_pick(self, callback):
         p = str(callback.data or "").split(":")
@@ -146,23 +138,84 @@ class PlayerDiscipline:
         self.app.runtime.state.games.update_game(game["id"], state=state)
         penalty = warning_penalty(next_no) - warning_penalty(current)
         await callback.message.edit_text(
-            f"⚠️ <b>اخطار شماره {next_no}</b>\n\n"
+            f"⚠️ <b>تذکر شماره {next_no}</b>\n\n"
             f"👤 {html.escape(self._name(row))}\n"
-            f"📉 کسر این اخطار: <b>-{penalty}</b> امتیاز\n"
-            f"📊 مجموع کسر اخطارها: <b>-{warning_penalty(next_no)}</b> امتیاز",
+            f"📉 کسر این تذکر: <b>-{penalty}</b> امتیاز\n"
+            f"📊 مجموع کسر تذکرها: <b>-{warning_penalty(next_no)}</b> امتیاز",
             parse_mode="HTML",
             reply_markup=GameManagement.panel(self, game["id"]),
         )
-        await callback.answer(f"⚠️ اخطار {next_no} ثبت شد.")
+        await callback.answer(f"⚠️ تذکر {next_no} ثبت شد.")
 
-    async def text_command(self, message):
+    async def _text_discipline(self, message, decrease: bool = False):
         if message.chat.type not in {"group", "supergroup"}:
             return
-        raw = (message.text or "").strip().lower()
-        if raw not in {"کیک", "کیک از بازی", "/kick"}:
+        gid = int(message.chat.id)
+        game = self._game(gid)
+        if not game:
+            await message.reply("⚠️ بازی فعالی وجود ندارد.")
             return
-        game = self._game(int(message.chat.id))
-        if not game or not await self._allowed(message, int(message.chat.id), game):
+        if not await self._allowed(message, gid, game):
+            await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند نظم بازی را مدیریت کند.")
+            return
+        reply = getattr(message, "reply_to_message", None)
+        target_user = getattr(reply, "from_user", None)
+        if not target_user:
+            command = "تذکر منفی" if decrease else "تذکر"
+            await message.reply(f"❗ برای {command} روی پیام بازیکن ریپلای کنید و همین دستور را ارسال کنید.")
+            return
+        uid = int(target_user.id)
+        row = next((r for r in self._rows(game) if int(r["player_id"]) == uid), None)
+        if not row or str(row.get("status") or "") in {"removed", "kicked"}:
+            await message.reply("❌ این کاربر بازیکن فعال این بازی نیست.")
+            return
+        state = dict(game.get("state") or {})
+        warnings = dict(state.get("warnings") or {})
+        current = max(0, int(warnings.get(str(uid), 0) or 0))
+        if decrease:
+            if current <= 0:
+                await message.reply(f"ℹ️ برای <b>{html.escape(self._name(row))}</b> تذکری ثبت نشده است.", parse_mode="HTML")
+                return
+            new_count = current - 1
+            warnings[str(uid)] = new_count
+            state["warnings"] = warnings
+            self.app.runtime.state.games.update_game(game["id"], state=state)
+            restored = warning_penalty(current) - warning_penalty(new_count)
+            await message.reply(
+                f"↩️ یک تذکر از <b>{html.escape(self._name(row))}</b> کم شد.\n"
+                f"📊 تعداد تذکر: <b>{new_count}</b>\n"
+                f"📈 امتیاز برگشتی: <b>+{restored}</b>",
+                parse_mode="HTML",
+            )
+            return
+        new_count = current + 1
+        warnings[str(uid)] = new_count
+        state["warnings"] = warnings
+        self.app.runtime.state.games.update_game(game["id"], state=state)
+        penalty = warning_penalty(new_count) - warning_penalty(current)
+        await message.reply(
+            f"⚠️ برای <b>{html.escape(self._name(row))}</b> تذکر شماره <b>{new_count}</b> ثبت شد.\n"
+            f"📉 کسر این تذکر: <b>-{penalty}</b>\n"
+            f"📊 مجموع کسر تذکرها: <b>-{warning_penalty(new_count)}</b>",
+            parse_mode="HTML",
+        )
+
+    async def text_command(self, message):
+        raw = (message.text or "").strip().casefold().replace("‌", " ")
+        raw = " ".join(raw.split())
+        if raw in {"کیک", "کیک از بازی", "/kick"}:
+            await self._text_kick(message)
+        elif raw in {"تذکر", "/تذکر", "/warning"}:
+            await self._text_discipline(message, decrease=False)
+        elif raw in {"تذکر منفی", "/تذکر_منفی", "کاهش تذکر", "/کاهش_تذکر"}:
+            await self._text_discipline(message, decrease=True)
+
+    async def _text_kick(self, message):
+        if message.chat.type not in {"group", "supergroup"}:
+            return
+        gid = int(message.chat.id)
+        game = self._game(gid)
+        if not game or not await self._allowed(message, gid, game):
             await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند بازیکن را کیک کند.")
             return
         reply = getattr(message, "reply_to_message", None)
@@ -200,7 +253,14 @@ class PlayerDiscipline:
         dp.register_callback_query_handler(self.warning, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2] == "warning", state="*")
         dp.register_callback_query_handler(self.kick_pick, lambda c: str(c.data or "").startswith("disc:kick_pick:"), state="*")
         dp.register_callback_query_handler(self.warning_pick, lambda c: str(c.data or "").startswith("disc:warning_pick:"), state="*")
-        dp.register_message_handler(self.text_command, lambda m: (m.text or "").strip().lower() in {"کیک", "کیک از بازی", "/kick"}, state="*")
+        dp.register_message_handler(
+            self.text_command,
+            lambda m: (m.text or "").strip().casefold().replace("‌", " ") in {
+                "کیک", "کیک از بازی", "/kick", "تذکر", "/تذکر", "/warning",
+                "تذکر منفی", "/تذکر_منفی", "کاهش تذکر", "/کاهش_تذکر",
+            },
+            state="*",
+        )
         return True
 
 
