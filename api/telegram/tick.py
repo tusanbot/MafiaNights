@@ -13,10 +13,8 @@ def _response(body, status="200 OK"):
 
 
 def app(environ, start_response):
-    # Supabase pg_cron invokes this endpoint every 10 seconds. Keep the
-    # transition idempotent and use the patched runtime functions installed by
-    # main.py; importing the original helpers directly would bypass the
-    # persistent/serverless voting flow.
+    # Supabase pg_cron invokes this endpoint every 10 seconds. Use the patched
+    # runtime helpers installed by main.py and keep each transition idempotent.
     try:
         import main
         from runtime import voting_runtime
@@ -38,18 +36,11 @@ def app(environ, start_response):
             asyncio.run(voting_runtime._end_target(app_obj))
             after_game = app_obj.runtime.state.active_game(gid)
             after = dict((after_game or {}).get("state", {}).get("voting") or {})
-            result = {
-                "ok": True,
-                "processed": True,
-                "action": "end_target",
-                "phase": phase,
-                "next_phase": str(after.get("phase") or ""),
-                "target_index": int(after.get("target_index") or 0),
-            }
+            result = {"ok": True, "processed": True, "action": "end_target", "phase": phase, "next_phase": str(after.get("phase") or ""), "target_index": int(after.get("target_index") or 0)}
+        elif phase == "next_target_pending":
+            asyncio.run(voting_runtime._start_target(app_obj))
+            result = {"ok": True, "processed": True, "action": "next_target", "phase": phase}
         elif phase == "round_finished_pending":
-            # A completed target is persisted first. Final-round UI is sent on
-            # the next tick so a Telegram API delay/failure cannot leave the
-            # game stuck on the previous target's result message.
             asyncio.run(voting_runtime._finish_round(app_obj))
             result = {"ok": True, "processed": True, "action": "finish_round", "phase": phase}
         else:
