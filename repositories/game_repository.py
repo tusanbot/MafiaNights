@@ -41,6 +41,26 @@ class GameRepository(DatabaseRepository):
         self._invalidate(int(group_chat_id), row)
         return row
 
+    def get_game(self, game_id):
+        """Return a game by id regardless of lifecycle status."""
+        with self.SessionLocal() as session:
+            row = session.execute(text("select * from public.mafia_games where id=:game_id limit 1"), {"game_id": int(game_id)}).mappings().first()
+            return dict(row) if row else None
+
+    def get_finished_game(self, game_id):
+        """Return a finalized game without treating it as an active game."""
+        with self.SessionLocal() as session:
+            row = session.execute(text("select * from public.mafia_games where id=:game_id and status='finished' limit 1"), {"game_id": int(game_id)}).mappings().first()
+            return dict(row) if row else None
+
+    def list_finished_games(self, group_chat_id=None, limit=50):
+        with self.SessionLocal() as session:
+            if group_chat_id is None:
+                rows = session.execute(text("select * from public.mafia_games where status='finished' order by finished_at desc nulls last, created_at desc limit :limit"), {"limit": int(limit)}).mappings().all()
+            else:
+                rows = session.execute(text("select * from public.mafia_games where group_chat_id=:group_chat_id and status='finished' order by finished_at desc nulls last, created_at desc limit :limit"), {"group_chat_id": int(group_chat_id), "limit": int(limit)}).mappings().all()
+            return [dict(row) for row in rows]
+
     def get_active_game(self, group_chat_id):
         gid = int(group_chat_id)
         cached = self._active_cache.get(gid)
