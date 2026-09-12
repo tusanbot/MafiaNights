@@ -1,7 +1,7 @@
 """MafiaNights player scoring rules.
 
-Base rating is 50. Per-game rating rows store only the delta earned/lost in that
-specific game; aggregate repositories add the 50-point starting balance.
+Base rating is 50. Per-game rating rows store the delta and its exact
+components so the profile can explain every point gained or lost.
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def warning_penalty(count: int) -> int:
 def _count_challenges(app: Any, game_id: int, user_id: int) -> int:
     try:
         rows = app.runtime.state.challenges.list_challenges(int(game_id))
-        return sum(1 for row in rows if int(row.get("target_id") or 0) == int(user_id))
+        return sum(1 for row in rows if int(row.get("target_id") or 0) == int(user_id) and str(row.get("status") or "").lower() not in {"cancelled", "canceled", "rejected"})
     except Exception:
         logging.exception("failed to count challenges game=%s user=%s", game_id, user_id)
         return 0
@@ -63,16 +63,27 @@ def score_game(app: Any, game: dict[str, Any], rows: list[dict[str, Any]], winne
         if key in recorded:
             continue
         side = game_end._role_side(row, state)
-        delta = WIN_POINTS if winner != "draw" and side == winner else 0
+        win_bonus = WIN_POINTS if winner != "draw" and side == winner else 0
         challenge_count = _count_challenges(app, int(game["id"]), uid)
-        delta += challenge_count * CHALLENGE_POINTS
+        challenge_bonus = challenge_count * CHALLENGE_POINTS
         warnings = _warning_count(row, state)
-        delta -= warning_penalty(warnings)
-        if _is_kicked(row, state):
-            delta -= KICK_PENALTY
+        warning_total = warning_penalty(warnings)
+        kicked = _is_kicked(row, state)
+        kick_penalty = KICK_PENALTY if kicked else 0
+        delta = win_bonus + challenge_bonus - warning_total - kick_penalty
         result = "draw" if winner == "draw" else ("win" if side == winner else "loss")
         try:
-            repo.record(uid, int(game["id"]), int(delta), result, str(row.get("role") or ""))
+            repo.record(
+                uid,
+                int(game["id"]),
+                int(delta),
+                result,
+                str(row.get("role") or ""),
+                win_bonus=win_bonus,
+                challenge_bonus=challenge_bonus,
+                warning_penalty=warning_total,
+                kick_penalty=kick_penalty,
+            )
             recorded.add(key)
         except Exception:
             logging.exception("failed to record rating game=%s user=%s", game.get("id"), uid)
