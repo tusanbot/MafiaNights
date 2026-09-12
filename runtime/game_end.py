@@ -1,9 +1,4 @@
-"""Durable manual game completion flow for MafiaNights.
-
-Game completion is deliberately manual and independent from voting.  The
-moderator first opens the completion menu, records the winning side, optionally
-manages the game-events publication flag, and only then confirms finalization.
-"""
+"""Manual game completion, finished-game history and event publication flow."""
 from __future__ import annotations
 
 import html
@@ -28,7 +23,6 @@ RESULTS = (
 SIDE_ICONS = {"city": "🏙️", "mafia": "🌃", "independent": "🏴‍☠️"}
 WIN_SCORE = 1
 DRAW_SCORE = 0
-
 
 ROLE_SIDE_HINTS = {
     "پدرخوانده": "mafia", "ماتادور": "mafia", "گودمن": "mafia", "مافیا": "mafia",
@@ -66,23 +60,18 @@ def _main_markup(game_id: int, winner: str | None, events_enabled: bool) -> Inli
 
 
 def _events_markup(game_id: int, group_id: int, enabled: bool) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(
+    """PV event controls: exactly two choices, no redundant third button."""
+    return InlineKeyboardMarkup(row_width=1).add(
         InlineKeyboardButton("🟢 فعال" + (" ✅" if enabled else ""), callback_data=f"game_event:{int(game_id)}:enable:{int(group_id)}"),
         InlineKeyboardButton("⚪ غیرفعال" + (" ✅" if not enabled else ""), callback_data=f"game_event:{int(game_id)}:disable:{int(group_id)}"),
-        InlineKeyboardButton("⬅️ بازگشت به اتمام بازی", callback_data=f"game_event:{int(game_id)}:back:{int(group_id)}"),
     )
-    return kb
-
-
-def _finish_markup(game_id: int) -> InlineKeyboardMarkup:
-    """Compatibility alias kept for old callers."""
-    return _main_markup(game_id, None, False)
 
 
 def _final_markup(game_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(row_width=2).add(
         InlineKeyboardButton("📊 نتیجه بازی", callback_data=f"game_end:{int(game_id)}:result"),
+        InlineKeyboardButton("📝 اتفاقات بازی", callback_data=f"game_end:{int(game_id)}:events"),
+        InlineKeyboardButton("📚 بازی‌های گذشته", callback_data=f"game_history:list:{int(game_id)}"),
         InlineKeyboardButton("✖️ بستن", callback_data=f"game_end:{int(game_id)}:close"),
     )
 
@@ -119,7 +108,6 @@ def _role_side(row: dict[str, Any], state: dict[str, Any]) -> str:
 
 
 def _jalali_date(dt: datetime) -> str:
-    # Gregorian -> Jalali conversion without adding a dependency to the bot.
     gy, gm, gd = dt.year, dt.month, dt.day
     gdm = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
     gy2 = gy + 1 if gm > 2 else gy
@@ -138,17 +126,38 @@ def _jalali_date(dt: datetime) -> str:
     return f"{jy:04d}/{jm:02d}/{jd:02d}"
 
 
-def _game_datetime(game: dict[str, Any]) -> datetime:
-    raw = game.get("started_at") or game.get("created_at")
-    if isinstance(raw, datetime):
-        dt = raw
+def _parse_dt(value: Any) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        dt = value
     else:
         try:
-            dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         except Exception:
-            dt = datetime.now(timezone.utc)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+            return None
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
+def _game_times(game: dict[str, Any]) -> tuple[datetime, datetime]:
+    start = _parse_dt(game.get("started_at")) or _parse_dt(game.get("created_at")) or datetime.now(timezone.utc)
+    end = _parse_dt(game.get("finished_at")) or datetime.now(timezone.utc)
+    return start, end
+
+
+def _duration_text(game: dict[str, Any]) -> str:
+    start, end = _game_times(game)
+    seconds = max(0, int((end - start).total_seconds()))
+    hours, rem = divmod(seconds, 3600)
+    minutes, secs = divmod(rem, 60)
+    if hours:
+        return f"{hours} ساعت و {minutes} دقیقه"
+    if minutes:
+        return f"{minutes} دقیقه و {secs} ثانیه"
+    return f"{secs} ثانیه"
+
+
+def _local_dt(dt: datetime) -> datetime:
     return dt.astimezone(timezone(timedelta(hours=3, minutes=30)))
 
 
@@ -156,27 +165,32 @@ def _events_state(game: dict[str, Any]) -> dict[str, Any]:
     state = dict(game.get("state") or {})
     events = state.get("game_events")
     if not isinstance(events, dict):
-        events = {"enabled": False, "text": None, "recorded": False}
+        events = {"enabled": False, "text": None, "recorded": False, "published": False}
         state["game_events"] = events
     events.setdefault("enabled", False)
     events.setdefault("text", None)
     events.setdefault("recorded", bool(events.get("text")))
+    events.setdefault("published", False)
     return events
 
 
 def _final_text(game: dict[str, Any], rows: list[dict[str, Any]]) -> str:
     state = dict(game.get("state") or {})
     winner = str(state.get("game_result") or "")
-    dt = _game_datetime(game)
+    start, end = _game_times(game)
+    start = _local_dt(start)
+    end = _local_dt(end)
     scenario = str(state.get("scenario_name") or game.get("scenario") or game.get("scenario_id") or "---")
     moderator = str(state.get("moderator_name") or game.get("moderator_name") or game.get("moderator_id") or "---")
     number = int(game.get("event_number") or 1)
     lines = [
         "༄",
-        "<b> Mafia Nights</b>",
+        "<b>Mafia Nights</b>",
         "",
-        f"⏱ زمان: <b>{dt:%H:%M}</b>",
-        f"📆 تاریخ: <b>{_jalali_date(dt)}</b>",
+        f"▶️ شروع: <b>{start:%H:%M}</b>",
+        f"⏹ پایان: <b>{end:%H:%M}</b>",
+        f"⏱ مدت بازی: <b>{_duration_text(game)}</b>",
+        f"📆 تاریخ: <b>{_jalali_date(start)}</b>",
         f"🗓 Scenario: <b>{html.escape(scenario)}</b>",
         f"👮‍♂ گرداننده: <b>{html.escape(moderator)}</b>",
         f"📓 شماره بازی: <b>{number}</b>",
@@ -197,7 +211,7 @@ def _final_text(game: dict[str, Any], rows: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _summary_text(game: dict[str, Any], rows: list[dict[str, Any]]) -> str:
+def _summary_text(game: dict[str, Any]) -> str:
     state = dict(game.get("state") or {})
     winner = str(state.get("game_result") or "")
     scenario = str(state.get("scenario_name") or game.get("scenario") or game.get("scenario_id") or "---")
@@ -212,10 +226,7 @@ def _summary_text(game: dict[str, Any], rows: list[dict[str, Any]]) -> str:
 
 
 def _score_players(app: Any, game: dict[str, Any], rows: list[dict[str, Any]], winner: str) -> None:
-    if winner == "draw":
-        score_for = lambda side: DRAW_SCORE
-    else:
-        score_for = lambda side: WIN_SCORE if side == winner else 0
+    score_for = (lambda side: DRAW_SCORE) if winner == "draw" else (lambda side: WIN_SCORE if side == winner else 0)
     repo = RatingRepository()
     state = dict(game.get("state") or {})
     recorded = set(str(x) for x in (state.get("rating_recorded_players") or []))
@@ -241,7 +252,7 @@ def _stop_and_finalize_players(app: Any, game: dict[str, Any], rows: list[dict[s
         try:
             app.runtime.state.games.set_player_status(game["id"], int(row["player_id"]), "finished")
         except Exception:
-            logging.exception("failed to finalize player game=%s user=%s", game["id"], row.get("player_id"))
+            logging.exception("failed to finalize player game=%s user=%s", game.get("id"), row.get("player_id"))
     _stop_transient_tasks(app)
 
 
@@ -252,8 +263,17 @@ def _events_message(events: dict[str, Any]) -> str:
     return "📝 <b>اتفاقات بازی</b>\n\nفعلا اتفاقات بازی ثبت نشده"
 
 
+def _history_markup(games: list[dict[str, Any]]) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    for game in games:
+        number = int(game.get("event_number") or 1)
+        state = dict(game.get("state") or {})
+        winner = _result_label(str(state.get("game_result") or ""))
+        kb.add(InlineKeyboardButton(f"📓 بازی {number} — {winner or 'بدون نتیجه'}", callback_data=f"game_history:view:{int(game['id'])}"))
+    return kb
+
+
 def install(app: Any) -> bool:
-    """Register durable manual completion callbacks."""
     dp = app.dp
 
     original_panel = getattr(GameManagement, "panel", None)
@@ -262,6 +282,7 @@ def install(app: Any) -> bool:
         def panel(self, game_id):
             kb = original_panel(self, game_id)
             kb.row(InlineKeyboardButton("🏁 اتمام بازی", callback_data=f"mgmt:{int(game_id)}:finish"))
+            kb.row(InlineKeyboardButton("📚 بازی‌های گذشته", callback_data=f"game_history:list:{int(game_id)}"))
             return kb
         GameManagement.panel = panel
         GameManagement._game_end_panel_wrapped = True
@@ -276,24 +297,24 @@ def install(app: Any) -> bool:
         except Exception:
             return False
 
+    def get_game(game_id: int):
+        return app.runtime.state.games.get_game(int(game_id))
+
     async def show_main_menu(callback: types.CallbackQuery, game: dict[str, Any]) -> None:
         state = dict(game.get("state") or {})
         events = _events_state(game)
         await callback.message.edit_text(
-            _summary_text(game, app.runtime.state.games.list_players(game["id"])),
-            parse_mode="HTML",
+            _summary_text(game), parse_mode="HTML",
             reply_markup=_main_markup(int(game["id"]), state.get("game_result"), bool(events.get("enabled"))),
         )
         await callback.answer()
 
     async def open_finish(callback: types.CallbackQuery, game: dict[str, Any]) -> None:
-        # The completion button always opens the main completion menu, never the winner picker.
         await show_main_menu(callback, game)
 
     async def finish_menu(callback: types.CallbackQuery):
         parts = str(callback.data or "").split(":")
-        if len(parts) != 3 or parts[0] != "mgmt" or parts[2] != "finish":
-            return
+        if len(parts) != 3 or parts[0] != "mgmt" or parts[2] != "finish": return
         gid = int(callback.message.chat.id)
         game = app.runtime.state.active_game(gid)
         if not game or int(game.get("id")) != int(parts[1]):
@@ -305,8 +326,7 @@ def install(app: Any) -> bool:
         await open_finish(callback, game)
 
     async def end_game_legacy(callback: types.CallbackQuery):
-        if str(callback.data or "") != "end_game":
-            return
+        if str(callback.data or "") != "end_game": return
         gid = int(callback.message.chat.id)
         game = app.runtime.state.active_game(gid)
         if not game:
@@ -321,10 +341,9 @@ def install(app: Any) -> bool:
         parts = str(callback.data or "").split(":")
         if len(parts) < 3 or parts[0] != "game_end": return
         game_id = int(parts[1])
-        group_id = int(callback.message.chat.id)
-        game = app.runtime.state.active_game(group_id)
-        if not game or int(game.get("id")) != game_id:
-            await callback.answer("❌ بازی فعال نیست.", show_alert=True); return
+        game = get_game(game_id)
+        if not game:
+            await callback.answer("❌ بازی پیدا نشد.", show_alert=True); return
         if not await allowed(callback, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         action = parts[2]
@@ -332,10 +351,14 @@ def install(app: Any) -> bool:
         events = _events_state(game)
 
         if action == "menu":
+            if str(game.get("status") or "") != "running":
+                await callback.answer("ℹ️ این بازی ثبت نهایی شده است.", show_alert=True); return
             await show_main_menu(callback, game); return
         if action == "close":
             await callback.message.delete(); await callback.answer(); return
         if action == "winner":
+            if str(game.get("status") or "") != "running":
+                await callback.answer("❌ بازی قبلاً نهایی شده است.", show_alert=True); return
             await callback.message.edit_text("🏆 <b>ثبت برنده</b>\n\nساید برنده بازی را انتخاب کنید:", parse_mode="HTML", reply_markup=_result_options_markup(game_id))
             await callback.answer(); return
         if action == "winner_set":
@@ -350,28 +373,23 @@ def install(app: Any) -> bool:
             state["winner_selected"] = True
             if not app.runtime.state.games.update_game(game_id, state=state):
                 await callback.answer("❌ ثبت برنده انجام نشد.", show_alert=True); return
-            game = app.runtime.state.active_game(group_id) or {**game, "state": state}
+            game = get_game(game_id) or {**game, "state": state}
             rows = app.runtime.state.games.list_players(game_id)
-            try:
-                _score_players(app, game, rows, winner)
-            except Exception:
-                logging.exception("rating calculation failed game=%s", game_id)
-            await callback.message.edit_text(_summary_text(game, rows), parse_mode="HTML", reply_markup=_main_markup(game_id, winner, bool(events.get("enabled"))))
+            _score_players(app, game, rows, winner)
+            events = _events_state(game)
+            await callback.message.edit_text(_summary_text(game), parse_mode="HTML", reply_markup=_main_markup(game_id, winner, bool(events.get("enabled"))))
             await callback.answer(f"🏆 برنده ثبت شد: {_result_label(winner)}")
             return
         if action == "events":
-            events = _events_state(game)
-            state["game_events"] = events
-            app.runtime.state.games.update_game(game_id, state=state)
             try:
                 await app.bot.send_message(
                     int(callback.from_user.id),
                     "📝 <b>پنل اتفاقات بازی</b>\n\n"
-                    "در این بخش وضعیت ارسال اتفاقات بازی را تعیین کنید.\n"
-                    "ثبت محتوای اتفاقات در مرحله بعدی به همین پنل متصل می‌شود.\n\n"
-                    f"وضعیت ارسال: <b>{'فعال' if events.get('enabled') else 'غیرفعال'}</b>",
+                    "وضعیت ارسال اتفاقات بازی را انتخاب کنید.\n"
+                    "این پنل فقط دو گزینه دارد؛ ثبت محتوای اتفاقات بعداً به همین بخش متصل می‌شود.\n\n"
+                    f"وضعیت فعلی: <b>{'فعال' if events.get('enabled') else 'غیرفعال'}</b>",
                     parse_mode="HTML",
-                    reply_markup=_events_markup(game_id, int(game.get("group_chat_id") or group_id), bool(events.get("enabled"))),
+                    reply_markup=_events_markup(game_id, int(game.get("group_chat_id") or callback.message.chat.id), bool(events.get("enabled"))),
                 )
                 await callback.answer("📝 پنل اتفاقات در پیام خصوصی ارسال شد.")
             except Exception:
@@ -382,7 +400,7 @@ def install(app: Any) -> bool:
             if winner not in dict(RESULTS):
                 await callback.answer("⚠️ ابتدا باید برنده بازی ثبت شود.", show_alert=True); return
             await callback.message.edit_text(
-                "⚠️ <b>تأیید ثبت نهایی</b>\n\nبا ثبت نهایی، بازی بسته می‌شود و نتیجه نهایی در گروه ثبت خواهد شد.\n\nآیا ادامه می‌دهید؟",
+                "⚠️ <b>تأیید ثبت نهایی</b>\n\nبا ثبت نهایی، بازی از فهرست بازی فعال خارج و در آرشیو بازی‌های گذشته نگهداری می‌شود.\n\nآیا ادامه می‌دهید؟",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(row_width=2).add(
                     InlineKeyboardButton("✅ ثبت نهایی", callback_data=f"game_end:{game_id}:confirm_final"),
@@ -396,13 +414,22 @@ def install(app: Any) -> bool:
                 await callback.answer("⚠️ ابتدا برنده را ثبت کنید.", show_alert=True); return
             rows = app.runtime.state.games.list_players(game_id)
             now = datetime.now(timezone.utc)
+            if not game.get("started_at"):
+                started = _parse_dt(game.get("created_at")) or now
+                game["started_at"] = started
             state["finished_manually"] = True
             state["finished_at"] = now.isoformat()
             state["finalized"] = True
-            if not app.runtime.state.games.update_game(game_id, status="finished", state=state, finished_at=now):
+            state["game_archive"] = {
+                "status": "finished",
+                "winner": winner,
+                "finished_at": now.isoformat(),
+                "duration": _duration_text({**game, "finished_at": now}),
+            }
+            if not app.runtime.state.games.update_game(game_id, status="finished", state=state, started_at=game.get("started_at"), finished_at=now):
                 await callback.answer("❌ ثبت نهایی انجام نشد.", show_alert=True); return
             _stop_and_finalize_players(app, {**game, "state": state}, rows)
-            final_game = {**game, "state": state, "status": "finished"}
+            final_game = {**game, "state": state, "status": "finished", "finished_at": now}
             text = _final_text(final_game, rows)
             try:
                 await callback.message.edit_text(text, parse_mode="HTML", reply_markup=_final_markup(game_id))
@@ -428,33 +455,54 @@ def install(app: Any) -> bool:
         parts = str(callback.data or "").split(":")
         if len(parts) != 4 or parts[0] != "game_event": return
         game_id, action, group_id = int(parts[1]), parts[2], int(parts[3])
-        if int(callback.from_user.id) != int(callback.from_user.id): return
-        game = app.runtime.state.active_game(group_id)
-        if not game or int(game.get("id")) != game_id:
+        game = get_game(game_id)
+        if not game or int(game.get("group_chat_id") or 0) != group_id:
             await callback.answer("❌ بازی پیدا نشد.", show_alert=True); return
         if not await allowed(callback, game):
             await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True); return
+        if action not in {"enable", "disable"}:
+            await callback.answer("❌ عملیات نامعتبر است.", show_alert=True); return
         state = dict(game.get("state") or {})
         events = _events_state(game)
-        if action == "back":
-            await callback.message.edit_text("📝 <b>پنل اتفاقات بازی</b>\n\nبرای تغییر وضعیت ارسال، یکی از گزینه‌ها را انتخاب کنید.", parse_mode="HTML", reply_markup=_events_markup(game_id, group_id, bool(events.get("enabled"))))
+        events["enabled"] = action == "enable"
+        state["game_events"] = events
+        app.runtime.state.games.update_game(game_id, state=state)
+        await callback.message.edit_text(
+            "📝 <b>پنل اتفاقات بازی</b>\n\n"
+            f"وضعیت ارسال اتفاقات: <b>{'فعال' if events['enabled'] else 'غیرفعال'}</b>",
+            parse_mode="HTML", reply_markup=_events_markup(game_id, group_id, bool(events.get("enabled"))),
+        )
+        await callback.answer("✅ وضعیت اتفاقات ذخیره شد.")
+
+    async def game_history(callback: types.CallbackQuery):
+        parts = str(callback.data or "").split(":")
+        if len(parts) < 3 or parts[0] != "game_history": return
+        action = parts[1]
+        reference_id = int(parts[2])
+        reference = get_game(reference_id)
+        if not reference:
+            await callback.answer("❌ بازی پیدا نشد.", show_alert=True); return
+        if not await allowed(callback, reference):
+            await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True); return
+        group_id = int(reference.get("group_chat_id") or callback.message.chat.id)
+        if action == "list":
+            games = app.runtime.state.games.list_finished_games(group_id, limit=20)
+            if not games:
+                await callback.answer("ℹ️ هنوز بازی ثبت نهایی‌شده‌ای وجود ندارد.", show_alert=True); return
+            await callback.message.edit_text("📚 <b>بازی‌های گذشته</b>\n\nبازی موردنظر را انتخاب کنید:", parse_mode="HTML", reply_markup=_history_markup(games))
             await callback.answer(); return
-        if action in {"enable", "disable"}:
-            events["enabled"] = action == "enable"
-            state["game_events"] = events
-            app.runtime.state.games.update_game(game_id, state=state)
-            await callback.message.edit_text(
-                "📝 <b>پنل اتفاقات بازی</b>\n\n"
-                f"وضعیت ارسال اتفاقات: <b>{'فعال' if events['enabled'] else 'غیرفعال'}</b>\n\n"
-                "محتوای اتفاقات در مرحله بعدی به همین پنل متصل می‌شود.",
-                parse_mode="HTML", reply_markup=_events_markup(game_id, group_id, bool(events.get("enabled"))),
-            )
-            await callback.answer("✅ وضعیت اتفاقات ذخیره شد.")
-            return
+        if action == "view":
+            game = app.runtime.state.games.get_finished_game(reference_id)
+            if not game:
+                await callback.answer("❌ این بازی در آرشیو پیدا نشد.", show_alert=True); return
+            rows = app.runtime.state.games.list_players(reference_id)
+            await callback.message.edit_text(_final_text(game, rows), parse_mode="HTML", reply_markup=_final_markup(reference_id))
+            await callback.answer(); return
 
     dp.register_callback_query_handler(finish_menu, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[-1] == "finish", state="*")
     dp.register_callback_query_handler(end_game_legacy, lambda c: str(c.data or "") == "end_game", state="*")
     dp.register_callback_query_handler(game_event, lambda c: str(c.data or "").startswith("game_event:"), state="*")
+    dp.register_callback_query_handler(game_history, lambda c: str(c.data or "").startswith("game_history:"), state="*")
     dp.register_callback_query_handler(game_end, lambda c: str(c.data or "").startswith("game_end:"), state="*")
     app._game_end_installed = True
     return True
