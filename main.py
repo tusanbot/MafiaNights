@@ -9,6 +9,7 @@ from runtime.cancel_command import install as install_cancel_command
 from runtime.final_persistence import install as install_persistence
 from runtime.game_management import GameManagement
 from runtime.game_management_compat import install as install_management_compat
+from runtime.game_end import install as install_game_end
 from runtime.management_navigation import install as install_management_navigation
 from runtime.production_lobby import install as install_production_lobby
 from runtime.role_distribution import install as install_role_distribution
@@ -34,6 +35,7 @@ management = GameManagement(app)
 install_management_navigation(app, management)
 management.install()
 install_management_compat(app, management)
+install_game_end(app)
 install_cancel_command(app)
 production_lobby_status = install_production_lobby(app)
 role_distribution_status = install_role_distribution(app)
@@ -45,14 +47,14 @@ voting_serverless_status = install_voting_serverless_patch(app)
 voting_end_target_status = install_voting_end_target_patch(app)
 voting_postfix_status = install_voting_postfix(app)
 logging.info(
-    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s management=active role_distribution=%s stable_round=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s",
+    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s management=active game_end=active role_distribution=%s stable_round=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s",
     persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status,
 )
 
 
 async def on_startup(dp):
     logging.info(
-        "MafiaNights production startup; persistence=%s canonical_lobby=%s management=active role_distribution=%s stable_round=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s",
+        "MafiaNights production startup; persistence=%s canonical_lobby=%s management=active game_end=active role_distribution=%s stable_round=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s",
         persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status,
     )
     await app.startup()
