@@ -13,13 +13,7 @@ class RatingRepository(DatabaseRepository):
                     "insert into public.mafia_ratings(user_id, game_id, score, result, role) "
                     "values(:user_id,:game_id,:score,:result,:role) returning id"
                 ),
-                {
-                    "user_id": int(user_id),
-                    "game_id": int(game_id),
-                    "score": int(score),
-                    "result": result,
-                    "role": role,
-                },
+                {"user_id": int(user_id), "game_id": int(game_id), "score": int(score), "result": result, "role": role},
             ).scalar_one()
             session.commit()
             return int(row)
@@ -28,32 +22,92 @@ class RatingRepository(DatabaseRepository):
         with self.SessionLocal() as session:
             row = session.execute(
                 text(
-                    "select count(*)::int as games, "
-                    "coalesce(sum(score),0)::int as score, "
+                    "select count(*)::int as games, coalesce(sum(score),0)::int as score, "
                     "count(*) filter (where result='win')::int as wins, "
                     "count(*) filter (where result='loss')::int as losses, "
                     "count(*) filter (where result='draw')::int as draws, "
                     "coalesce(max(score),0)::int as best_score "
                     "from public.mafia_ratings where user_id=:user_id"
-                ),
-                {"user_id": int(user_id)},
+                ), {"user_id": int(user_id)}
             ).mappings().one()
             return dict(row)
 
+    def player_profile(self, user_id):
+        with self.SessionLocal() as session:
+            row = session.execute(
+                text(
+                    "select p.user_id, p.username, p.first_name, p.last_name, p.nickname, "
+                    "coalesce(r.games,0)::int as games, coalesce(r.score,0)::int as score, "
+                    "coalesce(r.wins,0)::int as wins, coalesce(r.losses,0)::int as losses, "
+                    "coalesce(r.draws,0)::int as draws "
+                    "from public.mafia_players p "
+                    "left join (select user_id,count(*) games,sum(score) score, "
+                    "count(*) filter(where result='win') wins, count(*) filter(where result='loss') losses, "
+                    "count(*) filter(where result='draw') draws from public.mafia_ratings group by user_id) r "
+                    "on r.user_id=p.user_id where p.user_id=:user_id limit 1"
+                ), {"user_id": int(user_id)}
+            ).mappings().first()
+            return dict(row) if row else None
+
+    def rank(self, user_id):
+        with self.SessionLocal() as session:
+            row = session.execute(text("""
+                with totals as (
+                    select user_id, coalesce(sum(score),0)::int score,
+                           count(*)::int games,
+                           count(*) filter(where result='win')::int wins
+                    from public.mafia_ratings group by user_id
+                )
+                select 1 + count(*) filter(where t.score > me.score
+                    or (t.score=me.score and t.wins > me.wins)
+                    or (t.score=me.score and t.wins=me.wins and t.games > me.games))::int as rank,
+                    coalesce(me.score,0)::int score, coalesce(me.games,0)::int games, coalesce(me.wins,0)::int wins,
+                    (select count(*)::int from totals) as total_players
+                from totals me left join totals t on true
+                where me.user_id=:user_id group by me.score,me.games,me.wins
+            """), {"user_id": int(user_id)}).mappings().first()
+            if row:
+                return dict(row)
+            return {"rank": None, "score": 0, "games": 0, "wins": 0, "total_players": 0}
+
     def top(self, limit=10):
         with self.SessionLocal() as session:
-            rows = session.execute(
-                text(
-                    "select r.user_id, "
-                    "coalesce(p.nickname,p.display_name,p.first_name,p.username,r.user_id::text) as name, "
-                    "count(*)::int as games, coalesce(sum(r.score),0)::int as score, "
-                    "count(*) filter (where r.result='win')::int as wins "
-                    "from public.mafia_ratings r "
-                    "left join public.mafia_players p on p.user_id=r.user_id "
-                    "group by r.user_id,p.nickname,p.display_name,p.first_name,p.username "
-                    "order by score desc, wins desc, games desc, r.user_id "
-                    "limit :limit"
-                ),
-                {"limit": max(1, min(int(limit), 100))},
-            ).mappings().all()
+            rows = session.execute(text("""
+                select r.user_id,
+                coalesce(p.nickname,p.display_name,p.first_name,p.username,r.user_id::text) as name,
+                count(*)::int as games, coalesce(sum(r.score),0)::int as score,
+                count(*) filter (where r.result='win')::int as wins
+                from public.mafia_ratings r
+                left join public.mafia_players p on p.user_id=r.user_id
+                group by r.user_id,p.nickname,p.display_name,p.first_name,p.username
+                order by score desc, wins desc, games desc, r.user_id
+                limit :limit
+            """), {"limit": max(1, min(int(limit), 100))}).mappings().all()
+            return [dict(row) for row in rows]
+
+    def group_summary(self, user_id, group_chat_id):
+        with self.SessionLocal() as session:
+            row = session.execute(text("""
+                select count(*)::int games, coalesce(sum(r.score),0)::int score,
+                       count(*) filter(where r.result='win')::int wins,
+                       count(*) filter(where r.result='loss')::int losses,
+                       count(*) filter(where r.result='draw')::int draws
+                from public.mafia_ratings r join public.mafia_games g on g.id=r.game_id
+                where r.user_id=:user_id and g.group_chat_id=:group_chat_id
+            """), {"user_id": int(user_id), "group_chat_id": int(group_chat_id)}).mappings().one()
+            return dict(row)
+
+    def group_top(self, group_chat_id, limit=10):
+        with self.SessionLocal() as session:
+            rows = session.execute(text("""
+                select r.user_id,
+                coalesce(p.nickname,p.display_name,p.first_name,p.username,r.user_id::text) as name,
+                count(*)::int games, coalesce(sum(r.score),0)::int score,
+                count(*) filter(where r.result='win')::int wins
+                from public.mafia_ratings r join public.mafia_games g on g.id=r.game_id
+                left join public.mafia_players p on p.user_id=r.user_id
+                where g.group_chat_id=:group_chat_id
+                group by r.user_id,p.nickname,p.display_name,p.first_name,p.username
+                order by score desc,wins desc,games desc,r.user_id limit :limit
+            """), {"group_chat_id": int(group_chat_id), "limit": max(1,min(int(limit),100))}).mappings().all()
             return [dict(row) for row in rows]
