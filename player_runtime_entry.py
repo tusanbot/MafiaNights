@@ -29,6 +29,8 @@ from runtime.lobby_callback_cutover import install as install_lobby_callback_cut
 install_lobby_callback_cutover(main)
 from runtime.lobby_ui_v7_patch import install as install_lobby_v7_patch
 install_lobby_v7_patch(main)
+from runtime.lobby_ui_v8_patch import install as install_lobby_ui_v8
+install_lobby_ui_v8(main)
 # lobby_legacy_bridge is intentionally NOT installed: it recreated the old
 # lobby UX and competed with the canonical persistent lobby owner.
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
@@ -65,6 +67,7 @@ from runtime.private_navigation_authority import install as install_private_navi
 install_private_navigation_authority(main)
 
 from runtime.stable_round_engine import install as install_stable_round_engine
+from runtime.live_controls_v2 import install as install_live_controls_v2
 from runtime.stable_round_policy import install as install_stable_round_policy
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
 from runtime.transition_ui_dedup import install as install_transition_ui_dedup
@@ -72,6 +75,7 @@ from runtime.role_distribution_notice import install as install_role_distributio
 from runtime.voting_runtime import install as install_voting_runtime
 
 install_stable_round_engine(main)
+install_live_controls_v2(main)
 install_stable_round_policy(main)
 install_stable_challenge_button_guard(main)
 install_transition_ui_dedup(main)
