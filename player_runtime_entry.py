@@ -68,6 +68,7 @@ install_private_navigation_authority(main)
 
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.live_controls_v2 import install as install_live_controls_v2
+from runtime.lobby_challenge_v2 import install as install_lobby_challenge_v2
 from runtime.stable_round_policy import install as install_stable_round_policy
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
 from runtime.transition_ui_dedup import install as install_transition_ui_dedup
@@ -76,6 +77,7 @@ from runtime.voting_runtime import install as install_voting_runtime
 
 install_stable_round_engine(main)
 install_live_controls_v2(main)
+install_lobby_challenge_v2(main)
 install_stable_round_policy(main)
 install_stable_challenge_button_guard(main)
 install_transition_ui_dedup(main)
