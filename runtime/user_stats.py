@@ -93,7 +93,7 @@ def _score_breakdown(details: dict[str, Any]) -> str:
         "⭐ <b>جزئیات امتیاز</b>\n"
         f"├ 🏆 امتیاز برد ساید: <b>+{win}</b>\n"
         f"├ ⚔️ امتیاز چالش: <b>+{challenge}</b> ({challenges} چالش)\n"
-        f"├ ⚠️ کسر اخطار: <b>-{warning}</b> ({warnings} اخطار)\n"
+        f"├ ⚠️ کسر تذکر: <b>-{warning}</b> ({warnings} تذکر)\n"
         f"├ 🚫 کسر کیک: <b>-{kick}</b> ({kicks} بار)\n"
         f"└ 📈 تغییر خالص: <b>{_signed(net)}</b>\n\n"
         f"🎯 امتیاز پایه: <b>50</b>\n"
@@ -198,15 +198,15 @@ class UserStats:
         await callback.answer()
 
     def install(self):
-        dp = self.app.dp
         if getattr(self.app, "_user_stats_installed", False):
             return False
+        self.app._user_stats_instance = self
 
-        @dp.message_handler(lambda m: bool(resolve(getattr(m, "text", None))), state="*")
+        @self.app.dp.message_handler(lambda m: bool(resolve(getattr(m, "text", None))), state="*")
         async def text_handler(message: types.Message):
             await self.command(message)
 
-        @dp.callback_query_handler(lambda c: str(c.data or "").startswith("ustats:"), state="*")
+        @self.app.dp.callback_query_handler(lambda c: str(c.data or "").startswith("ustats:"), state="*")
         async def callback_handler(callback: types.CallbackQuery):
             try:
                 await self.callback(callback)
