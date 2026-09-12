@@ -5,7 +5,7 @@ import os
 
 from main_refactored import MafiaApplication
 from runtime.feature_parity_v4 import FeatureParityV4
-from runtime.scenario_management_v2 import ScenarioManagementV2
+from runtime.scenario_management_v3 import ScenarioManagementV3
 
 
 class MafiaApplicationV4(MafiaApplication):
@@ -14,7 +14,7 @@ class MafiaApplicationV4(MafiaApplication):
         self._disable_legacy_lobby_handlers()
         # Enhanced scenario handlers are registered before the legacy parity
         # handlers, so the new CRUD/edit surface wins on matching callbacks.
-        self.scenario_management = ScenarioManagementV2(self)
+        self.scenario_management = ScenarioManagementV3(self)
         self.scenario_management.register(self.dp)
         self.feature_parity = FeatureParityV4(self)
         self.feature_parity.register()
