@@ -50,6 +50,8 @@ from runtime.start_profile_patch import install as install_start_profile_patch
 install_start_profile_patch(main)
 from runtime.user_panel_back_patch import install as install_user_panel_back_patch
 install_user_panel_back_patch(main, user_panel)
+from runtime.profile_enhancements_fixed import install as install_profile_enhancements
+profile_enhancements = install_profile_enhancements(main, user_panel)
 
 from commands import register_commands as register_text_commands
 register_text_commands(main)
@@ -75,9 +77,6 @@ install_stable_challenge_button_guard(main)
 install_transition_ui_dedup(main)
 install_voting_runtime(main)
 
-# Final ownership pass: several compatibility modules register callbacks after
-# the first lobby cutover. Run the physical removal once more at the end so no
-# later registration can resurrect main1's old lobby handlers.
 install_lobby_callback_cutover(main)
 
 _original_startup = main.on_startup
@@ -98,8 +97,6 @@ async def on_startup(dp):
     from runtime.final_private_ui import install as install_final_private_ui
     await install_final_private_ui(main)
     install_role_distribution_notice(main)
-    # final_private_ui may register callback handlers, so enforce lobby
-    # ownership after it as well.
     install_lobby_callback_cutover(main)
     logging.info("FINAL UI AUTHORITY ACTIVE")
 
