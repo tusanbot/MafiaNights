@@ -15,6 +15,7 @@ from runtime.role_distribution import install as install_role_distribution
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.voting_runtime import install as install_voting_runtime
 from runtime.voting_timer_patch import install as install_voting_timer_patch
+from runtime.voting_postfix import install as install_voting_postfix
 
 TOKEN = os.getenv("API_TOKEN")
 if not TOKEN:
@@ -41,16 +42,17 @@ app._canonical_distribute_roles = app._role_distribution_handler
 stable_round_status = install_stable_round_engine(app)
 voting_runtime_status = install_voting_runtime(app)
 voting_timer_status = install_voting_timer_patch(app)
+voting_postfix_status = install_voting_postfix(app)
 logging.info(
-    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s management=active role_distribution=%s stable_round=%s voting=%s voting_timer=%s",
-    persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_runtime_status, voting_timer_status,
+    "PRODUCTION_RUNTIME_ACTIVE persistent=%s canonical_lobby=%s management=active role_distribution=%s stable_round=%s voting=%s voting_timer=%s voting_postfix=%s",
+    persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_runtime_status, voting_timer_status, voting_postfix_status,
 )
 
 
 async def on_startup(dp):
     logging.info(
-        "MafiaNights production startup; persistence=%s canonical_lobby=%s management=active role_distribution=%s stable_round=%s voting=%s voting_timer=%s",
-        persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_runtime_status, voting_timer_status,
+        "MafiaNights production startup; persistence=%s canonical_lobby=%s management=active role_distribution=%s stable_round=%s voting=%s voting_timer=%s voting_postfix=%s",
+        persistence_status, production_lobby_status, role_distribution_status, stable_round_status, voting_runtime_status, voting_timer_status, voting_postfix_status,
     )
     await app.startup()
     try:
