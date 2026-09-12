@@ -17,12 +17,10 @@ from runtime.postgres_fsm_storage import install as install_postgres_fsm_storage
 install_postgres_fsm_storage(main)
 from runtime.scenario_persistence_patch import install as install_scenario_persistence_patch
 install_scenario_persistence_patch(main)
-
 from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
 from runtime.production_fastpath import install as install_production_fastpath
 install_production_fastpath(main)
-
 from runtime.lobby_ui_v6 import install as install_lobby_ui
 install_lobby_ui(main)
 from runtime.lobby_callback_cutover import install as install_lobby_callback_cutover
@@ -31,8 +29,8 @@ from runtime.lobby_ui_v7_patch import install as install_lobby_v7_patch
 install_lobby_v7_patch(main)
 from runtime.lobby_ui_v8_patch import install as install_lobby_ui_v8
 install_lobby_ui_v8(main)
-# lobby_legacy_bridge is intentionally NOT installed: it recreated the old
-# lobby UX and competed with the canonical persistent lobby owner.
+from runtime.lobby_ui_v9_patch import install as install_lobby_ui_v9
+install_lobby_ui_v9(main)
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 from runtime.game_flow_authority import install as install_game_flow_authority
@@ -57,12 +55,13 @@ profile_enhancements = install_profile_enhancements(main, user_panel)
 
 from commands import register_commands as register_text_commands
 register_text_commands(main)
+from runtime.command_surface_v2 import install as install_command_surface_v2
+install_command_surface_v2(main)
 
 from runtime.addons_persistence_patch import install as install_addons_persistence_patch
 install_addons_persistence_patch(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
-
 from runtime.private_navigation_authority import install as install_private_navigation_authority
 install_private_navigation_authority(main)
 
@@ -74,7 +73,6 @@ from runtime.stable_challenge_button_guard import install as install_stable_chal
 from runtime.transition_ui_dedup import install as install_transition_ui_dedup
 from runtime.role_distribution_notice import install as install_role_distribution_notice
 from runtime.voting_runtime import install as install_voting_runtime
-
 install_stable_round_engine(main)
 install_live_controls_v2(main)
 install_lobby_challenge_v2(main)
@@ -83,6 +81,8 @@ install_stable_challenge_button_guard(main)
 install_transition_ui_dedup(main)
 install_voting_runtime(main)
 
+from runtime.game_info_security_v2 import install as install_game_info_security_v2
+install_game_info_security_v2(main)
 install_lobby_callback_cutover(main)
 
 _original_startup = main.on_startup
@@ -99,13 +99,13 @@ async def on_startup(dp):
             main.group_admins = list(main.admins)
     except Exception:
         logging.exception("Failed to initialize private UI group/admin authorization")
-
     from runtime.final_private_ui import install as install_final_private_ui
     await install_final_private_ui(main)
+    from runtime.private_start_guard_v2 import install as install_private_start_guard_v2
+    install_private_start_guard_v2(main)
     install_role_distribution_notice(main)
     install_lobby_callback_cutover(main)
     logging.info("FINAL UI AUTHORITY ACTIVE")
-
 
 if __name__ == "__main__":
     main.executor.start_polling(main.dp, skip_updates=True, on_startup=on_startup)
