@@ -43,9 +43,9 @@ class TextCommands:
     def _game(self, gid: int):
         return self.app.runtime.state.active_game(int(gid))
 
-    async def _allowed(self, message: types.Message, game: dict[str, Any]) -> bool:
+    async def _is_manager(self, message: types.Message, game: dict[str, Any] | None = None) -> bool:
         uid = int(message.from_user.id)
-        if uid == int(game.get("moderator_id") or 0):
+        if game and uid == int(game.get("moderator_id") or 0):
             return True
         try:
             return (await self.app.bot.get_chat_member(message.chat.id, uid)).status in {"creator", "administrator"}
@@ -56,20 +56,12 @@ class TextCommands:
         if message.chat.type not in {"group", "supergroup"}:
             await message.reply("ℹ️ ایجاد بازی جدید فقط داخل گروه قابل استفاده است.")
             return
-        current = self._game(message.chat.id)
-        if current:
+        if self._game(message.chat.id):
             await message.reply("⚠️ یک بازی فعال وجود دارد. ابتدا آن را تمام یا لغو کنید.")
             return
-        if not await self._allowed(message, {"moderator_id": 0}):
-            # _allowed also accepts group administrators when there is no moderator.
-            try:
-                member = await self.app.bot.get_chat_member(message.chat.id, message.from_user.id)
-                if member.status not in {"creator", "administrator"}:
-                    await message.reply("⛔ فقط مدیر گروه می‌تواند بازی جدید ایجاد کند.")
-                    return
-            except Exception:
-                await message.reply("⛔ دسترسی ندارید.")
-                return
+        if not await self._is_manager(message):
+            await message.reply("⛔ فقط مدیر گروه می‌تواند بازی جدید ایجاد کند.")
+            return
         try:
             game = self.app.runtime.lobby.start_new(message.chat.id)
             kb = InlineKeyboardMarkup(row_width=1)
@@ -79,12 +71,16 @@ class TextCommands:
                     f"📝 {row.get('name') or sid} ({len(row.get('roles') or [])})",
                     callback_data=f"lobby:{int(game['id'])}:scenario:{sid}",
                 ))
+            sent = await message.reply(
+                "📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:",
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
             state = dict(game.get("state") or {})
-            state["selection_message_id"] = int(message.message_id) + 1
-            state["lobby_message_id"] = int(message.message_id) + 1
+            state["selection_message_id"] = int(sent.message_id)
+            state["lobby_message_id"] = int(sent.message_id)
             self.app.runtime.state.games.update_game(game["id"], state=state)
             self.app.ui.group_chat_id = message.chat.id
-            await message.reply("📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:", parse_mode="HTML", reply_markup=kb)
         except RuntimeError as exc:
             await message.reply(str(exc))
         except Exception:
@@ -98,7 +94,7 @@ class TextCommands:
         if not game:
             await message.reply("❌ بازی فعالی وجود ندارد.")
             return
-        if not await self._allowed(message, game):
+        if not await self._is_manager(message, game):
             await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند مدیریت بازی را باز کند.")
             return
         from runtime.game_management import GameManagement
