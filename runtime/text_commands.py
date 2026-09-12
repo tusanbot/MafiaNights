@@ -5,15 +5,20 @@ import html
 from typing import Any
 
 from aiogram import types
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from repositories.scenario_repository import ScenarioRepository
 
 
 COMMAND_ALIASES = {
     "help": {"راهنما", "کمک", "/help"},
+    "new_game": {"بازی جدید", "/newgame"},
     "management": {"مدیریت", "مدیریت بازی"},
     "score": {"امتیاز", "امتیاز من"},
     "turn": {"نوبت", "نوبت من"},
-    "players": {"بازیکنان", "لیست بازیکنان"},
-    "seats": {"صندلی ها", "صندلی‌ها", "لیست صندلی"},
+    "players": {"بازیکنان"},
+    "seats": {"صندلی ها", "صندلی‌ها"},
+    "challenge": {"چالش"},
 }
 
 
@@ -33,6 +38,7 @@ def _resolve(value: str | None) -> str | None:
 class TextCommands:
     def __init__(self, app: Any):
         self.app = app
+        self.scenarios = ScenarioRepository()
 
     def _game(self, gid: int):
         return self.app.runtime.state.active_game(int(gid))
@@ -45,6 +51,44 @@ class TextCommands:
             return (await self.app.bot.get_chat_member(message.chat.id, uid)).status in {"creator", "administrator"}
         except Exception:
             return False
+
+    async def _new_game(self, message: types.Message):
+        if message.chat.type not in {"group", "supergroup"}:
+            await message.reply("ℹ️ ایجاد بازی جدید فقط داخل گروه قابل استفاده است.")
+            return
+        current = self._game(message.chat.id)
+        if current:
+            await message.reply("⚠️ یک بازی فعال وجود دارد. ابتدا آن را تمام یا لغو کنید.")
+            return
+        if not await self._allowed(message, {"moderator_id": 0}):
+            # _allowed also accepts group administrators when there is no moderator.
+            try:
+                member = await self.app.bot.get_chat_member(message.chat.id, message.from_user.id)
+                if member.status not in {"creator", "administrator"}:
+                    await message.reply("⛔ فقط مدیر گروه می‌تواند بازی جدید ایجاد کند.")
+                    return
+            except Exception:
+                await message.reply("⛔ دسترسی ندارید.")
+                return
+        try:
+            game = self.app.runtime.lobby.start_new(message.chat.id)
+            kb = InlineKeyboardMarkup(row_width=1)
+            for row in self.scenarios.list_active():
+                sid = int(row["id"])
+                kb.add(InlineKeyboardButton(
+                    f"📝 {row.get('name') or sid} ({len(row.get('roles') or [])})",
+                    callback_data=f"lobby:{int(game['id'])}:scenario:{sid}",
+                ))
+            state = dict(game.get("state") or {})
+            state["selection_message_id"] = int(message.message_id) + 1
+            state["lobby_message_id"] = int(message.message_id) + 1
+            self.app.runtime.state.games.update_game(game["id"], state=state)
+            self.app.ui.group_chat_id = message.chat.id
+            await message.reply("📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:", parse_mode="HTML", reply_markup=kb)
+        except RuntimeError as exc:
+            await message.reply(str(exc))
+        except Exception:
+            await message.reply("❌ ایجاد بازی انجام نشد.")
 
     async def _management(self, message: types.Message):
         if message.chat.type not in {"group", "supergroup"}:
@@ -125,6 +169,56 @@ class TextCommands:
         gid = message.chat.id if message.chat.type in {"group", "supergroup"} else None
         await stats.show_stats(message, int(target.id), gid)
 
+    async def _challenge(self, message: types.Message):
+        if message.chat.type not in {"group", "supergroup"}:
+            await message.reply("ℹ️ چالش فقط داخل گروه بازی قابل استفاده است.")
+            return
+        gid = int(message.chat.id)
+        game = self._game(gid)
+        if not game:
+            await message.reply("❌ بازی فعالی وجود ندارد.")
+            return
+        if not getattr(self.app, "challenge_enabled", {}).get(gid, True):
+            await message.reply("⚔️ چالش در این بازی خاموش است.")
+            return
+        reply = getattr(message, "reply_to_message", None)
+        target = getattr(reply, "from_user", None)
+        if not target:
+            await message.reply("❗ برای چالش، روی پیام بازیکن موردنظر ریپلای کنید و بنویسید «چالش».")
+            return
+        challenger = int(message.from_user.id)
+        target_id = int(target.id)
+        if challenger == target_id:
+            await message.reply("❌ نمی‌توانید خودتان را چالش کنید.")
+            return
+        rows = self.app._players_by_seat(gid)
+        target_seat = next((s for s, r in rows.items() if int(r["player_id"]) == target_id), None)
+        challenger_seat = next((s for s, r in rows.items() if int(r["player_id"]) == challenger), None)
+        if target_seat is None or challenger_seat is None:
+            await message.reply("❌ هر دو نفر باید بازیکن فعال بازی باشند.")
+            return
+        state = dict(game.get("state") or {})
+        pending = dict(state.get("challenge_requests") or {})
+        bucket = dict(pending.get(str(target_seat)) or {})
+        if str(challenger) in bucket:
+            await message.reply("⚠️ درخواست چالش شما قبلاً ثبت شده است.")
+            return
+        bucket[str(challenger)] = "pending"
+        pending[str(target_seat)] = bucket
+        state["challenge_requests"] = pending
+        self.app.runtime.state.games.update_game(game["id"], state=state)
+        kb = InlineKeyboardMarkup(row_width=2).add(
+            InlineKeyboardButton("✅ قبول قبل", callback_data=f"fp:accept:before:{challenger}:{target_id}"),
+            InlineKeyboardButton("✅ قبول بعد", callback_data=f"fp:accept:after:{challenger}:{target_id}"),
+            InlineKeyboardButton("❌ رد", callback_data=f"fp:reject:{challenger}:{target_id}"),
+        )
+        await self.app.bot.send_message(
+            gid,
+            f"⚔ <b>{html.escape(self.app._name(challenger))}</b> برای <b>{html.escape(self.app._name(target_id))}</b> درخواست چالش داد.",
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
+
     async def _help(self, message: types.Message):
         text = (
             "📚 <b>دستورات Mafia Nights</b>\n\n"
@@ -133,21 +227,23 @@ class TextCommands:
             "• آمار / امتیاز — آمار و جزئیات امتیاز\n"
             "• رتبه — رتبه‌بندی\n"
             "• صندلی من — شماره صندلی شما\n"
-            "• لیست صندلی — صندلی‌های بازی\n"
+            "• صندلی‌ها — نمایش صندلی‌ها\n"
             "• نقش من — نمایش نقش در پیوی\n"
             "• وضعیت بازی — وضعیت کلی بازی\n"
             "• نوبت من — نوبت فعلی\n"
-            "• جایگزین — ورود به لیست جایگزین\n\n"
-            "📢 <b>دستورات گروهی</b>\n"
+            "• جایگزین — ورود به لیست جایگزین\n"
+            "• چالش — درخواست چالش با ریپلای\n\n"
+            "📢 <b>گروه</b>\n"
             "• تگ لیست — تگ بازیکنان\n"
             "• تگ ادمین — تگ مدیران\n\n"
             "🎩 <b>مدیریت و نظم</b>\n"
+            "• بازی جدید — ایجاد بازی و انتخاب سناریو\n"
             "• مدیریت بازی — پنل مدیریت\n"
-            "• تذکر — ثبت تذکر روی بازیکن (با ریپلای)\n"
-            "• تذکر منفی — کم‌کردن یک تذکر (با ریپلای)\n"
-            "• کیک — خروج اجباری بازیکن (با ریپلای)\n"
+            "• تذکر — ثبت تذکر روی بازیکن با ریپلای\n"
+            "• تذکر منفی — کم‌کردن یک تذکر با ریپلای\n"
+            "• کیک — خروج اجباری بازیکن با ریپلای\n"
             "• لغو بازی — لغو بازی جاری\n\n"
-            "💡 بیشتر دستورات مدیریتی فقط برای گرداننده یا مدیر گروه فعال هستند."
+            "💡 دستورات مدیریتی فقط برای گرداننده یا مدیر گروه فعال هستند."
         )
         await message.reply(text, parse_mode="HTML")
 
@@ -157,6 +253,8 @@ class TextCommands:
             return
         if command == "help":
             await self._help(message)
+        elif command == "new_game":
+            await self._new_game(message)
         elif command == "management":
             await self._management(message)
         elif command == "score":
@@ -167,11 +265,12 @@ class TextCommands:
             await self._players(message)
         elif command == "seats":
             await self._seats(message)
+        elif command == "challenge":
+            await self._challenge(message)
 
     def install(self) -> bool:
         if getattr(self.app, "_text_commands_installed", False):
             return False
-        self.app._user_stats_instance = getattr(self.app, "_user_stats_instance", None)
         self.app.dp.register_message_handler(
             self.command,
             lambda m: _resolve(getattr(m, "text", None)) is not None,
