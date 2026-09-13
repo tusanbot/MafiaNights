@@ -8,6 +8,8 @@ from typing import Any
 
 _seen_updates: set[int] = set()
 _app: Any = None
+_runtime_module: Any = None
+_startup_complete = False
 
 
 def _response(body: dict[str, Any], status: str = "200 OK") -> tuple[str, list[tuple[str, str]], bytes]:
@@ -24,18 +26,40 @@ def _authorized(environ: dict[str, Any]) -> bool:
 
 
 def _get_application() -> Any:
-    """Return the canonical clean production application."""
-    global _app
+    """Return the canonical patched production application.
+
+    The Telegram webhook must import player_runtime_entry, not main.py directly.
+    player_runtime_entry imports main1 and installs the complete production patch
+    stack before exposing the application object.
+    """
+    global _app, _runtime_module
     if _app is None:
-        import main
-        _app = main.app
+        import player_runtime_entry as runtime_entry
+        _runtime_module = runtime_entry
+        _app = runtime_entry.main.app
     return _app
+
+
+async def _ensure_startup() -> None:
+    """Run the canonical production startup once per warm Vercel instance."""
+    global _startup_complete
+    if _startup_complete:
+        return
+
+    runtime_entry = _runtime_module
+    if runtime_entry is None:
+        _get_application()
+        runtime_entry = _runtime_module
+
+    await runtime_entry.on_startup(_app.dp)
+    _startup_complete = True
 
 
 async def _dispatch(payload: dict[str, Any]) -> None:
     from aiogram import Bot, types
 
     app = _get_application()
+    await _ensure_startup()
     update = types.Update(**payload)
     Bot.set_current(app.bot)
     await app.dp.process_update(update)
