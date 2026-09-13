@@ -6,11 +6,15 @@
   "routes": [
     { "src": "/api/telegram/webhook", "dest": "/api/telegram_app.py" },
     { "src": "/api/telegram/setup", "dest": "/api/telegram_app.py" },
+    { "src": "/api/telegram/setup_v2", "dest": "/api/telegram/setup_v2.py" },
     { "src": "/api/telegram/tick", "dest": "/api/telegram/tick.py" }
   ],
   "functions": {
     "api/telegram_app.py": {
       "maxDuration": 300
+    },
+    "api/telegram/setup_v2.py": {
+      "maxDuration": 30
     },
     "api/telegram/tick.py": {
       "maxDuration": 60
