@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from runtime.game_runtime import PersistentGameRuntime
@@ -27,16 +28,11 @@ def install(main_module: Any) -> dict[str, Any]:
     adapter = MigrationAdapter(game_runtime=runtime)
 
     main_module.persistent_runtime = runtime
-    # Some migrated modules historically looked for ``main.runtime``.
-    # Point that alias at the same persistent object; never create a second
-    # in-memory runtime.
     main_module.runtime = runtime
     main_module._migration_adapter = adapter
     main_module._persistent_challenge_runtime = runtime.challenges
 
     turn_cutover = install_legacy_turn_cutover(main_module, adapter)
-    # Lobby cutover middleware is intentionally disabled. lobby_ui_v6 is the
-    # sole lobby owner and talks to PersistentLobbyRuntime directly.
     lobby_cutover = None
     day_cutover = install_legacy_day_cutover(main_module, runtime)
     state_authority = install_legacy_state_authority(main_module, runtime, install_middleware=False)
@@ -109,7 +105,15 @@ async def recover_and_hydrate(main_module: Any) -> list[dict[str, Any]]:
 
 
 async def startup(main_module: Any, original_startup: Any) -> list[dict[str, Any]]:
-    """Run the original Telegram startup and then persistent recovery."""
-    if original_startup is not None:
+    """Run persistent recovery without deleting a webhook in Vercel.
+
+    The legacy main1 startup always calls delete_webhook(), which is correct
+    for long-polling but breaks a request-driven Vercel webhook: the first
+    webhook request deletes the webhook and all subsequent Telegram updates
+    stop arriving. Preserve the original startup for local polling only.
+    """
+    if original_startup is not None and not os.getenv("VERCEL"):
         await original_startup(main_module.dp)
+    elif os.getenv("VERCEL"):
+        logging.info("Webhook runtime detected; skipped polling-only delete_webhook startup.")
     return await recover_and_hydrate(main_module)
