@@ -1,7 +1,7 @@
-"""Private scenario CRUD bridge using the canonical scenario repository/form flow."""
+"""Private scenario CRUD bridge using the friendly scenario form."""
 from __future__ import annotations
 
-from runtime.scenario_management_v3 import ScenarioManagementV3, ScenarioForm
+from runtime.scenario_form_v5 import ScenarioFormV5
 
 
 def _handler(item):
@@ -45,27 +45,22 @@ def _promote_scenario_handlers(dp, manager):
     mh = getattr(dp.message_handlers, "handlers", None)
     callback_methods = {
         "menu", "view", "start_add", "start_edit", "delete_menu", "delete",
-        "delete_confirm", "challenge_mode",
+        "delete_confirm", "challenge_mode", "feature_toggle", "feature_save",
     }
-    state_methods = {
-        "name", "description", "min_players", "max_players", "roles",
-        "role_sides", "challenge_limit", "settings",
-    }
+    state_methods = {"name", "description", "min_players", "max_players", "roles", "settings"}
     if cq is not None:
         owned = [h for h in list(cq) if getattr(_handler(h), "__self__", None) is manager and getattr(_handler(h), "__name__", "") in callback_methods]
-        if owned:
-            cq[:] = owned + [h for h in list(cq) if h not in owned]
+        if owned: cq[:] = owned + [h for h in list(cq) if h not in owned]
     if mh is not None:
         owned = [h for h in list(mh) if getattr(_handler(h), "__self__", None) is manager and getattr(_handler(h), "__name__", "") in state_methods]
-        if owned:
-            mh[:] = owned + [h for h in list(mh) if h not in owned]
+        if owned: mh[:] = owned + [h for h in list(mh) if h not in owned]
 
 
 def install(app):
     if getattr(app, "_private_scenario_crud_installed", False):
         return False
-    manager = ScenarioManagementV3(app)
-    manager._admin = _private_admin.__get__(manager, ScenarioManagementV3)
+    manager = ScenarioFormV5(app)
+    manager._admin = _private_admin.__get__(manager, ScenarioFormV5)
     manager.register(app.dp)
     _promote_scenario_handlers(app.dp, manager)
     app._private_scenario_manager = manager
