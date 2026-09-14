@@ -34,7 +34,7 @@ install_lobby_ui_v9(main)
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 from runtime.game_flow_authority import install as install_game_flow_authority
-install_game_flow_authority(main)
+game_flow_authority = install_game_flow_authority(main)
 from runtime.challenge_authority import install as install_challenge_authority
 install_challenge_authority(main)
 from runtime.callback_authorization import install as install_callback_authorization
@@ -64,6 +64,8 @@ from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 from runtime.private_navigation_authority import install as install_private_navigation_authority
 install_private_navigation_authority(main)
+from runtime.private_scenario_crud import install as install_private_scenario_crud
+install_private_scenario_crud(main)
 
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.live_controls_v2 import install as install_live_controls_v2
@@ -103,6 +105,8 @@ async def on_startup(dp):
     await install_final_private_ui(main)
     from runtime.private_start_guard_v2 import install as install_private_start_guard_v2
     install_private_start_guard_v2(main)
+    from runtime.private_ui_hotfix import install as install_private_ui_hotfix
+    install_private_ui_hotfix(main)
     install_role_distribution_notice(main)
     install_lobby_callback_cutover(main)
     logging.info("FINAL UI AUTHORITY ACTIVE")
