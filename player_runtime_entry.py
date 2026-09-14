@@ -101,13 +101,12 @@ async def on_startup(dp):
     except Exception:
         logging.exception("Failed to initialize private UI group/admin authorization")
 
-    # Final private UI stack: install detailed game/profile/scenario handlers
-    # first, then install one canonical top-level PV router last. The canonical
-    # router removes competing legacy private navigation/start handlers.
     from runtime.final_private_ui import install as install_final_private_ui
     await install_final_private_ui(main)
     from runtime.private_pv_authority_v2 import install as install_canonical_private_pv
     await install_canonical_private_pv(main)
+    from runtime.pv_route_priority_v2 import install as install_pv_route_priority
+    await install_pv_route_priority(main)
     install_role_distribution_notice(main)
     install_lobby_callback_cutover(main)
     logging.info("CANONICAL PRIVATE PV AUTHORITY ACTIVE")
