@@ -1,8 +1,7 @@
 """Canonical private (PV) router for MafiaNights.
 
-This is the final owner of top-level private navigation. Older private
-navigation/start patches are removed from the dispatcher before this router
-is installed, preventing competing handlers from stealing PV callbacks.
+Owns top-level PV navigation and explicitly promotes the small set of routes
+that otherwise can be shadowed by older handlers registered earlier.
 """
 from __future__ import annotations
 
@@ -96,6 +95,23 @@ def _scenario_keyboard():
     return scenario_keyboard()
 
 
+def _promote(handlers, predicate):
+    """Move matching handlers to the front, preserving their relative order."""
+    if handlers is None:
+        return 0
+    matches = [h for h in list(handlers) if predicate(h)]
+    if not matches:
+        return 0
+    rest = [h for h in list(handlers) if h not in matches]
+    handlers[:] = matches + rest
+    return len(matches)
+
+
+def _handler_name(item):
+    fn = _fn(item)
+    return getattr(fn, "__name__", "")
+
+
 async def install(app):
     if getattr(app, "_canonical_private_pv_installed", False):
         return False
@@ -122,6 +138,13 @@ async def install(app):
         await callback.answer()
         raise CancelHandler()
 
+    async def manage_game_back(callback):
+        await _allowed(app, callback)
+        from runtime.final_private_ui import management_report, management_keyboard
+        await callback.message.edit_text(management_report(app), reply_markup=management_keyboard(), parse_mode="HTML")
+        await callback.answer()
+        raise CancelHandler()
+
     async def scenarios(callback):
         await _allowed(app, callback)
         await callback.message.edit_text("⚙️ <b>مدیریت سناریو</b>\n\nیک گزینه را انتخاب کنید:", reply_markup=_scenario_keyboard(), parse_mode="HTML")
@@ -132,6 +155,12 @@ async def install(app):
         await _allowed(app, callback)
         from runtime.addons_menu_v2 import AddonsMenuV2
         await AddonsMenuV2(app).menu(callback)
+        raise CancelHandler()
+
+    async def addons_back(callback):
+        await _allowed(app, callback)
+        await callback.message.edit_text("🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:", reply_markup=_start_keyboard(), parse_mode="HTML")
+        await callback.answer()
         raise CancelHandler()
 
     async def profile(callback):
@@ -145,6 +174,16 @@ async def install(app):
             await profile_menu(callback)
         raise CancelHandler()
 
+    async def profile_settings(callback):
+        if not _private(callback):
+            raise CancelHandler()
+        enhancement = getattr(app, "profile_enhancements", None)
+        if enhancement is None:
+            await callback.answer("⚠️ تنظیمات پروفایل در دسترس نیست.", show_alert=True)
+            raise CancelHandler()
+        await enhancement.settings(callback)
+        raise CancelHandler()
+
     async def help_menu(callback):
         if not _private(callback):
             raise CancelHandler()
@@ -156,14 +195,25 @@ async def install(app):
         await callback.answer()
         raise CancelHandler()
 
-    # Exact ownership for top-level PV routes.
+    # Register, then explicitly promote these canonical routes. Aiogram checks
+    # handlers in registration order, so merely registering them last is not enough.
     dp.register_message_handler(show_start, commands={"start"}, state="*")
     dp.register_callback_query_handler(start_callback, lambda c: c.data in {"final:start", "private:start"}, state="*")
     dp.register_callback_query_handler(manage_game, lambda c: c.data == "manage_game", state="*")
+    dp.register_callback_query_handler(manage_game_back, lambda c: c.data == "finalgm:back", state="*")
     dp.register_callback_query_handler(scenarios, lambda c: c.data == "final:scenarios", state="*")
     dp.register_callback_query_handler(addons, lambda c: c.data == "addons_menu", state="*")
-    dp.register_callback_query_handler(profile, lambda c: c.data == "up:menu", state="*")
+    dp.register_callback_query_handler(addons_back, lambda c: c.data == "addons:back", state="*")
+    dp.register_callback_query_handler(profile, lambda c: c.data in {"up:menu", "up:profile"}, state="*")
+    dp.register_callback_query_handler(profile_settings, lambda c: c.data == "profile:settings", state="*")
     dp.register_callback_query_handler(help_menu, lambda c: c.data == "final:help", state="*")
+
+    cq = getattr(dp.callback_query_handlers, "handlers", None)
+    mh = getattr(dp.message_handlers, "handlers", None)
+    # Canonical top-level routes must precede legacy detailed routes.
+    canonical_names = {"start_callback", "manage_game", "manage_game_back", "scenarios", "addons", "addons_back", "profile", "profile_settings", "help_menu"}
+    _promote(cq, lambda h: _handler_name(h) in canonical_names)
+    _promote(mh, lambda h: _handler_name(h) == "show_start")
 
     app._canonical_private_pv_installed = True
     logging.info("CANONICAL PRIVATE PV AUTHORITY ACTIVE removed_legacy_handlers=%s", removed)
