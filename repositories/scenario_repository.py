@@ -33,11 +33,14 @@ class ScenarioRepository(DatabaseRepository):
         with self.SessionLocal() as session:
             row = session.execute(text(
                 "insert into public.mafia_scenarios "
-                "(name, description, min_players, max_players, roles, config, is_active, updated_at) "
-                "values (:name, :description, :min_players, :max_players, cast(:roles as jsonb), cast(:config as jsonb), :is_active, now()) "
+                "(name, description, min_players, max_players, roles, config, is_active, sort_order, updated_at) "
+                "values (:name, :description, :min_players, :max_players, cast(:roles as jsonb), "
+                "cast(:config as jsonb), :is_active, "
+                "coalesce((select max(sort_order) + 1 from public.mafia_scenarios), 0), now()) "
                 "on conflict (name) do update set description = excluded.description, "
                 "min_players = excluded.min_players, max_players = excluded.max_players, "
-                "roles = excluded.roles, config = excluded.config, is_active = excluded.is_active, updated_at = now() "
+                "roles = excluded.roles, config = excluded.config, is_active = excluded.is_active, "
+                "updated_at = now() "
                 "returning id"
             ), {
                 "name": name, "description": description, "min_players": min_players,
