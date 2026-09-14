@@ -25,12 +25,7 @@ def _authorized(environ: dict[str, Any]) -> bool:
 
 
 def _get_runtime() -> Any:
-    """Return the canonical patched production module.
-
-    player_runtime_entry imports main1 and installs the complete production
-    patch stack. main1 is an aiogram module container, not a WSGI application,
-    so the webhook dispatches through its Dispatcher directly.
-    """
+    """Return the canonical patched production module."""
     global _runtime_module
     if _runtime_module is None:
         import player_runtime_entry as runtime_entry
@@ -43,36 +38,37 @@ async def _ensure_startup() -> None:
     global _startup_complete
     if _startup_complete:
         return
-
     runtime_entry = _get_runtime()
     await runtime_entry.on_startup(runtime_entry.main.dp)
     _startup_complete = True
 
 
 async def _dispatch(payload: dict[str, Any]) -> None:
-    from aiogram import Bot, types
+    from aiogram import Bot, Dispatcher, types
 
     runtime_entry = _get_runtime()
     await _ensure_startup()
     update = types.Update(**payload)
+
+    # Webhook dispatch is invoked directly rather than through executor.start_polling.
+    # Aiogram's FSM State.set()/storage APIs still depend on Dispatcher.get_current(),
+    # so establish both context variables explicitly for every webhook update.
     Bot.set_current(runtime_entry.main.bot)
+    Dispatcher.set_current(runtime_entry.main.dp)
     await runtime_entry.main.dp.process_update(update)
 
 
 def app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
     """WSGI application accepted by the Vercel Python runtime."""
     method = str(environ.get("REQUEST_METHOD", "GET")).upper()
-
     if method == "GET":
         status, headers, body = _response({"ok": True, "service": "mafia-nights-telegram"})
         start_response(status, headers)
         return [body]
-
     if method != "POST":
         status, headers, body = _response({"ok": False, "error": "method_not_allowed"}, "405 Method Not Allowed")
         start_response(status, headers)
         return [body]
-
     if not _authorized(environ):
         status, headers, body = _response({"ok": False, "error": "unauthorized"}, "401 Unauthorized")
         start_response(status, headers)
@@ -82,7 +78,6 @@ def app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
         length = int(environ.get("CONTENT_LENGTH") or "0")
     except (TypeError, ValueError):
         length = 0
-
     raw = environ.get("wsgi.input").read(length) if environ.get("wsgi.input") else b""
     try:
         payload = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw or "{}")
@@ -90,7 +85,6 @@ def app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
         status, headers, body = _response({"ok": False, "error": "invalid_json"}, "400 Bad Request")
         start_response(status, headers)
         return [body]
-
     if not isinstance(payload, dict):
         status, headers, body = _response({"ok": False, "error": "invalid_update"}, "400 Bad Request")
         start_response(status, headers)
