@@ -52,6 +52,7 @@ from runtime.user_panel_back_patch import install as install_user_panel_back_pat
 install_user_panel_back_patch(main, user_panel)
 from runtime.profile_enhancements_fixed import install as install_profile_enhancements
 profile_enhancements = install_profile_enhancements(main, user_panel)
+main.profile_enhancements = profile_enhancements
 
 from commands import register_commands as register_text_commands
 register_text_commands(main)
@@ -62,8 +63,6 @@ from runtime.addons_persistence_patch import install as install_addons_persisten
 install_addons_persistence_patch(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
-from runtime.private_navigation_authority import install as install_private_navigation_authority
-install_private_navigation_authority(main)
 from runtime.private_scenario_crud import install as install_private_scenario_crud
 install_private_scenario_crud(main)
 
@@ -101,15 +100,17 @@ async def on_startup(dp):
             main.group_admins = list(main.admins)
     except Exception:
         logging.exception("Failed to initialize private UI group/admin authorization")
+
+    # Final private UI stack: install detailed game/profile/scenario handlers
+    # first, then install one canonical top-level PV router last. The canonical
+    # router removes competing legacy private navigation/start handlers.
     from runtime.final_private_ui import install as install_final_private_ui
     await install_final_private_ui(main)
-    from runtime.private_start_guard_v2 import install as install_private_start_guard_v2
-    install_private_start_guard_v2(main)
-    from runtime.private_ui_hotfix import install as install_private_ui_hotfix
-    install_private_ui_hotfix(main)
+    from runtime.private_pv_authority_v2 import install as install_canonical_private_pv
+    await install_canonical_private_pv(main)
     install_role_distribution_notice(main)
     install_lobby_callback_cutover(main)
-    logging.info("FINAL UI AUTHORITY ACTIVE")
+    logging.info("CANONICAL PRIVATE PV AUTHORITY ACTIVE")
 
 if __name__ == "__main__":
     main.executor.start_polling(main.dp, skip_updates=True, on_startup=on_startup)
