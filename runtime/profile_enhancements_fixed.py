@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import re
 from typing import Optional
 
@@ -17,7 +18,7 @@ class FixedProfileEnhancements(ProfileEnhancements):
     @classmethod
     def _valid_nickname(cls, value: str) -> bool:
         value = cls._normalize(value)
-        return 1 <= len(value) <= 32 and bool(STRICT_PERSIAN_RE.fullmatch(value)) and any(c in value for c in "اآبپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی")
+        return 1 <= len(value) <= 32 and bool(STRICT_PERSIAN_RE.fullmatch(value)) and any(c in value for c in "اآبپتثجچحخدذرزژسشصضطظععغفقکگلمنوهی")
 
     async def profile(self, callback):
         uid = int(callback.from_user.id)
@@ -37,9 +38,51 @@ class FixedProfileEnhancements(ProfileEnhancements):
             InlineKeyboardButton("⚙️ تنظیمات پروفایل", callback_data="profile:settings"),
             InlineKeyboardButton("⬅️ پنل اصلی", callback_data="up:menu"),
         )
-        body = ("👤 <b>پروفایل من</b>\n\n" f"نام: <b>{__import__('html').escape(str(name))}</b>\n" f"نام مستعار: <b>{__import__('html').escape(str(nickname))}</b>\n" f"جنسیت: <b>{gtext}</b>\n" f"نام کاربری: @{__import__('html').escape(str(row.get('username'))) if row.get('username') else '—'}\n" f"شناسه عددی: <code>{uid}</code>\n" f"تعداد بازی: <b>{games}</b>")
+        body = ("👤 <b>پروفایل من</b>\n\n" f"نام: <b>{html.escape(str(name))}</b>\n" f"نام مستعار: <b>{html.escape(str(nickname))}</b>\n" f"جنسیت: <b>{gtext}</b>\n" f"نام کاربری: @{html.escape(str(row.get('username'))) if row.get('username') else '—'}\n" f"شناسه عددی: <code>{uid}</code>\n" f"تعداد بازی: <b>{games}</b>")
         await callback.message.edit_text(body, reply_markup=kb, parse_mode="HTML")
         await callback.answer()
+
+    async def save_nickname(self, message, state):
+        value = self._normalize(message.text or "")
+        if value == "حذف":
+            nickname = None
+        elif self._valid_nickname(value):
+            nickname = value
+        else:
+            await message.answer("❌ نام مستعار نامعتبر است. فقط حروف فارسی و فاصله مجاز است و حداکثر ۳۲ نویسه می‌تواند باشد.")
+            return
+
+        try:
+            with self._session() as s:
+                s.execute(text("""
+                    insert into public.mafia_players
+                        (id, username, first_name, last_name, nickname, gender, created_at, updated_at)
+                    values
+                        (:id, :username, :first_name, :last_name, :nickname, null, now(), now())
+                    on conflict (id) do update set
+                        username=coalesce(excluded.username, public.mafia_players.username),
+                        first_name=coalesce(excluded.first_name, public.mafia_players.first_name),
+                        last_name=coalesce(excluded.last_name, public.mafia_players.last_name),
+                        nickname=excluded.nickname,
+                        updated_at=now()
+                """), {
+                    "id": int(message.from_user.id),
+                    "username": message.from_user.username,
+                    "first_name": message.from_user.first_name,
+                    "last_name": message.from_user.last_name,
+                    "nickname": nickname,
+                })
+                s.commit()
+            self._invalidate(message.from_user.id)
+            await state.finish()
+            markup = self.user_panel._menu() if self.user_panel is not None else None
+            await message.answer("✅ نام مستعار ذخیره شد." if nickname else "✅ نام مستعار حذف شد.", reply_markup=markup)
+        except Exception:
+            try:
+                await state.finish()
+            except Exception:
+                pass
+            await message.answer("❌ ذخیره نام مستعار انجام نشد. خطای پایگاه‌داده رخ داد.")
 
     def transfer_account(self, source: int, target: int, actor: int, group_id: Optional[int]):
         source, target, actor = int(source), int(target), int(actor)
