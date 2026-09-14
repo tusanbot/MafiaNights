@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from aiogram.dispatcher.handler import CancelHandler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.utils.exceptions import MessageNotModified
 
 LEGACY_PRIVATE_MODULES = {
     "runtime.private_navigation_authority",
@@ -96,7 +97,6 @@ def _scenario_keyboard():
 
 
 def _promote(handlers, predicate):
-    """Move matching handlers to the front, preserving their relative order."""
     if handlers is None:
         return 0
     matches = [h for h in list(handlers) if predicate(h)]
@@ -127,27 +127,39 @@ async def install(app):
     async def start_callback(callback):
         if not _private(callback):
             raise CancelHandler()
-        await callback.message.edit_text("🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:", reply_markup=_start_keyboard(), parse_mode="HTML")
+        try:
+            await callback.message.edit_text("🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:", reply_markup=_start_keyboard(), parse_mode="HTML")
+        except MessageNotModified:
+            pass
         await callback.answer()
         raise CancelHandler()
 
     async def manage_game(callback):
         await _allowed(app, callback)
         from runtime.final_private_ui import management_report, management_keyboard
-        await callback.message.edit_text(management_report(app), reply_markup=management_keyboard(), parse_mode="HTML")
+        try:
+            await callback.message.edit_text(management_report(app), reply_markup=management_keyboard(), parse_mode="HTML")
+        except MessageNotModified:
+            pass
         await callback.answer()
         raise CancelHandler()
 
     async def manage_game_back(callback):
         await _allowed(app, callback)
         from runtime.final_private_ui import management_report, management_keyboard
-        await callback.message.edit_text(management_report(app), reply_markup=management_keyboard(), parse_mode="HTML")
-        await callback.answer()
+        try:
+            await callback.message.edit_text(management_report(app), reply_markup=management_keyboard(), parse_mode="HTML")
+        except MessageNotModified:
+            pass
+        await callback.answer("↩️")
         raise CancelHandler()
 
     async def scenarios(callback):
         await _allowed(app, callback)
-        await callback.message.edit_text("⚙️ <b>مدیریت سناریو</b>\n\nیک گزینه را انتخاب کنید:", reply_markup=_scenario_keyboard(), parse_mode="HTML")
+        try:
+            await callback.message.edit_text("⚙️ <b>مدیریت سناریو</b>\n\nیک گزینه را انتخاب کنید:", reply_markup=_scenario_keyboard(), parse_mode="HTML")
+        except MessageNotModified:
+            pass
         await callback.answer()
         raise CancelHandler()
 
@@ -159,8 +171,11 @@ async def install(app):
 
     async def addons_back(callback):
         await _allowed(app, callback)
-        await callback.message.edit_text("🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:", reply_markup=_start_keyboard(), parse_mode="HTML")
-        await callback.answer()
+        try:
+            await callback.message.edit_text("🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:", reply_markup=_start_keyboard(), parse_mode="HTML")
+        except MessageNotModified:
+            pass
+        await callback.answer("↩️")
         raise CancelHandler()
 
     async def profile(callback):
@@ -187,16 +202,17 @@ async def install(app):
     async def help_menu(callback):
         if not _private(callback):
             raise CancelHandler()
-        await callback.message.edit_text(
-            "📚 <b>راهنمای Mafia Nights</b>\n\nبرای شروع بازی از گروه استفاده کنید.\nمدیریت بازی و سناریو فقط برای گرداننده یا مدیر گروه در دسترس است.",
-            reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("⬅️ بازگشت", callback_data="final:start")),
-            parse_mode="HTML",
-        )
+        try:
+            await callback.message.edit_text(
+                "📚 <b>راهنمای Mafia Nights</b>\n\nبرای شروع بازی از گروه استفاده کنید.\nمدیریت بازی و سناریو فقط برای گرداننده یا مدیر گروه در دسترس است.",
+                reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("⬅️ بازگشت", callback_data="final:start")),
+                parse_mode="HTML",
+            )
+        except MessageNotModified:
+            pass
         await callback.answer()
         raise CancelHandler()
 
-    # Register, then explicitly promote these canonical routes. Aiogram checks
-    # handlers in registration order, so merely registering them last is not enough.
     dp.register_message_handler(show_start, commands={"start"}, state="*")
     dp.register_callback_query_handler(start_callback, lambda c: c.data in {"final:start", "private:start"}, state="*")
     dp.register_callback_query_handler(manage_game, lambda c: c.data == "manage_game", state="*")
@@ -210,7 +226,6 @@ async def install(app):
 
     cq = getattr(dp.callback_query_handlers, "handlers", None)
     mh = getattr(dp.message_handlers, "handlers", None)
-    # Canonical top-level routes must precede legacy detailed routes.
     canonical_names = {"start_callback", "manage_game", "manage_game_back", "scenarios", "addons", "addons_back", "profile", "profile_settings", "help_menu"}
     _promote(cq, lambda h: _handler_name(h) in canonical_names)
     _promote(mh, lambda h: _handler_name(h) == "show_start")
