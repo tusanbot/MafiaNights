@@ -1,9 +1,4 @@
-"""Final canonical fixes for private profile and scenario navigation.
-
-This module intentionally owns only the routes that were conflicting between the
-older private UI layers. It is installed last and promoted to the front of the
-callback handler list.
-"""
+"""Final canonical fixes for private profile and scenario navigation."""
 from __future__ import annotations
 
 import logging
@@ -24,16 +19,30 @@ async def install(app):
     if handlers is None or getattr(app, "_private_ui_recovery_v7", False):
         return False
 
+    # Canonical main-panel keyboard: profile must be a real profile entry.
+    # `up:menu` is exclusively the profile -> main-panel route.
+    try:
+        from runtime import final_private_ui
+
+        def canonical_start_keyboard():
+            kb = InlineKeyboardMarkup(row_width=1)
+            kb.add(InlineKeyboardButton("🛠 مدیریت بازی", callback_data="manage_game"))
+            kb.add(InlineKeyboardButton("⚙️ مدیریت سناریو", callback_data="final:scenarios"))
+            kb.add(InlineKeyboardButton("⚙️ امکانات اضافه", callback_data="addons_menu"))
+            kb.add(InlineKeyboardButton("👤 پروفایل", callback_data="up:profile"))
+            kb.add(InlineKeyboardButton("📚 راهنما", callback_data="final:help"))
+            return kb
+
+        final_private_ui.start_keyboard = canonical_start_keyboard
+    except Exception:
+        logging.exception("private v7: failed to patch canonical start keyboard")
+
     async def home(callback):
         if not _private(callback):
             raise CancelHandler()
         try:
             from runtime.final_private_ui import start_keyboard
-            await callback.message.edit_text(
-                "🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:",
-                reply_markup=start_keyboard(),
-                parse_mode="HTML",
-            )
+            await callback.message.edit_text("🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:", reply_markup=start_keyboard(), parse_mode="HTML")
         except MessageNotModified:
             pass
         await callback.answer()
