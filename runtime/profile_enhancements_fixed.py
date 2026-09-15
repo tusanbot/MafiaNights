@@ -18,11 +18,11 @@ class FixedProfileEnhancements(ProfileEnhancements):
     @classmethod
     def _valid_nickname(cls, value: str) -> bool:
         value = cls._normalize(value)
-        return 1 <= len(value) <= 32 and bool(STRICT_PERSIAN_RE.fullmatch(value)) and any(c in value for c in "اآبپتثجچحخدذرزژسشصضطظععغفقکگلمنوهی")
+        return 1 <= len(value) <= 32 and bool(STRICT_PERSIAN_RE.fullmatch(value)) and any(c in value for c in "اآبپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی")
 
     async def profile(self, callback):
         uid = int(callback.from_user.id)
-        row = self._profile(uid) or {"username": callback.from_user.username, "first_name": callback.from_user.first_name, "last_name": callback.from_user.last_name}
+        row = self._profile(uid) or {"username": callback.from_user.username, "first_name": callback.from_user.first_name, "last_name": callback.from_user.last_name, "nickname": None, "gender": None}
         with self._session() as s:
             games = int(s.execute(text("select count(*) from public.mafia_game_players where player_id=:id"), {"id": uid}).scalar() or 0)
         gender = row.get("gender")
@@ -31,10 +31,8 @@ class FixedProfileEnhancements(ProfileEnhancements):
         name = nickname if nickname != "تنظیم نشده" else " ".join(x for x in ((row.get("first_name") or "").strip(), (row.get("last_name") or "").strip()) if x) or row.get("username") or "❓"
         from aiogram.types import InlineKeyboardMarkup
         kb = InlineKeyboardMarkup(row_width=2).add(
-            InlineKeyboardButton("📊 آمار پیشرفته", callback_data="profile:advanced"),
+            InlineKeyboardButton("📊 آمار و امتیازات", callback_data="profile:advanced"),
             InlineKeyboardButton("⚧ جنسیت", callback_data="profile:gender"),
-            InlineKeyboardButton("✏️ نام مستعار", callback_data="profile:nickname"),
-            InlineKeyboardButton("🔁 انتقال حساب", callback_data="profile:transfer"),
             InlineKeyboardButton("⚙️ تنظیمات پروفایل", callback_data="profile:settings"),
             InlineKeyboardButton("⬅️ پنل اصلی", callback_data="up:menu"),
         )
@@ -51,7 +49,6 @@ class FixedProfileEnhancements(ProfileEnhancements):
         else:
             await message.answer("❌ نام مستعار نامعتبر است. فقط حروف فارسی و فاصله مجاز است و حداکثر ۳۲ نویسه می‌تواند باشد.")
             return
-
         try:
             with self._session() as s:
                 s.execute(text("""
@@ -82,6 +79,7 @@ class FixedProfileEnhancements(ProfileEnhancements):
                 await state.finish()
             except Exception:
                 pass
+            logging.exception("fixed profile nickname save failed")
             await message.answer("❌ ذخیره نام مستعار انجام نشد. خطای پایگاه‌داده رخ داد.")
 
     def transfer_account(self, source: int, target: int, actor: int, group_id: Optional[int]):
@@ -119,6 +117,7 @@ class FixedProfileEnhancements(ProfileEnhancements):
             self._invalidate(source); self._invalidate(target)
             return True, "✅ انتقال حساب انجام شد."
         except Exception:
+            logging.exception("fixed profile account transfer failed")
             return False, "❌ انتقال حساب انجام نشد. داده مقصد یا سابقه بازی با انتقال سازگار نیست."
 
 
@@ -130,8 +129,11 @@ def install(app, user_panel=None):
         uid = int(user_id)
         name = original(uid, fallback)
         if uid not in enhancement.gender_cache:
-            row = enhancement._profile(uid)
-            enhancement.gender_cache[uid] = (row or {}).get("gender") or ""
+            try:
+                row = enhancement._profile(uid)
+                enhancement.gender_cache[uid] = (row or {}).get("gender") or ""
+            except Exception:
+                enhancement.gender_cache[uid] = ""
         emoji = enhancement._gender_emoji(enhancement.gender_cache.get(uid))
         return f"{emoji} {name}".strip() if emoji else name
 
