@@ -1,19 +1,45 @@
 from __future__ import annotations
 
 import html
+import logging
 from aiogram.dispatcher.handler import CancelHandler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from repositories.scenario_repository import ScenarioRepository
 from runtime.scenario_runtime import ScenarioRuntime
 
 
+def _registry(main):
+    return getattr(getattr(main.dp, "callback_query_handlers", None), "handlers", [])
+
+
+def _remove_legacy_lobby_handlers(main):
+    """Make v9 the single owner of the lobby scenario flow.
+
+    v8 was registered before v9 and its generic `scenario` handler therefore
+    consumed lv8_s callbacks before the numeric-ID v9 handler could run.
+    Remove the known legacy lobby callbacks by function name before registering
+    the canonical v9 handlers.
+    """
+    reg = _registry(main)
+    legacy_names = {"new", "scenario", "moderator", "change_s", "manage"}
+    before = len(reg)
+    reg[:] = [
+        item
+        for item in reg
+        if getattr(getattr(item, "callback", None), "__name__", "") not in legacy_names
+    ]
+    return before - len(reg)
+
+
 def install(main):
     if getattr(main, "_lobby_ui_v9_installed", False):
         return False
     main._lobby_ui_v9_installed = True
+
+    removed = _remove_legacy_lobby_handlers(main)
     repo = ScenarioRepository()
     dp = main.dp
-    reg = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
+    reg = _registry(main)
     if reg is None:
         return False
 
@@ -98,7 +124,6 @@ def install(main):
                 for player in list(main.runtime.lobby_snapshot(gid).get("players", [])):
                     main.runtime.lobby.leave(gid, int(player["player_id"]))
         except Exception:
-            import logging
             logging.exception("scenario selection persistence failed sid=%s group=%s", sid, gid)
             await c.answer("❌ ذخیره سناریو انجام نشد.", show_alert=True); raise CancelHandler()
         main.selected_scenario = selected; main.MAX_SEATS = len(row.get("roles") or [])
@@ -127,6 +152,9 @@ def install(main):
 
     for fn,flt in ((new,lambda c:c.data=="lv6_new"),(show_catalog,lambda c:c.data=="lv9_catalog"),(category,lambda c:str(c.data).startswith("lv9_cat:")),(choose,lambda c:str(c.data).startswith("lv9_s:") or str(c.data).startswith("lv8_s:") or str(c.data).startswith("lv6_s:")),(moderator,lambda c:str(c.data).startswith("lv9_m:")),(change,lambda c:c.data=="lv6_change_s")):
         dp.register_callback_query_handler(fn,flt,state="*")
+        reg = _registry(main)
         for i,item in enumerate(reg):
-            if getattr(item,"callback",None) is fn: reg.insert(0,reg.pop(i)); break
+            if getattr(item,"callback",None) is fn:
+                reg.insert(0,reg.pop(i)); break
+    logging.info("LOBBY_UI_V9 active: canonical numeric scenario IDs; removed_legacy=%s", removed)
     return True
