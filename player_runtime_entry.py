@@ -23,11 +23,13 @@ from runtime.production_fastpath import install as install_production_fastpath
 install_production_fastpath(main)
 
 # Canonical group lobby: v6 remains the complete seat/grid/runtime base;
-# v9 owns the scenario-selection flow with numeric DB scenario IDs.
+# v9 owns scenario selection with numeric DB IDs; v10 owns the final lobby controls.
 from runtime.lobby_ui_v6 import install as install_lobby_ui
 install_lobby_ui(main)
 from runtime.lobby_ui_v9_patch import install as install_lobby_ui_v9
 install_lobby_ui_v9(main)
+from runtime.lobby_ui_v10_patch import install as install_lobby_ui_v10
+install_lobby_ui_v10(main)
 
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
@@ -118,13 +120,5 @@ async def on_startup(dp):
     await install_private_ui_recovery_v7(main)
     from runtime.private_ui_recovery_v8 import install as install_private_ui_recovery_v8
     await install_private_ui_recovery_v8(main)
-    install_role_distribution_notice(main)
-    logging.info("CANONICAL PRIVATE PV AUTHORITY ACTIVE")
-    logging.info("PRIVATE UI RECOVERY V3 ACTIVE")
-    logging.info("PRIVATE UI RECOVERY V5 ACTIVE")
-    logging.info("PRIVATE UI RECOVERY V6 ACTIVE")
-    logging.info("PRIVATE UI RECOVERY V7 ACTIVE")
-    logging.info("PRIVATE UI RECOVERY V8 ACTIVE")
 
-if __name__ == "__main__":
-    main.executor.start_polling(main.dp, skip_updates=True, on_startup=on_startup)
+main.on_startup = on_startup
