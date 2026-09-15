@@ -116,12 +116,15 @@ async def on_startup(dp):
     await install_private_ui_recovery_v6(main)
     from runtime.private_ui_recovery_v7 import install as install_private_ui_recovery_v7
     await install_private_ui_recovery_v7(main)
+    from runtime.private_ui_recovery_v8 import install as install_private_ui_recovery_v8
+    await install_private_ui_recovery_v8(main)
     install_role_distribution_notice(main)
     logging.info("CANONICAL PRIVATE PV AUTHORITY ACTIVE")
     logging.info("PRIVATE UI RECOVERY V3 ACTIVE")
     logging.info("PRIVATE UI RECOVERY V5 ACTIVE")
     logging.info("PRIVATE UI RECOVERY V6 ACTIVE")
     logging.info("PRIVATE UI RECOVERY V7 ACTIVE")
+    logging.info("PRIVATE UI RECOVERY V8 ACTIVE")
 
 if __name__ == "__main__":
     main.executor.start_polling(main.dp, skip_updates=True, on_startup=on_startup)
