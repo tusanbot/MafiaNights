@@ -4,6 +4,7 @@ import html
 from aiogram.dispatcher.handler import CancelHandler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from repositories.scenario_repository import ScenarioRepository
+from runtime.scenario_runtime import ScenarioRuntime
 
 
 def install(main):
@@ -64,21 +65,39 @@ def install(main):
         await c.message.edit_text(f"{title}\n\nنسخه موردنظر را انتخاب کنید:", parse_mode="HTML", reply_markup=scenario_kb(key))
         await c.answer(); raise CancelHandler()
 
+    def resolve_selection(data):
+        parts = str(data).split(":")
+        if len(parts) == 3 and parts[0] == "lv9_s":
+            return int(parts[2])
+        if len(parts) == 2 and parts[0] == "lv8_s":
+            index = int(parts[1])
+            names = list((getattr(main, "scenarios", {}) or {}).keys())
+            if index < 0 or index >= len(names):
+                raise ValueError("scenario index out of range")
+            row = repo.get_by_name(names[index])
+            if not row:
+                raise ValueError("scenario not found")
+            return int(row["id"])
+        raise ValueError("invalid scenario callback")
+
     async def choose(c):
-        p = str(c.data).split(":")
-        if len(p) != 3: return
-        key,sid = p[1],int(p[2])
-        row = repo.get_by_id(sid)
+        try:
+            sid = resolve_selection(c.data)
+            row = repo.get_by_id(sid)
+        except Exception:
+            await c.answer("❌ سناریو نامعتبر است.", show_alert=True); raise CancelHandler()
         if not row or not row.get("is_active",True):
             await c.answer("❌ سناریو معتبر نیست.", show_alert=True); raise CancelHandler()
         selected = str(row["name"]); gid = int(c.message.chat.id)
         try:
-            if getattr(main,"runtime",None): main.runtime.lobby.set_scenario(gid, selected)
+            runtime = ScenarioRuntime(main)
             game = main.runtime.state.active_game(gid)
-            if game:
-                state = dict(game.get("state") or {}); state["scenario_name"] = selected; state["scenario_id"] = sid
-                main.runtime.state.games.update_game(game["id"], scenario_id=sid, state=state)
+            if not game:
+                raise ValueError("بازی فعال پیدا نشد")
+            runtime.apply_to_game(str(game["id"]), sid)
         except Exception:
+            import logging
+            logging.exception("scenario selection persistence failed sid=%s group=%s", sid, gid)
             await c.answer("❌ ذخیره سناریو انجام نشد.", show_alert=True); raise CancelHandler()
         main.selected_scenario = selected; main.MAX_SEATS = len(row.get("roles") or [])
         if getattr(main,"_lv6_change_scenario",False) and getattr(main,"moderator_id",None):
@@ -104,7 +123,7 @@ def install(main):
         except Exception: pass
         await c.message.edit_text("✅ <b>لابی آماده شد.</b>",parse_mode="HTML"); await c.answer(); raise CancelHandler()
 
-    for fn,flt in ((new,lambda c:c.data=="lv6_new"),(show_catalog,lambda c:c.data=="lv9_catalog"),(category,lambda c:str(c.data).startswith("lv9_cat:")),(choose,lambda c:str(c.data).startswith("lv9_s:")),(moderator,lambda c:str(c.data).startswith("lv9_m:")),(change,lambda c:c.data=="lv6_change_s")):
+    for fn,flt in ((new,lambda c:c.data=="lv6_new"),(show_catalog,lambda c:c.data=="lv9_catalog"),(category,lambda c:str(c.data).startswith("lv9_cat:")),(choose,lambda c:str(c.data).startswith("lv9_s:") or str(c.data).startswith("lv8_s:")),(moderator,lambda c:str(c.data).startswith("lv9_m:")),(change,lambda c:c.data=="lv6_change_s")):
         dp.register_callback_query_handler(fn,flt,state="*")
         for i,item in enumerate(reg):
             if getattr(item,"callback",None) is fn: reg.insert(0,reg.pop(i)); break
