@@ -23,7 +23,7 @@ from runtime.production_fastpath import install as install_production_fastpath
 install_production_fastpath(main)
 
 # Canonical group lobby: v6 remains the complete seat/grid/runtime base;
-# v9 owns scenario selection with numeric DB IDs; v10 owns the final lobby controls.
+# v9 owns scenario selection with numeric DB scenario IDs; v10 owns final lobby controls.
 from runtime.lobby_ui_v6 import install as install_lobby_ui
 install_lobby_ui(main)
 from runtime.lobby_ui_v9_patch import install as install_lobby_ui_v9
@@ -80,6 +80,8 @@ from runtime.role_distribution_notice import install as install_role_distributio
 from runtime.voting_runtime import install as install_voting_runtime
 install_stable_round_engine(main)
 install_live_controls_v2(main)
+from runtime.lobby_ui_v10_runtime_patch import install as install_lobby_ui_v10_runtime
+install_lobby_ui_v10_runtime(main)
 install_lobby_challenge_v2(main)
 install_stable_round_policy(main)
 install_stable_challenge_button_guard(main)
