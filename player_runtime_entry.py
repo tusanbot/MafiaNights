@@ -18,6 +18,14 @@ install_production_fastpath(main)
 # Single authoritative group lobby. Previous lobby UI layers are intentionally not loaded.
 from runtime.lobby_ui_final import install as install_final_lobby
 install_final_lobby(main)
+# Canonical management callbacks used by the final lobby.
+from runtime.game_management import GameManagement
+main.game_management = GameManagement(main)
+main.game_management.install()
+# Canonical role distribution is the bridge from a full lobby into the running game.
+from runtime.role_distribution import install as install_role_distribution
+install_role_distribution(main)
+main._canonical_distribute_roles = main._role_distribution_handler
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 from runtime.game_flow_authority import install as install_game_flow_authority
@@ -58,7 +66,6 @@ from runtime.lobby_challenge_v2 import install as install_lobby_challenge_v2
 from runtime.stable_round_policy import install as install_stable_round_policy
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
 from runtime.transition_ui_dedup import install as install_transition_ui_dedup
-from runtime.role_distribution_notice import install as install_role_distribution_notice
 from runtime.voting_runtime import install as install_voting_runtime
 install_stable_round_engine(main); install_live_controls_v2(main); install_lobby_challenge_v2(main); install_stable_round_policy(main); install_stable_challenge_button_guard(main); install_transition_ui_dedup(main); install_voting_runtime(main)
 from runtime.game_info_security_v2 import install as install_game_info_security_v2
