@@ -10,6 +10,27 @@ def install(main):
     if getattr(main, "_final_lobby_installed", False): return False
     main._final_lobby_installed = True
     repo = ScenarioRepository(); dp = main.dp
+
+    # The legacy lobby lives in main1.py.  It is not a second lobby anymore:
+    # its callback handlers are removed here so this file is the only owner of
+    # group-lobby callbacks.  Do this before registering the final handlers.
+    legacy_names = {
+        "start_game", "choose_scenario", "scenario_selected",
+        "choose_moderator", "moderator_selected", "handle_slot",
+    }
+    registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", [])
+    removed = 0
+    kept = []
+    for item in registry:
+        cb = getattr(item, "callback", None)
+        if getattr(cb, "__name__", "") in legacy_names:
+            removed += 1
+            continue
+        kept.append(item)
+    if removed:
+        registry[:] = kept
+        logging.info("FINAL_LOBBY_CUTOVER removed_legacy_handlers=%s", removed)
+
     def game(gid): return main.runtime.state.active_game(int(gid))
     def row(g):
         try: return repo.get_by_id(int(g.get("scenario_id"))) if g and g.get("scenario_id") else None
