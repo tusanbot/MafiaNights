@@ -15,17 +15,17 @@ from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
 from runtime.production_fastpath import install as install_production_fastpath
 install_production_fastpath(main)
-# Single authoritative group lobby. Previous lobby UI layers are intentionally not loaded.
 from runtime.lobby_ui_final import install as install_final_lobby
 install_final_lobby(main)
-# Canonical management callbacks used by the final lobby.
 from runtime.game_management import GameManagement
 main.game_management = GameManagement(main)
 main.game_management.install()
-# Canonical role distribution is the bridge from a full lobby into the running game.
 from runtime.role_distribution import install as install_role_distribution
 install_role_distribution(main)
 main._canonical_distribute_roles = main._role_distribution_handler
+# All management refresh/close operations must return to the same authoritative lobby.
+if getattr(main, "_render_final_lobby", None):
+    main._render_production_lobby = main._render_final_lobby
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 from runtime.game_flow_authority import install as install_game_flow_authority
@@ -70,6 +70,26 @@ from runtime.voting_runtime import install as install_voting_runtime
 install_stable_round_engine(main); install_live_controls_v2(main); install_lobby_challenge_v2(main); install_stable_round_policy(main); install_stable_challenge_button_guard(main); install_transition_ui_dedup(main); install_voting_runtime(main)
 from runtime.game_info_security_v2 import install as install_game_info_security_v2
 install_game_info_security_v2(main)
+
+# Final cutover runs AFTER every production installer. This prevents an older
+# /start or lobby handler registered later in the import chain from winning.
+def _finalize_lobby_routes():
+    dp = main.dp
+    def handler_of(item):
+        return getattr(item, "handler", None) or getattr(item, "callback", None)
+    old_callback_names = {"start_game", "choose_scenario", "scenario_selected", "choose_moderator", "moderator_selected", "handle_slot"}
+    cr = getattr(getattr(dp, "callback_query_handlers", None), "handlers", [])
+    cr[:] = [x for x in cr if getattr(handler_of(x), "__name__", "") not in old_callback_names]
+    mr = getattr(getattr(dp, "message_handlers", None), "handlers", [])
+    mr[:] = [x for x in mr if getattr(handler_of(x), "__name__", "") != "start_cmd"]
+    start_item = next((x for x in mr if getattr(handler_of(x), "__name__", "") == "start_command"), None)
+    if start_item is not None:
+        mr.remove(start_item)
+        mr.insert(0, start_item)
+    logging.info("FINAL_LOBBY_ROUTE_CUTOVER applied after all installers")
+
+_finalize_lobby_routes()
+
 _original_startup=main.on_startup
 async def on_startup(dp):
     results=await persistent_startup(main,_original_startup); logging.info("Persistent runtime startup recovery completed: %s",results)
