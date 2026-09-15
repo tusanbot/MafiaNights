@@ -1,8 +1,8 @@
-"""Last-mile private UI routing fixes.
+"""Final private UI routing fixes.
 
-This module is the final owner of ambiguous private-panel callbacks.  It keeps
-navigation in the same Telegram message whenever possible and provides safe
-fallbacks for the profile when optional schema fields are unavailable.
+This layer owns ambiguous private callbacks and keeps navigation in the
+current Telegram message whenever possible. Profile actions are delegated to
+the canonical profile/advanced-profile implementations.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from runtime.scenario_management_v2 import ScenarioForm
 
 
 def _private(c):
-    return bool(c.message and c.message.chat.type == "private")
+    return bool(getattr(c, "message", None) and c.message.chat.type == "private")
 
 
 async def _finish(state):
@@ -28,20 +28,17 @@ async def _finish(state):
 
 
 async def _edit_or_answer(message, body, reply_markup=None, parse_mode="HTML"):
-    """Edit the current panel; only create a new message when editing is impossible."""
     try:
         await message.edit_text(body, reply_markup=reply_markup, parse_mode=parse_mode)
         return
     except Exception as exc:
-        # Telegram raises MessageNotModified when the target is already identical.
-        # In that case there is no reason to create a duplicate message.
         if "Message is not modified" in str(exc):
             return
-        logging.exception("private v6 edit failed")
+        logging.exception("private UI edit failed")
         try:
             await message.answer(body, reply_markup=reply_markup, parse_mode=parse_mode)
         except Exception:
-            logging.exception("private v6 fallback message failed")
+            logging.exception("private UI fallback message failed")
 
 
 async def install(app):
@@ -67,42 +64,35 @@ async def install(app):
         enhancement = getattr(app, "profile_enhancements", None)
         if enhancement is not None:
             try:
-                # The normal profile renderer currently depends on gender, which
-                # is not present on every production DB.  Use it only when it works.
                 await enhancement.profile(c)
                 raise CancelHandler()
             except CancelHandler:
                 raise
             except Exception:
-                logging.exception("private v6 profile enhancement failed; using safe renderer")
-
+                logging.exception("private v6 profile renderer failed")
         uid = int(c.from_user.id)
         row = {}
         games = 0
-        if enhancement is not None:
-            try:
-                with enhancement._session() as s:
-                    row = dict(s.execute(text("select id,username,first_name,last_name,nickname from public.mafia_players where id=:id"), {"id": uid}).mappings().first() or {})
-                    games = int(s.execute(text("select count(*) from public.mafia_game_players where player_id=:id"), {"id": uid}).scalar() or 0)
-            except Exception:
-                logging.exception("private v6 profile fallback query failed")
-
+        try:
+            with enhancement._session() as s:
+                row = dict(s.execute(text("select id,username,first_name,last_name,nickname,gender from public.mafia_players where id=:id"), {"id": uid}).mappings().first() or {})
+                games = int(s.execute(text("select count(*) from public.mafia_game_players where player_id=:id"), {"id": uid}).scalar() or 0)
+        except Exception:
+            logging.exception("private v6 profile fallback query failed")
         name = row.get("nickname") or " ".join(x for x in ((row.get("first_name") or c.from_user.first_name or "").strip(), (row.get("last_name") or c.from_user.last_name or "").strip()) if x) or c.from_user.full_name or "❓"
+        gender = "دختر 👩" if row.get("gender") == "female" else "پسر 👨" if row.get("gender") == "male" else "تعیین نشده"
         kb = InlineKeyboardMarkup(row_width=2).add(
             InlineKeyboardButton("📊 آمار و امتیازات", callback_data="profile:advanced"),
             InlineKeyboardButton("⚧ جنسیت", callback_data="profile:gender"),
-            InlineKeyboardButton("✏️ نام مستعار", callback_data="profile:nickname"),
-            InlineKeyboardButton("🔁 انتقال حساب", callback_data="profile:transfer"),
             InlineKeyboardButton("⚙️ تنظیمات پروفایل", callback_data="profile:settings"),
             InlineKeyboardButton("⬅️ پنل اصلی", callback_data="up:menu"),
         )
-        body = (
-            "👤 <b>پروفایل من</b>\n\n"
-            f"نام: <b>{html.escape(str(name))}</b>\n"
-            f"نام کاربری: @{html.escape(str(row.get('username'))) if row.get('username') else (html.escape(c.from_user.username) if c.from_user.username else '—')}\n"
-            f"شناسه عددی: <code>{uid}</code>\n"
-            f"تعداد بازی: <b>{games}</b>"
-        )
+        body = ("👤 <b>پروفایل من</b>\n\n"
+                f"نام: <b>{html.escape(str(name))}</b>\n"
+                f"جنسیت: <b>{gender}</b>\n"
+                f"نام کاربری: @{html.escape(str(row.get('username'))) if row.get('username') else (html.escape(c.from_user.username) if c.from_user.username else '—')}\n"
+                f"شناسه عددی: <code>{uid}</code>\n"
+                f"تعداد بازی: <b>{games}</b>")
         await _edit_or_answer(c.message, body, kb)
         await c.answer()
         raise CancelHandler()
@@ -110,11 +100,6 @@ async def install(app):
     async def up_menu(c, state):
         if not _private(c):
             raise CancelHandler()
-        current = (c.message.text or "") if c.message else ""
-        # up:menu is historically used by the main-menu profile button.  From
-        # an actual profile/settings screen it means "back to main panel".
-        if "Mafia Nights" in current and "یک گزینه را انتخاب کنید" in current:
-            await profile(c, state)
         await home(c, state)
 
     async def profile_settings(c, state):
@@ -129,56 +114,51 @@ async def install(app):
             except CancelHandler:
                 raise
             except Exception:
-                logging.exception("private v6 profile settings enhancement failed; using safe renderer")
+                logging.exception("private v6 profile settings renderer failed")
         uid = int(c.from_user.id)
         nickname = "تنظیم نشده"
-        if enhancement is not None:
-            try:
-                with enhancement._session() as s:
-                    row = s.execute(text("select nickname from public.mafia_players where id=:id"), {"id": uid}).mappings().first()
-                    nickname = (row or {}).get("nickname") or nickname
-            except Exception:
-                pass
+        gender = "تعیین نشده"
+        try:
+            with enhancement._session() as s:
+                row = s.execute(text("select nickname,gender from public.mafia_players where id=:id"), {"id": uid}).mappings().first() or {}
+                nickname = row.get("nickname") or nickname
+                gender = "دختر 👩" if row.get("gender") == "female" else "پسر 👨" if row.get("gender") == "male" else gender
+        except Exception:
+            logging.exception("private v6 profile settings fallback failed")
         kb = InlineKeyboardMarkup(row_width=1).add(
+            InlineKeyboardButton(f"⚧ جنسیت: {gender}", callback_data="profile:gender"),
             InlineKeyboardButton("✏️ تغییر نام مستعار", callback_data="profile:nickname"),
             InlineKeyboardButton("🔁 انتقال حساب من", callback_data="profile:transfer"),
             InlineKeyboardButton("⬅️ پروفایل", callback_data="up:profile"),
-            InlineKeyboardButton("⬅️ پنل اصلی", callback_data="up:menu"),
         )
-        await _edit_or_answer(c.message, "⚙️ <b>تنظیمات پروفایل</b>\n\nنام مستعار: <b>" + html.escape(str(nickname)) + "</b>", kb)
+        await _edit_or_answer(c.message, "⚙️ <b>تنظیمات پروفایل</b>\n\n" f"نام مستعار: <b>{html.escape(str(nickname))}</b>", kb)
         await c.answer()
         raise CancelHandler()
 
     async def management_back(c, state):
-        if not _private(c):
-            raise CancelHandler()
-        # Management -> Back means the main private panel, not the management
-        # menu itself.  Never send a duplicate management message.
         await home(c, state)
 
-    async def scenario_back(c, state):
-        await home(c, state)
-
-    async def scenario_keep(c, state):
+    async def scenario_menu(c, state):
         if not _private(c):
             raise CancelHandler()
+        await _finish(state)
         manager = getattr(app, "_private_scenario_manager", None)
         if manager is None:
             await c.answer("❌ مدیریت سناریو در دسترس نیست.", show_alert=True)
             raise CancelHandler()
-        uid = int(c.from_user.id)
-        session = getattr(manager, "sessions", {}).get(uid)
-        if not session or session.get("mode") != "edit":
-            await c.answer("⚠️ فرم ویرایش منقضی شده است.", show_alert=True)
-            raise CancelHandler()
-        current = str(await c.message.bot.get_chat(c.message.chat.id) if False else "")
-        # FSM state is authoritative for the current form step.
-        from aiogram.dispatcher import FSMContext
-        # The handler receives the FSM context through aiogram's injected state
-        # in the wrapper below; this local function is replaced by the wrapper.
+        try:
+            await manager.menu(c, state)
+        except CancelHandler:
+            raise
+        except Exception:
+            logging.exception("private v6 scenario menu failed")
+            await c.answer("❌ بازگشت به مدیریت سناریو انجام نشد.", show_alert=True)
         raise CancelHandler()
 
-    async def scenario_keep_with_state(c, state):
+    async def scenario_back(c, state):
+        await scenario_menu(c, state)
+
+    async def scenario_keep(c, state):
         if not _private(c):
             raise CancelHandler()
         manager = getattr(app, "_private_scenario_manager", None)
@@ -226,9 +206,7 @@ async def install(app):
         uid = int(c.from_user.id); session = getattr(manager, "sessions", {}).get(uid)
         if not session:
             await c.answer("⚠️ فرم منقضی شده است.", show_alert=True); raise CancelHandler()
-        data = session.get("data") or {}
-        roles = list(data.get("roles") or [])
-        sides = dict(data.get("sides") or {})
+        data = session.get("data") or {}; roles = list(data.get("roles") or []); sides = dict(data.get("sides") or {})
         if not sides:
             for line in data.get("role_lines") or []:
                 p = str(line).rsplit(None, 1)
@@ -238,27 +216,62 @@ async def install(app):
             await c.answer("⚠️ ساید نقش‌ها کامل نیست.", show_alert=True); raise CancelHandler()
         mode = data.get("challenge_mode") or (data.get("config") or {}).get("challenge_mode") or "limited"
         settings = dict(data.get("settings") or manager.DEFAULTS)
-        old_cfg = data.get("config") or {}
-        old_limit = old_cfg.get("challenge_limit", 1) if isinstance(old_cfg, dict) else 1
+        old_cfg = data.get("config") or {}; old_limit = old_cfg.get("challenge_limit", 1) if isinstance(old_cfg, dict) else 1
         cfg = {"roles": {r: {"side": sides[r], "challenge": mode} for r in roles}, "sides": sides, "challenge_mode": mode, "challenge_limit": old_limit if mode == "limited" else None, "settings": settings}
         try:
             if session.get("mode") == "edit":
                 sid = manager.repo.update_by_id(session["id"], data.get("name"), data.get("description"), data.get("min_players"), data.get("max_players"), roles, cfg, True)
             else:
                 sid = manager.repo.upsert(data.get("name"), data.get("description"), data.get("min_players"), data.get("max_players"), roles, cfg, True)
-            manager.sessions.pop(uid, None); await state.finish()
-            row = manager.repo.get_by_id(sid)
-            kb = InlineKeyboardMarkup(row_width=1).add(
-                InlineKeyboardButton("⚙️ مدیریت سناریو", callback_data="final:scenarios"),
-                InlineKeyboardButton("⬅️ پنل اصلی", callback_data="final:start"),
-            )
-            await _edit_or_answer(c.message, "✅ <b>سناریو ذخیره شد.</b>\n\n" + manager._summary(row), kb)
-            await c.answer("ذخیره شد")
+            manager.sessions.pop(uid, None); await state.finish(); row = manager.repo.get_by_id(sid)
+            kb = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("⚙️ مدیریت سناریو", callback_data="final:scenarios"), InlineKeyboardButton("⬅️ پنل اصلی", callback_data="final:start"))
+            await _edit_or_answer(c.message, "✅ <b>سناریو ذخیره شد.</b>\n\n" + manager._summary(row), kb); await c.answer("ذخیره شد")
         except Exception:
             logging.exception("private v6 scenario save failed")
             await c.answer("❌ ذخیره سناریو انجام نشد.", show_alert=True)
-            raise CancelHandler()
         raise CancelHandler()
+
+    async def advanced_dispatch(c, state):
+        if not _private(c):
+            raise CancelHandler()
+        enhancement = getattr(app, "profile_enhancements", None)
+        advanced = getattr(enhancement, "advanced_profile", None) if enhancement else None
+        if advanced is None:
+            await c.answer("❌ بخش آمار در دسترس نیست.", show_alert=True); raise CancelHandler()
+        parts = c.data.split(":")
+        method_name = "advanced" if len(parts) == 2 else parts[2]
+        method = getattr(advanced, method_name, None)
+        if method is None:
+            await c.answer("❌ این بخش آمار در دسترس نیست.", show_alert=True); raise CancelHandler()
+        try:
+            await method(c)
+        except Exception:
+            logging.exception("private v6 advanced profile route failed: %s", c.data)
+            await c.answer("❌ نمایش آمار انجام نشد.", show_alert=True)
+        raise CancelHandler()
+
+    async def delegate_callback(method_name, c, state):
+        enhancement = getattr(app, "profile_enhancements", None)
+        if enhancement is None:
+            raise CancelHandler()
+        method = getattr(enhancement, method_name, None)
+        if method is None:
+            await c.answer("❌ این گزینه در دسترس نیست.", show_alert=True); raise CancelHandler()
+        try:
+            await method(c, state) if method_name in {"nickname_prompt", "transfer_prompt"} else await method(c)
+        except CancelHandler:
+            raise
+        except Exception:
+            logging.exception("private v6 delegated callback failed: %s", method_name)
+            await c.answer("❌ انجام عملیات ناموفق بود.", show_alert=True)
+        raise CancelHandler()
+
+    async def gender_menu(c, state): await delegate_callback("gender_menu", c, state)
+    async def set_gender(c, state): await delegate_callback("set_gender", c, state)
+    async def nickname_prompt(c, state): await delegate_callback("nickname_prompt", c, state)
+    async def transfer_prompt(c, state): await delegate_callback("transfer_prompt", c, state)
+    async def transfer_confirm(c, state): await delegate_callback("transfer_confirm", c, state)
+    async def transfer_cancel(c, state): await delegate_callback("transfer_cancel", c, state)
 
     async def nickname_save(message, state):
         enhancement = getattr(app, "profile_enhancements", None)
@@ -270,28 +283,34 @@ async def install(app):
             await message.answer("❌ نام مستعار نامعتبر است. فقط حروف فارسی و فاصله مجاز است و حداکثر ۳۲ نویسه می‌تواند باشد."); return
         try:
             with enhancement._session() as s:
-                s.execute(text("""insert into public.mafia_players
-                    (id,username,first_name,last_name,nickname,created_at,updated_at)
-                    values (:id,:username,:first_name,:last_name,:nickname,now(),now())
-                    on conflict (id) do update set
-                    username=coalesce(excluded.username,public.mafia_players.username),
-                    first_name=coalesce(excluded.first_name,public.mafia_players.first_name),
-                    last_name=coalesce(excluded.last_name,public.mafia_players.last_name),
-                    nickname=excluded.nickname,updated_at=now()"""), {"id": int(message.from_user.id), "username": message.from_user.username, "first_name": message.from_user.first_name, "last_name": message.from_user.last_name, "nickname": nickname}); s.commit()
+                s.execute(text("""update public.mafia_players set nickname=:nickname,updated_at=now() where id=:id"""), {"id": int(message.from_user.id), "nickname": nickname})
+                s.commit()
             enhancement._invalidate(message.from_user.id); await state.finish(); await message.answer("✅ نام مستعار ذخیره شد." if nickname else "✅ نام مستعار حذف شد.")
         except Exception:
-            logging.exception("private v6 nickname save failed"); await message.answer("❌ ذخیره نام مستعار انجام نشد. خطای پایگاه‌داده رخ داد.")
+            logging.exception("private v6 nickname save failed")
+            try: await state.finish()
+            except Exception: pass
+            await message.answer("❌ ذخیره نام مستعار انجام نشد. خطای پایگاه‌داده رخ داد.")
 
     regs = [
         (management_back, lambda c: c.data == "finalgm:back"),
+        (scenario_menu, lambda c: c.data == "sm2:menu"),
+        (scenario_back, lambda c: c.data == "final:start"),
         (up_menu, lambda c: c.data == "up:menu"),
         (profile, lambda c: c.data == "up:profile"),
         (profile_settings, lambda c: c.data == "profile:settings"),
-        (scenario_back, lambda c: c.data == "final:start"),
-        (scenario_keep_with_state, lambda c: c.data == "sm5:keep"),
+        (advanced_dispatch, lambda c: c.data == "profile:advanced" or c.data.startswith("profile:advanced:")),
+        (gender_menu, lambda c: c.data == "profile:gender"),
+        (set_gender, lambda c: c.data in {"profile:gender:female", "profile:gender:male"}),
+        (nickname_prompt, lambda c: c.data == "profile:nickname"),
+        (transfer_prompt, lambda c: c.data == "profile:transfer"),
+        (transfer_confirm, lambda c: c.data == "profile:transfer:confirm"),
+        (transfer_cancel, lambda c: c.data == "profile:transfer:cancel"),
+        (scenario_keep, lambda c: c.data == "sm5:keep"),
         (scenario_save, lambda c: c.data == "sm5:save"),
     ]
-    for fn, filt in regs: dp.register_callback_query_handler(fn, filt, state="*")
+    for fn, filt in regs:
+        dp.register_callback_query_handler(fn, filt, state="*")
     try:
         from runtime.profile_enhancements import ProfileStates
         dp.register_message_handler(nickname_save, state=ProfileStates.waiting_nickname)
