@@ -1,4 +1,4 @@
-"""Final canonical fixes for private profile and scenario navigation."""
+"""Final canonical fixes for private profile, scenario navigation, and /start."""
 from __future__ import annotations
 
 import logging
@@ -13,14 +13,26 @@ def _private(callback):
     return bool(message and getattr(message.chat, "type", None) == "private")
 
 
+def _fn(item):
+    return getattr(item, "handler", None) or getattr(item, "callback", None)
+
+
+def _promote(handlers, predicate):
+    if handlers is None:
+        return 0
+    matches = [h for h in list(handlers) if predicate(h)]
+    if not matches:
+        return 0
+    handlers[:] = matches + [h for h in list(handlers) if h not in matches]
+    return len(matches)
+
+
 async def install(app):
     dp = app.dp
     handlers = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
     if handlers is None or getattr(app, "_private_ui_recovery_v7", False):
         return False
 
-    # Canonical main-panel keyboard: profile must be a real profile entry.
-    # `up:menu` is exclusively the profile -> main-panel route.
     try:
         from runtime import final_private_ui
 
@@ -36,6 +48,28 @@ async def install(app):
         final_private_ui.start_keyboard = canonical_start_keyboard
     except Exception:
         logging.exception("private v7: failed to patch canonical start keyboard")
+
+    async def canonical_start(message, state):
+        """Last-resort /start owner for every FSM state and both chat types."""
+        try:
+            await state.finish()
+        except Exception:
+            logging.exception("private v7 /start: failed to clear FSM state")
+
+        if getattr(message.chat, "type", None) == "private":
+            from runtime.final_private_ui import start_keyboard
+            await message.answer("🎭 <b>Mafia Nights</b>\n\nیک گزینه را انتخاب کنید:", reply_markup=start_keyboard(), parse_mode="HTML")
+        elif getattr(message.chat, "type", None) in {"group", "supergroup"}:
+            try:
+                from main1 import main_menu_keyboard
+                await message.reply("🏠 منوی اصلی گروه:", reply_markup=main_menu_keyboard())
+            except Exception:
+                logging.exception("private v7 /start: group menu failed")
+                await message.reply("🏠 منوی اصلی گروه در دسترس نیست.")
+        else:
+            raise CancelHandler()
+        logging.info("PRIVATE UI V7 /START handled chat_type=%s user_id=%s", message.chat.type, message.from_user.id)
+        raise CancelHandler()
 
     async def home(callback):
         if not _private(callback):
@@ -141,6 +175,12 @@ async def install(app):
             await callback.answer("❌ ذخیره جنسیت انجام نشد.", show_alert=True)
         raise CancelHandler()
 
+    # V7 is loaded last in production, so it also owns /start ordering. This
+    # prevents a persisted ScenarioForm.roles state from consuming /start.
+    dp.register_message_handler(canonical_start, commands={"start"}, state="*")
+    mh = getattr(dp.message_handlers, "handlers", None)
+    promoted_start = _promote(mh, lambda h: getattr(_fn(h), "__name__", "") == "canonical_start")
+
     routes = [
         (home, lambda c: c.data in {"final:start", "private:start", "fp:panel", "up:menu"}),
         (profile, lambda c: c.data == "up:profile"),
@@ -159,5 +199,5 @@ async def install(app):
     handlers[:] = matches + [h for h in current if h not in matches]
 
     app._private_ui_recovery_v7 = True
-    logging.info("PRIVATE UI RECOVERY V7 ACTIVE")
+    logging.info("PRIVATE UI RECOVERY V7 ACTIVE start_promoted=%s", promoted_start)
     return True
