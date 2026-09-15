@@ -69,7 +69,7 @@ def install(main):
         parts = str(data).split(":")
         if len(parts) == 3 and parts[0] == "lv9_s":
             return int(parts[2])
-        if len(parts) == 2 and parts[0] == "lv8_s":
+        if len(parts) == 2 and parts[0] in {"lv6_s", "lv8_s"}:
             index = int(parts[1])
             names = list((getattr(main, "scenarios", {}) or {}).keys())
             if index < 0 or index >= len(names):
@@ -90,11 +90,13 @@ def install(main):
             await c.answer("❌ سناریو معتبر نیست.", show_alert=True); raise CancelHandler()
         selected = str(row["name"]); gid = int(c.message.chat.id)
         try:
-            runtime = ScenarioRuntime(main)
             game = main.runtime.state.active_game(gid)
             if not game:
                 raise ValueError("بازی فعال پیدا نشد")
-            runtime.apply_to_game(str(game["id"]), sid)
+            ScenarioRuntime(main).apply_to_game(str(game["id"]), sid)
+            if getattr(main, "_lv6_change_scenario", False):
+                for player in list(main.runtime.lobby_snapshot(gid).get("players", [])):
+                    main.runtime.lobby.leave(gid, int(player["player_id"]))
         except Exception:
             import logging
             logging.exception("scenario selection persistence failed sid=%s group=%s", sid, gid)
@@ -123,7 +125,7 @@ def install(main):
         except Exception: pass
         await c.message.edit_text("✅ <b>لابی آماده شد.</b>",parse_mode="HTML"); await c.answer(); raise CancelHandler()
 
-    for fn,flt in ((new,lambda c:c.data=="lv6_new"),(show_catalog,lambda c:c.data=="lv9_catalog"),(category,lambda c:str(c.data).startswith("lv9_cat:")),(choose,lambda c:str(c.data).startswith("lv9_s:") or str(c.data).startswith("lv8_s:")),(moderator,lambda c:str(c.data).startswith("lv9_m:")),(change,lambda c:c.data=="lv6_change_s")):
+    for fn,flt in ((new,lambda c:c.data=="lv6_new"),(show_catalog,lambda c:c.data=="lv9_catalog"),(category,lambda c:str(c.data).startswith("lv9_cat:")),(choose,lambda c:str(c.data).startswith("lv9_s:") or str(c.data).startswith("lv8_s:") or str(c.data).startswith("lv6_s:")),(moderator,lambda c:str(c.data).startswith("lv9_m:")),(change,lambda c:c.data=="lv6_change_s")):
         dp.register_callback_query_handler(fn,flt,state="*")
         for i,item in enumerate(reg):
             if getattr(item,"callback",None) is fn: reg.insert(0,reg.pop(i)); break
