@@ -53,6 +53,8 @@ install_user_panel_back_patch(main, user_panel)
 from runtime.profile_enhancements_fixed import install as install_profile_enhancements
 profile_enhancements = install_profile_enhancements(main, user_panel)
 main.profile_enhancements = profile_enhancements
+from runtime.profile_db_compat import install as install_profile_db_compat
+install_profile_db_compat(profile_enhancements)
 
 from commands import register_commands as register_text_commands
 register_text_commands(main)
