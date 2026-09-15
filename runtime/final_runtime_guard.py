@@ -20,21 +20,17 @@ ADMIN_OR_MOD_EXACT = {
 }
 ADMIN_OR_MOD_PREFIXES = ("remove_player:", "remove_", "next_")
 
+PRIVATE_UI_EXACT = {"manage_game", "final:start", "final:scenarios", "final:help", "addons_menu"}
+PRIVATE_UI_PREFIXES = ("finalgm:", "final:scenario:", "adm2:add:")
+
 LEGACY_GAME_HANDLERS = {
     "start_round_handler", "handle_start_turn", "start_night", "start_new_day",
     "distribute_roles_callback",
 }
 
-# These callbacks are owned by the single private UI authority. They must not
-# be passed through a group-admin guard because their callback message lives
-# in the user's private chat. The private UI performs its own group-admin
-# authorization against the configured game group.
-PRIVATE_UI_EXACT = {"manage_game", "final:start", "final:scenarios", "final:help", "addons_menu"}
-PRIVATE_UI_PREFIXES = ("finalgm:", "final:scenario:", "adm2:add:")
-
 
 def _handler(item):
-    return getattr(item, "handler", None)
+    return getattr(item, "handler", getattr(item, "callback", None))
 
 
 def _set_handler(item, fn):
@@ -61,12 +57,40 @@ def _configured_group_id(main):
     return None
 
 
+def _remove_v6_scenario_handler(registry):
+    """Remove the old v6 scenario callback without touching the canonical v9 selector.
+
+    v6 and v9 both expose a function named ``scenario``.  Name-only removal is
+    unsafe because the dispatcher guard wraps callbacks with functools.wraps.
+    The module identity is stable and lets us remove only the obsolete v6
+    handler.  This is the critical cutover that prevents a selected scenario
+    name from being written into mafia_games.scenario_id (BIGINT).
+    """
+    removed = 0
+    kept = []
+    for item in registry:
+        fn = _handler(item)
+        module = getattr(fn, "__module__", "")
+        name = getattr(fn, "__name__", "")
+        if module == "runtime.lobby_ui_v6" and name == "scenario":
+            removed += 1
+            continue
+        kept.append(item)
+    registry[:] = kept
+    return removed
+
+
 def install(main):
     dp = main.dp
     registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
     if registry is None:
         logging.error("FINAL runtime guard: callback registry unavailable")
         return
+
+    # Hard cutover: the v9 lobby selector is the only owner of scenario
+    # selection.  Do this before wrapping handlers so the obsolete v6 callback
+    # can never receive a scenario-selection callback.
+    removed_v6_scenario = _remove_v6_scenario_handler(registry)
 
     before = len(registry)
     registry[:] = [
@@ -131,6 +155,6 @@ def install(main):
 
     main._final_runtime_guard_installed = True
     logging.info(
-        "FINAL runtime guard installed: handlers=%d legacy_removed=%d protected_exact=%d",
-        len(registry), removed_legacy, len(ADMIN_ONLY_EXACT | ADMIN_OR_MOD_EXACT),
+        "FINAL runtime guard installed: handlers=%d legacy_removed=%d v6_scenario_removed=%d protected_exact=%d",
+        len(registry), removed_legacy, removed_v6_scenario, len(ADMIN_ONLY_EXACT | ADMIN_OR_MOD_EXACT),
     )
