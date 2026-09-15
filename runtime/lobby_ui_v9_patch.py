@@ -13,15 +13,11 @@ def _registry(main):
 
 
 def _remove_legacy_lobby_handlers(main):
-    """Make v9 the single owner of the lobby scenario flow.
-
-    v8 was registered before v9 and its generic `scenario` handler therefore
-    consumed lv8_s callbacks before the numeric-ID v9 handler could run.
-    Remove the known legacy lobby callbacks by function name before registering
-    the canonical v9 handlers.
-    """
+    """Leave the complete v6 lobby base intact and replace only its old scenario flow."""
     reg = _registry(main)
-    legacy_names = {"new", "scenario", "moderator", "change_s", "manage"}
+    # v6 remains the canonical seat/grid lobby. Only callbacks replaced by this
+    # numeric-ID scenario authority are removed. Management stays owned by v6.
+    legacy_names = {"new", "scenario", "moderator", "change_s"}
     before = len(reg)
     reg[:] = [
         item
@@ -83,6 +79,7 @@ def install(main):
             if getattr(main, "runtime", None): main.runtime.lobby.ensure(int(c.message.chat.id))
         except Exception: pass
         main.group_chat_id = int(c.message.chat.id); main.lobby_active = True; main.game_running = False; main.round_active = False
+        main._lv6_setup = True; main._lv6_change_scenario = False
         await show_catalog(c)
 
     async def category(c):
@@ -95,7 +92,9 @@ def install(main):
         parts = str(data).split(":")
         if len(parts) == 3 and parts[0] == "lv9_s":
             return int(parts[2])
-        if len(parts) == 2 and parts[0] in {"lv6_s", "lv8_s"}:
+        # v6 is retained only as the canonical lobby base. Its back/change
+        # buttons may still emit lv6_s:<index>; resolve those to the DB id.
+        if len(parts) == 2 and parts[0] == "lv6_s":
             index = int(parts[1])
             names = list((getattr(main, "scenarios", {}) or {}).keys())
             if index < 0 or index >= len(names):
@@ -134,11 +133,6 @@ def install(main):
         await c.message.edit_text(f"📝 <b>{html.escape(selected)}</b>\n\n🎩 <b>انتخاب گرداننده</b>", parse_mode="HTML", reply_markup=kb)
         await c.answer("✅ سناریو انتخاب شد"); raise CancelHandler()
 
-    async def change(c):
-        admins={int(a.user.id) for a in await main.bot.get_chat_administrators(int(c.message.chat.id))}
-        if int(c.from_user.id) not in admins: await c.answer("⛔ فقط مدیران.",show_alert=True); raise CancelHandler()
-        main._lv6_change_scenario=True; await show_catalog(c)
-
     async def moderator(c):
         gid=int(c.message.chat.id); uid=int(str(c.data).split(":")[1]); admins={int(a.user.id) for a in await main.bot.get_chat_administrators(gid)}
         if uid not in admins: await c.answer("❌ گرداننده باید مدیر گروه باشد.",show_alert=True); raise CancelHandler()
@@ -150,11 +144,16 @@ def install(main):
         except Exception: pass
         await c.message.edit_text("✅ <b>لابی آماده شد.</b>",parse_mode="HTML"); await c.answer(); raise CancelHandler()
 
-    for fn,flt in ((new,lambda c:c.data=="lv6_new"),(show_catalog,lambda c:c.data=="lv9_catalog"),(category,lambda c:str(c.data).startswith("lv9_cat:")),(choose,lambda c:str(c.data).startswith("lv9_s:") or str(c.data).startswith("lv8_s:") or str(c.data).startswith("lv6_s:")),(moderator,lambda c:str(c.data).startswith("lv9_m:")),(change,lambda c:c.data=="lv6_change_s")):
+    async def change(c):
+        admins={int(a.user.id) for a in await main.bot.get_chat_administrators(int(c.message.chat.id))}
+        if int(c.from_user.id) not in admins: await c.answer("⛔ فقط مدیران.",show_alert=True); raise CancelHandler()
+        main._lv6_change_scenario=True; await show_catalog(c)
+
+    for fn,flt in ((new,lambda c:c.data=="lv6_new"),(show_catalog,lambda c:c.data=="lv9_catalog"),(category,lambda c:str(c.data).startswith("lv9_cat:")),(choose,lambda c:str(c.data).startswith("lv9_s:") or str(c.data).startswith("lv6_s:")),(moderator,lambda c:str(c.data).startswith("lv9_m:")),(change,lambda c:c.data=="lv6_change_s")):
         dp.register_callback_query_handler(fn,flt,state="*")
         reg = _registry(main)
         for i,item in enumerate(reg):
             if getattr(item,"callback",None) is fn:
                 reg.insert(0,reg.pop(i)); break
-    logging.info("LOBBY_UI_V9 active: canonical numeric scenario IDs; removed_legacy=%s", removed)
+    logging.info("LOBBY_UI_CANONICAL active: v6 lobby base + numeric scenario authority; removed_legacy=%s", removed)
     return True
