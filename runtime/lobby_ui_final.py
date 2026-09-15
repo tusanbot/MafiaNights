@@ -23,7 +23,6 @@ def install(main):
                 return True
         return False
 
-    # Remove legacy lobby/start handlers from main1.py. This module owns them now.
     old_names = {"start_game", "choose_scenario", "scenario_selected", "choose_moderator", "moderator_selected", "handle_slot"}
     cr = getattr(getattr(dp, "callback_query_handlers", None), "handlers", [])
     cr[:] = [x for x in cr if getattr(handler_of(x), "__name__", "") not in old_names]
@@ -71,6 +70,7 @@ def install(main):
         waiting = [p for p in ps if p.get("seat") is None and str(p.get("status") or "waiting") == "waiting"]
         active.sort(key=lambda p: int(p.get("seat") or 999))
         cap = len((r or {}).get("roles") or [])
+        full = cap > 0 and len(active) >= cap
         lines = [
             "༄", "    <b>Mafia Nights</b>", "",
             f"📝 <b>سناریو:</b> {html.escape(str((r or {}).get('name') or '---'))}",
@@ -83,10 +83,13 @@ def install(main):
             lines += ["", "🎟 <b>لیست رزرو</b>"] + [f"{i}. {mention(int(p['player_id']), pname(p))}" for i,p in enumerate(waiting,1)]
         lines += ["", "◤◢◣◥◤◢◣◥◤◢◣◥", "༄"]
         kb = InlineKeyboardMarkup(row_width=2)
-        kb.row(InlineKeyboardButton("🔄 ورود / خروج", callback_data="fl_toggle"), InlineKeyboardButton("🎟 رزرو / لغو رزرو", callback_data="fl_reserve"))
+        kb.row(InlineKeyboardButton("🔄 ورود / خروج", callback_data="fl_toggle"))
+        if full:
+            kb.add(InlineKeyboardButton("🎟 رزرو / لغو رزرو", callback_data="fl_reserve"))
         kb.row(InlineKeyboardButton("📝 تغییر سناریو", callback_data="fl_scenario"), InlineKeyboardButton("⚙️ مدیریت بازی", callback_data="fl_manage"))
         kb.row(InlineKeyboardButton("⭐ امکانات ویژه", callback_data="fl_special"), InlineKeyboardButton("🚫 لغو بازی", callback_data="fl_cancel"))
-        kb.add(InlineKeyboardButton("📢 تگ لیست / حاضری", callback_data="fl_attendance"))
+        if full:
+            kb.add(InlineKeyboardButton("🎭 پخش نقش", callback_data="distribute_roles"))
         return "\n".join(lines), kb
 
     async def render(c):
@@ -173,16 +176,14 @@ def install(main):
         main.runtime.state.lobby.join(g["id"],uid,None,is_substitute=True); await render(c); await c.answer("🎟 رزرو شما ثبت شد")
 
     async def manage(c):
-        from runtime.game_management import GameManagement
         g=game(c.message.chat.id)
         if not g or not await allowed(c,g): await c.answer("⛔ دسترسی ندارید یا بازی فعال نیست.",show_alert=True); return
-        await GameManagement(main).open(c)
+        await main.game_management.open(c)
 
     async def cancel(c):
-        from runtime.game_management import GameManagement
         g=game(c.message.chat.id)
         if not g or not await allowed(c,g): await c.answer("⛔ دسترسی ندارید.",show_alert=True); return
-        await GameManagement(main).cancel(c)
+        await main.game_management.cancel(c)
 
     async def scenario_menu(c):
         g=game(c.message.chat.id)
@@ -250,5 +251,5 @@ def install(main):
     dp.register_message_handler(start_command,commands=["start"],state="*")
     move_front(mr,start_command)
     main._render_final_lobby=render
-    logging.info("FINAL_LOBBY_UI active: authoritative lobby + /start")
+    logging.info("FINAL_LOBBY_UI active: authoritative lobby + capacity-gated reserve + role distribution")
     return True
