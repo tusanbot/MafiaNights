@@ -21,16 +21,14 @@ from runtime.game_ui_bugfixes import install as install_game_ui_bugfixes
 install_game_ui_bugfixes(main)
 from runtime.production_fastpath import install as install_production_fastpath
 install_production_fastpath(main)
+
+# Canonical group lobby: v6 remains the complete seat/grid/runtime base;
+# v9 owns the scenario-selection flow with numeric DB scenario IDs.
 from runtime.lobby_ui_v6 import install as install_lobby_ui
 install_lobby_ui(main)
-from runtime.lobby_callback_cutover import install as install_lobby_callback_cutover
-install_lobby_callback_cutover(main)
-from runtime.lobby_ui_v7_patch import install as install_lobby_v7_patch
-install_lobby_v7_patch(main)
-from runtime.lobby_ui_v8_patch import install as install_lobby_ui_v8
-install_lobby_ui_v8(main)
 from runtime.lobby_ui_v9_patch import install as install_lobby_ui_v9
 install_lobby_ui_v9(main)
+
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 from runtime.game_flow_authority import install as install_game_flow_authority
@@ -88,7 +86,6 @@ install_voting_runtime(main)
 
 from runtime.game_info_security_v2 import install as install_game_info_security_v2
 install_game_info_security_v2(main)
-install_lobby_callback_cutover(main)
 
 _original_startup = main.on_startup
 
@@ -120,7 +117,6 @@ async def on_startup(dp):
     from runtime.private_ui_recovery_v7 import install as install_private_ui_recovery_v7
     await install_private_ui_recovery_v7(main)
     install_role_distribution_notice(main)
-    install_lobby_callback_cutover(main)
     logging.info("CANONICAL PRIVATE PV AUTHORITY ACTIVE")
     logging.info("PRIVATE UI RECOVERY V3 ACTIVE")
     logging.info("PRIVATE UI RECOVERY V5 ACTIVE")
