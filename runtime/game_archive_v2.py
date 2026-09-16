@@ -54,7 +54,10 @@ def _duration(g):
     sec=max(0,int((end-start).total_seconds())); h,rem=divmod(sec,3600); m,s=divmod(rem,60)
     return f"{h} ساعت و {m} دقیقه" if h else (f"{m} دقیقه و {s} ثانیه" if m else f"{s} ثانیه")
 
-def _title(g): return f"📓 بازی {int(g.get('event_number') or 1)}" + (" ✅" if str(g.get("status"))=="finished" else " 🟢")
+def _title(g):
+    status = str(g.get("status") or "")
+    suffix = " 🚫" if status == "cancelled" else " ✅" if status == "finished" else " 🟢"
+    return f"📓 بازی {int(g.get('event_number') or 1)}{suffix}"
 
 def _options(gid):
     return InlineKeyboardMarkup(row_width=2).add(
@@ -65,17 +68,25 @@ def _options(gid):
 def _menu():
     return InlineKeyboardMarkup(row_width=2).add(
         InlineKeyboardButton("🟢 آخرین بازی فعال",callback_data="game_archive:active:0"),InlineKeyboardButton("🏁 آخرین بازی تمام‌شده",callback_data="game_archive:latest:0"),
-        InlineKeyboardButton("🔢 وارد کردن شماره بازی",callback_data="game_archive:input:0"),InlineKeyboardButton("📚 فهرست بازی‌ها",callback_data="game_archive:list:0"))
+        InlineKeyboardButton("🚫 بازی‌های لغوشده",callback_data="game_archive:cancelled:0"),InlineKeyboardButton("🔢 وارد کردن شماره بازی",callback_data="game_archive:input:0"),
+        InlineKeyboardButton("📚 فهرست بازی‌های انجام‌شده",callback_data="game_archive:list:0"))
 
 def _history(gs):
     kb=InlineKeyboardMarkup(row_width=1)
     for g in gs: kb.add(InlineKeyboardButton(_title(g),callback_data=f"game_archive:select:{int(g['id'])}"))
     kb.add(InlineKeyboardButton("⬅️ بازگشت",callback_data="game_archive:menu:0")); return kb
 
+def _cancelled_history(gs):
+    kb=InlineKeyboardMarkup(row_width=1)
+    for g in gs: kb.add(InlineKeyboardButton(_title(g),callback_data=f"game_archive:cancelled_select:{int(g['id'])}"))
+    kb.add(InlineKeyboardButton("⬅️ بازگشت",callback_data="game_archive:menu:0")); return kb
+
 def _overview(g):
     state=dict(g.get("state") or {}); start=_local(_dt(g.get("started_at")) or _dt(g.get("created_at"))); end=_local(_dt(g.get("finished_at")))
     scenario=state.get("scenario_name") or g.get("scenario") or g.get("scenario_id") or "---"
-    return "\n".join([f"🎮 <b>{_title(g)}</b>","",f"🔢 شماره بازی: <b>{int(g.get('event_number') or 1)}</b>",f"📌 وضعیت: <b>{html.escape(str(g.get('status') or '---'))}</b>",f"🎭 سناریو: <b>{html.escape(str(scenario))}</b>",f"▶️ شروع: <b>{start:%H:%M:%S}</b>" if start else "▶️ شروع: <b>---</b>",f"⏹ پایان: <b>{end:%H:%M:%S}</b>" if end else "⏹ پایان: <b>---</b>",f"⏱ مدت: <b>{_duration(g)}</b>",f"🏆 برنده: <b>{html.escape(_winner_label(_winner(g)))}</b>"])
+    status=str(g.get("status") or "---")
+    status_label={"finished":"🏁 تمام‌شده","cancelled":"🚫 لغوشده"}.get(status,status)
+    return "\n".join([f"🎮 <b>{_title(g)}</b>","",f"🔢 شماره بازی: <b>{int(g.get('event_number') or 1)}</b>",f"📌 وضعیت: <b>{html.escape(status_label)}</b>",f"🎭 سناریو: <b>{html.escape(str(scenario))}</b>",f"▶️ شروع: <b>{start:%H:%M:%S}</b>" if start else "▶️ شروع: <b>---</b>",f"⏹ پایان: <b>{end:%H:%M:%S}</b>" if end else "⏹ پایان: <b>---</b>",f"⏱ مدت: <b>{_duration(g)}</b>",f"🏆 برنده: <b>{html.escape(_winner_label(_winner(g)))}</b>"])
 
 def _players(g,rows):
     state=dict(g.get("state") or {}); win=_winner(g); out=[f"👥 <b>لیست بازی {int(g.get('event_number') or 1)}</b>",""]
@@ -102,7 +113,9 @@ def install(app: Any) -> bool:
         GameManagement.panel=panel; GameManagement._archive_v2_wrapped=True
     def get_game(gid): return app.runtime.state.games.get_game(int(gid))
     def group_games(gid,finished=False):
-        gs=app.runtime.state.games.list_games(int(gid),limit=100); return [g for g in gs if not finished or str(g.get("status"))=="finished"]
+        gs=app.runtime.state.games.list_games(int(gid),limit=100)
+        allowed={"finished"} if finished else {"lobby","running","paused","finished"}
+        return [g for g in gs if str(g.get("status")) in allowed]
     async def allowed(obj,g):
         uid=int(obj.from_user.id)
         if uid==int(g.get("moderator_id") or 0): return True
@@ -114,16 +127,23 @@ def install(app: Any) -> bool:
         if len(p)!=3 or p[0]!="game_archive":return
         action,ref=p[1],int(p[2]); gid=int(cb.message.chat.id)
         if action=="input": await state.update_data(origin=gid); await state.set_state(ArchiveState.waiting_game_number); await cb.message.edit_text("🔢 <b>شماره بازی</b>\n\nشماره بازی را وارد کنید:",parse_mode="HTML"); await cb.answer(); return
-        if action=="menu": await cb.message.edit_text("🎮 <b>اطلاعات بازی‌ها</b>\n\nآخرین بازی، آخرین بازی تمام‌شده یا شماره بازی را انتخاب کنید:",parse_mode="HTML",reply_markup=_menu()); await cb.answer(); return
+        if action=="menu": await cb.message.edit_text("🎮 <b>اطلاعات بازی‌ها</b>\n\nبازی‌های انجام‌شده و بازی‌های لغوشده در دو بخش جدا نگهداری می‌شوند:",parse_mode="HTML",reply_markup=_menu()); await cb.answer(); return
         if action=="active": g=app.runtime.state.active_game(gid)
         elif action=="latest":
             gs=group_games(gid,True); g=gs[0] if gs else None
         elif action=="list":
             gs=group_games(gid,True)[:30]
-            if not gs: await cb.answer("ℹ️ آرشیو خالی است.",show_alert=True); return
+            if not gs: await cb.answer("ℹ️ آرشیو بازی‌های انجام‌شده خالی است.",show_alert=True); return
             if not await allowed(cb,gs[0]): await cb.answer("⛔ دسترسی ندارید.",show_alert=True); return
-            await cb.message.edit_text("📚 <b>بازی‌های گذشته</b>\n\nبازی موردنظر را انتخاب کنید:",parse_mode="HTML",reply_markup=_history(gs)); await cb.answer(); return
+            await cb.message.edit_text("📚 <b>بازی‌های انجام‌شده</b>\n\nبازی موردنظر را انتخاب کنید:",parse_mode="HTML",reply_markup=_history(gs)); await cb.answer(); return
+        elif action=="cancelled":
+            gs=app.runtime.state.games.list_cancelled_games(gid,limit=30)
+            if not gs: await cb.answer("ℹ️ هنوز بازی لغوشده‌ای ثبت نشده است.",show_alert=True); return
+            if not await allowed(cb,gs[0]): await cb.answer("⛔ دسترسی ندارید.",show_alert=True); return
+            await cb.message.edit_text("🚫 <b>بازی‌های لغوشده</b>\n\nاین بازی‌ها در تاریخچه بازی‌های انجام‌شده، امتیاز و سابقه بازیکنان محاسبه نمی‌شوند:",parse_mode="HTML",reply_markup=_cancelled_history(gs)); await cb.answer(); return
         elif action=="select": g=get_game(ref)
+        elif action=="cancelled_select":
+            g=app.runtime.state.games.get_cancelled_game(ref)
         elif action=="events_menu":
             g=get_game(ref)
             if not g or not await allowed(cb,g): await cb.answer("❌ بازی پیدا نشد یا دسترسی ندارید.",show_alert=True); return
