@@ -16,14 +16,29 @@ class PersistentRecoveryRuntime:
     def active_games(self):
         return self.state.active_games()
 
+    def _current_turn(self, game_id):
+        method = getattr(self.state.turns, "current_turn", None)
+        if callable(method):
+            return method(game_id)
+        method = getattr(self.state.turns, "current", None)
+        if callable(method):
+            return method(game_id)
+        return None
+
+    def _finish_turn(self, turn_id, state):
+        method = getattr(self.state.turns, "finish_turn", None)
+        if callable(method):
+            return method(turn_id, state)
+        method = getattr(self.state.turns, "finish", None)
+        if callable(method):
+            return method(turn_id, state)
+        return False
+
     def plan(self, group_chat_id: int) -> dict[str, Any]:
         game = self.state.active_game(group_chat_id)
         if not game:
             return {"recoverable": False, "reason": "no_active_game"}
-        # GameState exposes the repository, whose public API is
-        # current_turn()/finish_turn(). Do not call the newer TurnService API
-        # directly through this persistence facade.
-        turn = self.state.turns.current_turn(game["id"])
+        turn = self._current_turn(game["id"])
         if not turn:
             return {"recoverable": True, "group_chat_id": int(group_chat_id), "game": game,
                     "turn": None, "turn_id": None, "deadline_epoch": None, "expired": False}
@@ -45,7 +60,7 @@ class PersistentRecoveryRuntime:
         plan = self.plan(group_chat_id)
         if not plan.get("turn") or not plan.get("expired"):
             return False
-        return bool(self.state.turns.finish_turn(plan["turn"]["id"], {
+        return bool(self._finish_turn(plan["turn"]["id"], {
             "recovery": True, "finish_reason": "timer_expired_after_restart",
         }))
 
