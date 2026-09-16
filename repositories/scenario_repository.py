@@ -3,7 +3,18 @@ from .base import DatabaseRepository
 
 
 class ScenarioRepository(DatabaseRepository):
-    """Persistence for mafia_scenarios."""
+    """Persistence for mafia_scenarios.
+
+    Scenario primary keys are UUIDs in Supabase. Keep them as strings all the
+    way through the repository instead of coercing them to integers.
+    """
+
+    @staticmethod
+    def _scenario_id(value):
+        if value is None:
+            return None
+        value = str(value).strip()
+        return value or None
 
     def list_active(self):
         with self.SessionLocal() as session:
@@ -22,10 +33,13 @@ class ScenarioRepository(DatabaseRepository):
             return dict(row) if row else None
 
     def get_by_id(self, scenario_id):
+        scenario_id = self._scenario_id(scenario_id)
+        if not scenario_id:
+            return None
         with self.SessionLocal() as session:
             row = session.execute(text(
                 "select * from public.mafia_scenarios where id = :scenario_id limit 1"
-            ), {"scenario_id": int(scenario_id)}).mappings().first()
+            ), {"scenario_id": scenario_id}).mappings().first()
             return dict(row) if row else None
 
     def upsert(self, name, description=None, min_players=None, max_players=None, roles=None, config=None, is_active=True):
@@ -48,11 +62,14 @@ class ScenarioRepository(DatabaseRepository):
                 "config": json.dumps(config or {}, ensure_ascii=False), "is_active": is_active,
             }).scalar_one()
             session.commit()
-            return row
+            return str(row)
 
     def update_by_id(self, scenario_id, name, description=None, min_players=None, max_players=None, roles=None, config=None, is_active=True):
         """Update an existing scenario without creating a duplicate when its name changes."""
         import json
+        scenario_id = self._scenario_id(scenario_id)
+        if not scenario_id:
+            raise ValueError("scenario id is required")
         with self.SessionLocal() as session:
             row = session.execute(text(
                 "update public.mafia_scenarios set name=:name, description=:description, "
@@ -60,7 +77,7 @@ class ScenarioRepository(DatabaseRepository):
                 "config=cast(:config as jsonb), is_active=:is_active, updated_at=now() "
                 "where id=:id returning id"
             ), {
-                "id": int(scenario_id), "name": name, "description": description,
+                "id": scenario_id, "name": name, "description": description,
                 "min_players": min_players, "max_players": max_players,
                 "roles": json.dumps(roles or [], ensure_ascii=False),
                 "config": json.dumps(config or {}, ensure_ascii=False), "is_active": is_active,
@@ -68,15 +85,18 @@ class ScenarioRepository(DatabaseRepository):
             if row is None:
                 raise ValueError("scenario not found")
             session.commit()
-            return row
+            return str(row)
 
     def set_active(self, scenario_id, is_active=False):
+        scenario_id = self._scenario_id(scenario_id)
+        if not scenario_id:
+            raise ValueError("scenario id is required")
         with self.SessionLocal() as session:
             row = session.execute(text(
                 "update public.mafia_scenarios set is_active=:active, updated_at=now() "
                 "where id=:id returning id"
-            ), {"id": int(scenario_id), "active": bool(is_active)}).scalar_one_or_none()
+            ), {"id": scenario_id, "active": bool(is_active)}).scalar_one_or_none()
             if row is None:
                 raise ValueError("scenario not found")
             session.commit()
-            return row
+            return str(row)
