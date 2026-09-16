@@ -4,7 +4,6 @@ from typing import Any, Dict, Optional
 from uuid import UUID
 
 from repositories.game_repository import GameRepository
-from repositories.turn_repository import TurnRepository
 
 
 class LobbyService:
@@ -12,7 +11,6 @@ class LobbyService:
 
     def __init__(self, repository: Optional[GameRepository] = None):
         self.repository = repository or GameRepository()
-        self._turns = None
 
     @staticmethod
     def _scenario_id(value):
@@ -29,8 +27,7 @@ class LobbyService:
             except (TypeError, ValueError, OverflowError):
                 return raw
 
-    def get_or_create(self, group_chat_id: int, moderator_id: Optional[int] = None,
-                      scenario_id: Optional[str] = None, event_number: Optional[int] = None) -> Dict[str, Any]:
+    def get_or_create(self, group_chat_id: int, moderator_id: Optional[int] = None, scenario_id: Optional[str] = None, event_number: Optional[int] = None) -> Dict[str, Any]:
         game = self.repository.get_active_game(group_chat_id)
         if game:
             return game
@@ -40,24 +37,17 @@ class LobbyService:
         if event_number < 1:
             raise ValueError("شماره بازی باید حداقل ۱ باشد")
         game_id = self.repository.create_game(group_chat_id=group_chat_id, moderator_id=moderator_id, scenario_id=self._scenario_id(scenario_id), event_number=event_number, state={"phase": "lobby", "waiting": [], "seat_count": 0})
-        return self.repository.get_active_game(group_chat_id) or {"id": game_id, "group_chat_id": group_chat_id, "event_number": event_number}
+        return self.repository.get_active_game(group_chat_id) or {"id": game_id, "group_chat_id": group_chat_id, "event_number": event_number, "status": "lobby"}
 
     def start_new(self, group_chat_id: int, event_number: Optional[int] = None) -> Dict[str, Any]:
+        """Return the existing lobby or create one; never auto-finish running games."""
         active = self.repository.get_active_game(group_chat_id)
         if active:
             status = str(active.get("status") or "")
             if status in {"running", "paused"}:
-                try:
-                    if self._turns is None:
-                        self._turns = TurnRepository()
-                    current_turn = self._turns.current_turn(active["id"])
-                except Exception:
-                    current_turn = object()
-                if current_turn:
-                    raise RuntimeError("یک بازی در حال اجراست و امکان ایجاد بازی جدید وجود ندارد")
-                self.repository.update_game(active["id"], status="finished", state={})
-            elif status == "lobby":
-                self.repository.update_game(active["id"], status="finished", state={})
+                raise RuntimeError("یک بازی در حال اجراست و امکان ایجاد بازی جدید وجود ندارد")
+            if status == "lobby":
+                return active
         if event_number is None:
             event_number = self.repository.next_event_number(group_chat_id)
         number = int(event_number)
@@ -80,14 +70,9 @@ class LobbyService:
 
     def join(self, game_id: str, player_id: int, seat: Optional[int] = None, is_substitute: bool = False) -> int:
         resolved = self.repository.get_game(game_id)
-        if resolved:
-            game_id = resolved["id"]
-        else:
-            active = self.repository.get_active_game(int(game_id))
-            if not active:
-                raise ValueError("بازی پیدا نشد")
-            game_id = active["id"]
-        return self.repository.add_player(game_id=game_id, player_id=player_id, seat=seat, status="waiting" if seat is None else "active", is_substitute=is_substitute)
+        if not resolved:
+            raise ValueError("بازی پیدا نشد")
+        return self.repository.add_player(game_id=resolved["id"], player_id=player_id, seat=seat, status="waiting" if seat is None else "active", is_substitute=is_substitute)
 
     def leave(self, game_id: str, player_id: int) -> bool:
         return self.repository.remove_player(game_id, player_id)
@@ -109,11 +94,7 @@ class LobbyService:
 
     def players(self, game_id: str) -> list[dict[str, Any]]:
         rows = self.repository.list_players(game_id)
-        return [{
-            "id": row.get("id"), "player_id": row.get("player_id"), "seat": row.get("seat"), "status": row.get("status"),
-            "is_alive": row.get("is_alive", True), "is_substitute": row.get("is_substitute", False),
-            "username": row.get("username"), "first_name": row.get("first_name"), "last_name": row.get("last_name"), "nickname": row.get("nickname"),
-        } for row in rows]
+        return [{"id": row.get("id"), "player_id": row.get("player_id"), "seat": row.get("seat"), "status": row.get("status"), "is_alive": row.get("is_alive", True), "is_substitute": row.get("is_substitute", False), "username": row.get("username"), "first_name": row.get("first_name"), "last_name": row.get("last_name"), "nickname": row.get("nickname")} for row in rows]
 
     def snapshot(self, game_id: str) -> Dict[str, Any]:
         rows = self.players(game_id)
