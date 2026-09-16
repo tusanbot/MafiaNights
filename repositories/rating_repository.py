@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import text
 
 from .base import DatabaseRepository
@@ -9,9 +11,24 @@ BASE_SCORE = 50
 class RatingRepository(DatabaseRepository):
     """Persistence and aggregate queries for player ratings."""
 
+    @staticmethod
+    def _game_uuid(session, game_id):
+        raw = str(game_id).strip()
+        try:
+            return str(UUID(raw))
+        except (TypeError, ValueError, AttributeError):
+            row = session.execute(
+                text("select id from public.mafia_games where event_number=:event_number limit 1"),
+                {"event_number": int(raw)},
+            ).scalar_one_or_none()
+            if row is None:
+                raise ValueError("بازی پیدا نشد")
+            return str(row)
+
     def record(self, user_id, game_id, score, result, role, *, win_bonus=0,
                challenge_bonus=0, warning_penalty=0, kick_penalty=0):
         with self.SessionLocal() as session:
+            resolved_game_id = self._game_uuid(session, game_id)
             row = session.execute(
                 text("""
                     insert into public.mafia_ratings
@@ -37,7 +54,7 @@ class RatingRepository(DatabaseRepository):
                     returning id
                 """),
                 {
-                    "user_id": int(user_id), "game_id": game_id,
+                    "user_id": int(user_id), "game_id": resolved_game_id,
                     "score": int(score), "result": result, "role": role,
                     "base_score": BASE_SCORE, "win_bonus": int(win_bonus),
                     "challenge_bonus": int(challenge_bonus),
@@ -51,22 +68,20 @@ class RatingRepository(DatabaseRepository):
     def player_summary(self, user_id):
         with self.SessionLocal() as session:
             row = session.execute(text("""
-                select
-                    count(*)::int as games,
-                    (50 + coalesce(sum(score), 0))::int as score,
-                    count(*) filter (where result='win')::int as wins,
-                    count(*) filter (where result='loss')::int as losses,
-                    count(*) filter (where result='draw')::int as draws,
-                    coalesce(sum(win_bonus),0)::int as win_bonus,
-                    coalesce(sum(challenge_bonus),0)::int as challenge_bonus,
-                    coalesce(sum(warning_penalty),0)::int as warning_penalty,
-                    coalesce(sum(kick_penalty),0)::int as kick_penalty,
-                    count(*) filter (where kick_penalty > 0)::int as kicks,
-                    coalesce(sum(challenge_bonus / 3),0)::int as challenges,
-                    coalesce(sum(warning_penalty),0)::int as warnings,
-                    coalesce(max(score),0)::int as best_game_delta
-                from public.mafia_ratings
-                where user_id=:user_id
+                select count(*)::int as games,
+                       (50 + coalesce(sum(score), 0))::int as score,
+                       count(*) filter (where result='win')::int as wins,
+                       count(*) filter (where result='loss')::int as losses,
+                       count(*) filter (where result='draw')::int as draws,
+                       coalesce(sum(win_bonus),0)::int as win_bonus,
+                       coalesce(sum(challenge_bonus),0)::int as challenge_bonus,
+                       coalesce(sum(warning_penalty),0)::int as warning_penalty,
+                       coalesce(sum(kick_penalty),0)::int as kick_penalty,
+                       count(*) filter (where kick_penalty > 0)::int as kicks,
+                       coalesce(sum(challenge_bonus / 3),0)::int as challenges,
+                       coalesce(sum(warning_penalty),0)::int as warnings,
+                       coalesce(max(score),0)::int as best_game_delta
+                from public.mafia_ratings where user_id=:user_id
             """), {"user_id": int(user_id)}).mappings().one()
             return dict(row)
 
@@ -94,19 +109,17 @@ class RatingRepository(DatabaseRepository):
     def rating_details(self, user_id):
         with self.SessionLocal() as session:
             row = session.execute(text("""
-                select
-                    (50 + coalesce(sum(score),0))::int as score,
-                    coalesce(sum(win_bonus),0)::int as win_bonus,
-                    coalesce(sum(challenge_bonus),0)::int as challenge_bonus,
-                    coalesce(sum(warning_penalty),0)::int as warning_penalty,
-                    coalesce(sum(kick_penalty),0)::int as kick_penalty,
-                    count(*) filter(where challenge_bonus > 0)::int as challenge_games,
-                    coalesce(sum(challenge_bonus / 3),0)::int as challenges,
-                    count(*) filter(where warning_penalty > 0)::int as warning_games,
-                    coalesce(sum(warning_penalty),0)::int as warnings,
-                    count(*) filter(where kick_penalty > 0)::int as kicks
-                from public.mafia_ratings
-                where user_id=:user_id
+                select (50 + coalesce(sum(score),0))::int as score,
+                       coalesce(sum(win_bonus),0)::int as win_bonus,
+                       coalesce(sum(challenge_bonus),0)::int as challenge_bonus,
+                       coalesce(sum(warning_penalty),0)::int as warning_penalty,
+                       coalesce(sum(kick_penalty),0)::int as kick_penalty,
+                       count(*) filter(where challenge_bonus > 0)::int as challenge_games,
+                       coalesce(sum(challenge_bonus / 3),0)::int as challenges,
+                       count(*) filter(where warning_penalty > 0)::int as warning_games,
+                       coalesce(sum(warning_penalty),0)::int as warnings,
+                       count(*) filter(where kick_penalty > 0)::int as kicks
+                from public.mafia_ratings where user_id=:user_id
             """), {"user_id": int(user_id)}).mappings().one()
             return dict(row)
 
