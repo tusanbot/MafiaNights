@@ -7,12 +7,12 @@ from .base import DatabaseRepository
 
 
 class GameId(str):
-    """UUID game id that remains compatible with legacy int(callback) paths.
+    """Canonical UUID game id with compatibility for legacy int(callback) paths.
 
-    Telegram callback code historically used the numeric event number as the
-    callback identifier.  The database now uses UUID primary keys.  Keeping a
-    UUID string at the persistence boundary while making int(game_id) return
-    event_number lets old callback contracts continue to work safely.
+    Older handlers cast the UUID to int before putting it in Telegram callback
+    data.  We keep that compatibility by exposing the UUID's integer form.
+    The repository then converts that integer back to the same UUID instead of
+    treating it as an event number.
     """
 
     def __new__(cls, value, event_number=None):
@@ -21,11 +21,9 @@ class GameId(str):
         return obj
 
     def __int__(self):
-        if self.event_number is not None:
-            return self.event_number
         try:
             return UUID(str(self)).int
-        except Exception:
+        except (TypeError, ValueError, AttributeError):
             return int(str(self))
 
 
@@ -55,15 +53,29 @@ class GameRepository(DatabaseRepository):
             return False
 
     def _resolve_id(self, session, game_id):
-        """Resolve UUIDs directly and legacy numeric callback ids by event_number."""
+        """Resolve canonical UUIDs and legacy UUID-int callback identifiers."""
         if self._is_uuid(game_id):
             return str(game_id)
+        if isinstance(game_id, int):
+            try:
+                return str(UUID(int=game_id))
+            except (ValueError, OverflowError):
+                pass
         raw = str(game_id).strip()
         if not raw:
             raise ValueError("game id is required")
+        try:
+            return str(UUID(raw))
+        except (TypeError, ValueError, AttributeError):
+            pass
+        # Genuine legacy installations may still send event_number values.
+        try:
+            numeric = int(raw)
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError("بازی پیدا نشد")
         row = session.execute(
-            text("select id from public.mafia_games where event_number=:event_number limit 1"),
-            {"event_number": int(raw)},
+            text("select id from public.mafia_games where event_number=:event_number order by created_at desc limit 1"),
+            {"event_number": numeric},
         ).scalar_one_or_none()
         if row is None:
             raise ValueError("بازی پیدا نشد")
@@ -115,6 +127,20 @@ class GameRepository(DatabaseRepository):
                 rows = session.execute(text("select * from public.mafia_games where group_chat_id=:group_chat_id and status='finished' order by finished_at desc nulls last, created_at desc limit :limit"), {"group_chat_id": int(group_chat_id), "limit": int(limit)}).mappings().all()
             return [self._wrap(row) for row in rows]
 
+    def list_cancelled_games(self, group_chat_id=None, limit=50):
+        with self.SessionLocal() as session:
+            if group_chat_id is None:
+                rows = session.execute(text("select * from public.mafia_games where status='cancelled' order by finished_at desc nulls last, created_at desc limit :limit"), {"limit": int(limit)}).mappings().all()
+            else:
+                rows = session.execute(text("select * from public.mafia_games where group_chat_id=:group_chat_id and status='cancelled' order by finished_at desc nulls last, created_at desc limit :limit"), {"group_chat_id": int(group_chat_id), "limit": int(limit)}).mappings().all()
+            return [self._wrap(row) for row in rows]
+
+    def get_cancelled_game(self, game_id):
+        with self.SessionLocal() as session:
+            resolved = self._resolve_id(session, game_id)
+            row = session.execute(text("select * from public.mafia_games where id=:game_id and status='cancelled' limit 1"), {"game_id": resolved}).mappings().first()
+            return self._wrap(row)
+
     def get_active_game(self, group_chat_id):
         gid = int(group_chat_id)
         cached = self._active_cache.get(gid)
@@ -158,7 +184,7 @@ class GameRepository(DatabaseRepository):
                 else:
                     assignments.append(f"{key}=:{key}")
                     params[key] = value
-            if fields.get("status") == "finished" and "finished_at" not in fields:
+            if fields.get("status") in {"finished", "cancelled"} and "finished_at" not in fields:
                 assignments.append("finished_at=coalesce(finished_at, now())")
             assignments.append("updated_at=now()")
             result = session.execute(text(f"update public.mafia_games set {', '.join(assignments)} where id=:game_id"), params)
