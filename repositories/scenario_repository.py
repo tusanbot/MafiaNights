@@ -26,10 +26,12 @@ class ScenarioRepository(DatabaseRepository):
         if value is None:
             return None
         if isinstance(value, int):
-            try:
-                return str(UUID(int=value))
-            except (ValueError, OverflowError):
-                return str(value)
+            if value > 2**63:
+                try:
+                    return str(UUID(int=value))
+                except (ValueError, OverflowError):
+                    pass
+            return str(value)
         raw = str(value).strip()
         if not raw:
             return None
@@ -38,7 +40,6 @@ class ScenarioRepository(DatabaseRepository):
         except (TypeError, ValueError, AttributeError):
             try:
                 numeric = int(raw)
-                # UUID integer representation used by legacy callback handlers.
                 if numeric > 2**63:
                     return str(UUID(int=numeric))
                 return str(numeric)
@@ -63,9 +64,7 @@ class ScenarioRepository(DatabaseRepository):
 
     def get_by_name(self, name):
         with self.SessionLocal() as session:
-            row = session.execute(text(
-                "select * from public.mafia_scenarios where name = :name limit 1"
-            ), {"name": name}).mappings().first()
+            row = session.execute(text("select * from public.mafia_scenarios where name = :name limit 1"), {"name": name}).mappings().first()
             return self._wrap(row)
 
     def get_by_id(self, scenario_id):
@@ -73,9 +72,7 @@ class ScenarioRepository(DatabaseRepository):
         if not scenario_id:
             return None
         with self.SessionLocal() as session:
-            row = session.execute(text(
-                "select * from public.mafia_scenarios where id = :scenario_id limit 1"
-            ), {"scenario_id": scenario_id}).mappings().first()
+            row = session.execute(text("select * from public.mafia_scenarios where id = :scenario_id limit 1"), {"scenario_id": scenario_id}).mappings().first()
             return self._wrap(row)
 
     def upsert(self, name, description=None, min_players=None, max_players=None, roles=None, config=None, is_active=True):
@@ -88,9 +85,8 @@ class ScenarioRepository(DatabaseRepository):
                 "cast(:config as jsonb), :is_active, "
                 "coalesce((select max(sort_order) + 1 from public.mafia_scenarios), 0), now()) "
                 "on conflict (name) do update set description = excluded.description, "
-                "min_players = excluded.min_players, max_players = excluded.max_players, "
-                "roles = excluded.roles, config = excluded.config, is_active = excluded.is_active, "
-                "updated_at = now() returning id"
+                "min_players = excluded.min_players, max_players = excluded.max_players, roles = excluded.roles, "
+                "config = excluded.config, is_active = excluded.is_active, updated_at = now() returning id"
             ), {
                 "name": name, "description": description, "min_players": min_players,
                 "max_players": max_players, "roles": json.dumps(roles or [], ensure_ascii=False),
@@ -106,15 +102,13 @@ class ScenarioRepository(DatabaseRepository):
             raise ValueError("scenario id is required")
         with self.SessionLocal() as session:
             row = session.execute(text(
-                "update public.mafia_scenarios set name=:name, description=:description, "
-                "min_players=:min_players, max_players=:max_players, roles=cast(:roles as jsonb), "
-                "config=cast(:config as jsonb), is_active=:is_active, updated_at=now() "
-                "where id=:id returning id"
+                "update public.mafia_scenarios set name=:name, description=:description, min_players=:min_players, "
+                "max_players=:max_players, roles=cast(:roles as jsonb), config=cast(:config as jsonb), "
+                "is_active=:is_active, updated_at=now() where id=:id returning id"
             ), {
                 "id": scenario_id, "name": name, "description": description,
                 "min_players": min_players, "max_players": max_players,
-                "roles": json.dumps(roles or [], ensure_ascii=False),
-                "config": json.dumps(config or {}, ensure_ascii=False),
+                "roles": json.dumps(roles or [], ensure_ascii=False), "config": json.dumps(config or {}, ensure_ascii=False),
                 "is_active": is_active,
             }).scalar_one_or_none()
             if row is None:
@@ -127,10 +121,7 @@ class ScenarioRepository(DatabaseRepository):
         if not scenario_id:
             raise ValueError("scenario id is required")
         with self.SessionLocal() as session:
-            row = session.execute(text(
-                "update public.mafia_scenarios set is_active=:active, updated_at=now() "
-                "where id=:id returning id"
-            ), {"id": scenario_id, "active": bool(is_active)}).scalar_one_or_none()
+            row = session.execute(text("update public.mafia_scenarios set is_active=:active, updated_at=now() where id=:id returning id"), {"id": scenario_id, "active": bool(is_active)}).scalar_one_or_none()
             if row is None:
                 raise ValueError("scenario not found")
             session.commit()
