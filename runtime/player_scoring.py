@@ -52,7 +52,11 @@ def _is_kicked(row: dict[str, Any], state: dict[str, Any]) -> bool:
 
 
 def score_game(app: Any, game: dict[str, Any], rows: list[dict[str, Any]], winner: str) -> None:
-    """Record exactly one rating delta per player for a finalized game."""
+    """Record rating only for a game that has already been finalized."""
+    if str(game.get("status") or "") != "finished":
+        logging.info("rating deferred because game is not finalized: game=%s status=%s", game.get("id"), game.get("status"))
+        return
+
     repo = RatingRepository()
     state = dict(game.get("state") or {})
     recorded = {str(x) for x in (state.get("rating_recorded_players") or [])}
@@ -113,10 +117,55 @@ def _patch_final_report() -> None:
     game_end._score_final_report_patched = True
 
 
+def _install_final_score_hook(app: Any) -> None:
+    """Make finalization the single point that commits player ratings."""
+    if getattr(game_end, "_final_score_hook_installed", False):
+        return
+
+    dp = app.dp
+    table = getattr(getattr(dp, "callback_query_handlers", None), "handlers", [])
+    original = None
+    kept = []
+    for item in table:
+        fn = getattr(item, "callback", None)
+        if getattr(fn, "__module__", "") == game_end.__name__ and getattr(fn, "__name__", "") == "game_end":
+            original = fn
+            continue
+        kept.append(item)
+    table[:] = kept
+    if original is None:
+        return
+
+    async def finalized_game_end(callback):
+        await original(callback)
+        data = str(callback.data or "").split(":")
+        if len(data) < 3 or data[0] != "game_end" or data[2] != "confirm_final":
+            return
+        try:
+            game = app.runtime.state.games.get_game(int(data[1]))
+            if not game or str(game.get("status") or "") != "finished":
+                return
+            winner = str((game.get("state") or {}).get("game_result") or "")
+            if not winner:
+                return
+            rows = app.runtime.state.games.list_players(game["id"])
+            score_game(app, game, rows, winner)
+        except Exception:
+            logging.exception("final score hook failed game=%s", data[1] if len(data) > 1 else "?")
+
+    dp.register_callback_query_handler(
+        finalized_game_end,
+        lambda c: str(c.data or "").startswith("game_end:"),
+        state="*",
+    )
+    game_end._final_score_hook_installed = True
+
+
 def install(app: Any) -> bool:
-    """Replace legacy end-game scoring and mark kicked players in reports."""
+    """Install canonical final-game scoring and report decoration."""
     game_end._score_players = lambda app_, game_, rows_, winner_: score_game(app_, game_, rows_, winner_)
     _patch_final_report()
+    _install_final_score_hook(app)
     app.player_scoring = {
         "base": BASE_SCORE,
         "win": WIN_POINTS,
