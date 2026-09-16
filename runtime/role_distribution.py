@@ -186,7 +186,12 @@ def install(app: Any) -> bool:
 
         state = dict(game.get("state") or {})
         state["role_delivery"] = {str(int(p["player_id"])): int(p["player_id"]) not in delivery_failures for p in players}
-        lobby_message_id = state.get("lobby_message_id"); state["control_message_id"] = lobby_message_id
+        # The callback itself is the canonical lobby message. Prefer it over
+        # transient globals so the conversion still works after recovery.
+        lobby_message_id = state.get("lobby_message_id") or getattr(app, "lobby_message_id", None) or getattr(callback.message, "message_id", None)
+        if lobby_message_id is not None:
+            state["lobby_message_id"] = int(lobby_message_id)
+            state["control_message_id"] = int(lobby_message_id)
         app.runtime.state.games.update_game(game_id, state=state)
         if lobby_message_id:
             try:
@@ -213,5 +218,19 @@ def install(app: Any) -> bool:
     dp.register_callback_query_handler(lambda c: set_head(c, True), lambda c: str(c.data or "").startswith("day:") and str(c.data or "").endswith(":head_random"), state="*")
     dp.register_callback_query_handler(set_head, lambda c: str(c.data or "").startswith("day:") and ":head_pick:" in str(c.data), state="*")
     dp.register_callback_query_handler(distribute_roles, lambda c: c.data == "distribute_roles", state="*")
+
+    # Handle only the role-recovery deep link and put it before generic /start.
+    # The filter is intentionally narrow so normal /start keeps its existing UI.
+    async def role_deep_link_filter(message: types.Message):
+        return bool((message.text or "").startswith("/start") and (message.get_args() or "").strip().startswith("role_"))
+
+    dp.register_message_handler(role_start_command, role_deep_link_filter, state="*")
+    message_registry = getattr(getattr(dp, "message_handlers", None), "handlers", [])
+    for index, item in enumerate(message_registry):
+        handler = getattr(item, "handler", None) or getattr(item, "callback", None)
+        if handler is role_start_command:
+            message_registry.insert(0, message_registry.pop(index))
+            break
+
     logging.info("PRODUCTION_ROLE_DISTRIBUTION_ACTIVE")
     return True
