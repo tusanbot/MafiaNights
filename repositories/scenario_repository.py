@@ -5,17 +5,22 @@ from .base import DatabaseRepository
 
 
 class ScenarioId(str):
-    """UUID scenario id with a Telegram-safe legacy integer representation."""
+    """Scenario id with compatibility for both UUID and legacy numeric ids."""
 
     def __new__(cls, value):
         return super().__new__(cls, str(value))
 
     def __int__(self):
-        return UUID(str(self)).int
+        """Support legacy int(id) callers without assuming the DB type is UUID."""
+        raw = str(self).strip()
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return UUID(raw).int
 
 
 class ScenarioRepository(DatabaseRepository):
-    """Persistence for mafia_scenarios with UUID-safe legacy compatibility."""
+    """Persistence for mafia_scenarios with UUID/numeric compatibility."""
 
     @staticmethod
     def _scenario_id(value):
@@ -27,8 +32,9 @@ class ScenarioRepository(DatabaseRepository):
         try:
             return str(UUID(raw))
         except (TypeError, ValueError, AttributeError):
+            # Legacy installations may still have integer scenario ids.
             try:
-                return str(UUID(int=int(raw)))
+                return str(int(raw))
             except (TypeError, ValueError, OverflowError):
                 return raw
 
@@ -36,13 +42,7 @@ class ScenarioRepository(DatabaseRepository):
     def _wrap(row):
         value = dict(row) if row else None
         if value and value.get("id") is not None:
-            raw = str(value["id"])
-            try:
-                # Return the UUID string subclass for persistence, but expose
-                # its full UUID integer when legacy callback code calls int().
-                value["id"] = ScenarioId(str(UUID(raw)))
-            except (TypeError, ValueError, AttributeError):
-                value["id"] = ScenarioId(raw)
+            value["id"] = ScenarioId(value["id"])
         return value
 
     def list_active(self):
