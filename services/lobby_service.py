@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+from uuid import UUID
 
 from repositories.game_repository import GameRepository
 from repositories.turn_repository import TurnRepository
@@ -13,6 +14,21 @@ class LobbyService:
         self.repository = repository or GameRepository()
         self._turns = None
 
+    @staticmethod
+    def _scenario_id(value):
+        if value is None:
+            return None
+        raw = str(value).strip()
+        if not raw:
+            return None
+        try:
+            return str(UUID(raw))
+        except (TypeError, ValueError, AttributeError):
+            try:
+                return str(UUID(int=int(raw)))
+            except (TypeError, ValueError, OverflowError):
+                return raw
+
     def get_or_create(self, group_chat_id: int, moderator_id: Optional[int] = None,
                       scenario_id: Optional[str] = None, event_number: Optional[int] = None) -> Dict[str, Any]:
         game = self.repository.get_active_game(group_chat_id)
@@ -23,7 +39,7 @@ class LobbyService:
         event_number = int(event_number)
         if event_number < 1:
             raise ValueError("شماره بازی باید حداقل ۱ باشد")
-        game_id = self.repository.create_game(group_chat_id=group_chat_id, moderator_id=moderator_id, scenario_id=scenario_id, event_number=event_number, state={"phase": "lobby", "waiting": [], "seat_count": 0})
+        game_id = self.repository.create_game(group_chat_id=group_chat_id, moderator_id=moderator_id, scenario_id=self._scenario_id(scenario_id), event_number=event_number, state={"phase": "lobby", "waiting": [], "seat_count": 0})
         return self.repository.get_active_game(group_chat_id) or {"id": game_id, "group_chat_id": group_chat_id, "event_number": event_number}
 
     def start_new(self, group_chat_id: int, event_number: Optional[int] = None) -> Dict[str, Any]:
@@ -40,8 +56,6 @@ class LobbyService:
                         self._turns = TurnRepository()
                     current_turn = self._turns.current_turn(active["id"])
                 except Exception:
-                    # If turn state cannot be verified, fail closed: the game
-                    # may really be running, so require explicit manual finish.
                     current_turn = object()
                 if current_turn:
                     raise RuntimeError("یک بازی در حال اجراست و امکان ایجاد بازی جدید وجود ندارد")
@@ -51,34 +65,54 @@ class LobbyService:
         if event_number is None:
             event_number = self.repository.next_event_number(group_chat_id)
         number = int(event_number)
-        if number < 1: raise ValueError("شماره بازی باید حداقل ۱ باشد")
+        if number < 1:
+            raise ValueError("شماره بازی باید حداقل ۱ باشد")
         game_id = self.repository.create_game(group_chat_id=group_chat_id, moderator_id=None, scenario_id=None, event_number=number, state={"phase": "scenario_selection", "waiting": [], "seat_count": 0})
         return self.repository.get_active_game(group_chat_id) or {"id": game_id, "group_chat_id": int(group_chat_id), "event_number": number, "status": "lobby", "scenario_id": None, "moderator_id": None}
 
     def set_event_number(self, game_id: str, event_number: int) -> bool:
         number = int(event_number)
-        if number < 1: raise ValueError("شماره بازی باید حداقل ۱ باشد")
+        if number < 1:
+            raise ValueError("شماره بازی باید حداقل ۱ باشد")
         return self.repository.update_game(game_id, event_number=number)
 
-    def set_scenario(self, game_id: str, scenario_id: str) -> bool: return self.repository.update_game(game_id, scenario_id=scenario_id)
-    def set_moderator(self, game_id: str, moderator_id: int) -> bool: return self.repository.update_game(game_id, moderator_id=int(moderator_id))
+    def set_scenario(self, game_id: str, scenario_id: str) -> bool:
+        return self.repository.update_game(game_id, scenario_id=self._scenario_id(scenario_id))
+
+    def set_moderator(self, game_id: str, moderator_id: int) -> bool:
+        return self.repository.update_game(game_id, moderator_id=int(moderator_id))
+
     def join(self, game_id: str, player_id: int, seat: Optional[int] = None, is_substitute: bool = False) -> int:
-        resolved_game_id = int(game_id)
-        # Backward compatibility: older handlers passed group_chat_id here.
-        active = self.repository.get_active_game(int(game_id))
-        if active:
-            resolved_game_id = int(active["id"])
-        return self.repository.add_player(game_id=resolved_game_id, player_id=player_id, seat=seat, status="waiting" if seat is None else "active", is_substitute=is_substitute)
-    def leave(self, game_id: str, player_id: int) -> bool: return self.repository.remove_player(game_id, player_id)
-    def assign_seat(self, game_id: str, player_id: int, seat: int) -> bool: return self.repository.set_player_seat(game_id, player_id, seat)
-    def clear_seat(self, game_id: str, player_id: int) -> bool: return self.repository.set_player_seat(game_id, player_id, None)
+        # New callbacks carry the numeric compatibility id returned by int(GameId),
+        # while the repository resolves it to the authoritative UUID.
+        resolved = self.repository.get_game(game_id)
+        if resolved:
+            game_id = resolved["id"]
+        else:
+            # Legacy callers may still pass group_chat_id.
+            active = self.repository.get_active_game(int(game_id))
+            if not active:
+                raise ValueError("بازی پیدا نشد")
+            game_id = active["id"]
+        return self.repository.add_player(game_id=game_id, player_id=player_id, seat=seat, status="waiting" if seat is None else "active", is_substitute=is_substitute)
+
+    def leave(self, game_id: str, player_id: int) -> bool:
+        return self.repository.remove_player(game_id, player_id)
+
+    def assign_seat(self, game_id: str, player_id: int, seat: int) -> bool:
+        return self.repository.set_player_seat(game_id, player_id, seat)
+
+    def clear_seat(self, game_id: str, player_id: int) -> bool:
+        return self.repository.set_player_seat(game_id, player_id, None)
 
     def set_status(self, game_id: str, player_id: int, status: str) -> bool:
         allowed = {"active", "waiting", "removed", "substitute", "finished"}
-        if status not in allowed: raise ValueError(f"وضعیت نامعتبر: {status}")
+        if status not in allowed:
+            raise ValueError(f"وضعیت نامعتبر: {status}")
         return self.repository.set_player_status(game_id, player_id, status)
 
-    def promote_waiting(self, game_id: str, seat: int): return self.repository.promote_waiting_player(game_id, seat)
+    def promote_waiting(self, game_id: str, seat: int):
+        return self.repository.promote_waiting_player(game_id, seat)
 
     def players(self, game_id: str) -> list[dict[str, Any]]:
         rows = self.repository.list_players(game_id)
