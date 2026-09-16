@@ -5,7 +5,7 @@ from .base import DatabaseRepository
 
 
 class ScenarioId(str):
-    """UUID scenario id compatible with legacy int(callback) code."""
+    """UUID scenario id with a Telegram-safe legacy integer representation."""
 
     def __new__(cls, value):
         return super().__new__(cls, str(value))
@@ -36,7 +36,13 @@ class ScenarioRepository(DatabaseRepository):
     def _wrap(row):
         value = dict(row) if row else None
         if value and value.get("id") is not None:
-            value["id"] = ScenarioId(value["id"])
+            raw = str(value["id"])
+            try:
+                # Return the UUID string subclass for persistence, but expose
+                # its full UUID integer when legacy callback code calls int().
+                value["id"] = ScenarioId(str(UUID(raw)))
+            except (TypeError, ValueError, AttributeError):
+                value["id"] = ScenarioId(raw)
         return value
 
     def list_active(self):
