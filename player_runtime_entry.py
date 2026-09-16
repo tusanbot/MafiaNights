@@ -23,7 +23,6 @@ main.game_management.install()
 from runtime.role_distribution import install as install_role_distribution
 install_role_distribution(main)
 main._canonical_distribute_roles = main._role_distribution_handler
-# All management refresh/close operations must return to the same authoritative lobby.
 if getattr(main, "_render_final_lobby", None):
     main._render_production_lobby = main._render_final_lobby
 from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
@@ -71,8 +70,6 @@ install_stable_round_engine(main); install_live_controls_v2(main); install_lobby
 from runtime.game_info_security_v2 import install as install_game_info_security_v2
 install_game_info_security_v2(main)
 
-# Final cutover runs AFTER every production installer. This prevents an older
-# /start or lobby handler registered later in the import chain from winning.
 def _finalize_lobby_routes():
     dp = main.dp
     def handler_of(item):
@@ -92,7 +89,13 @@ _finalize_lobby_routes()
 
 _original_startup=main.on_startup
 async def on_startup(dp):
-    results=await persistent_startup(main,_original_startup); logging.info("Persistent runtime startup recovery completed: %s",results)
+    # Startup recovery is auxiliary. A recovery/database failure must never
+    # abort Telegram update dispatch on a request-driven Vercel webhook.
+    try:
+        results=await persistent_startup(main,_original_startup)
+        logging.info("Persistent runtime startup recovery completed: %s",results)
+    except Exception:
+        logging.exception("Persistent runtime startup recovery failed; continuing webhook startup")
     try:
         configured_gid=getattr(main,"ALLOWED_GROUP_ID",None)
         if configured_gid:
