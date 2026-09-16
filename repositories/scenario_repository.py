@@ -1,20 +1,43 @@
+from uuid import UUID
+
 from sqlalchemy import text
 from .base import DatabaseRepository
 
 
-class ScenarioRepository(DatabaseRepository):
-    """Persistence for mafia_scenarios.
+class ScenarioId(str):
+    """UUID scenario id compatible with legacy int(callback) code."""
 
-    Scenario primary keys are UUIDs in Supabase. Keep them as strings all the
-    way through the repository instead of coercing them to integers.
-    """
+    def __new__(cls, value):
+        return super().__new__(cls, str(value))
+
+    def __int__(self):
+        return UUID(str(self)).int
+
+
+class ScenarioRepository(DatabaseRepository):
+    """Persistence for mafia_scenarios with UUID-safe legacy compatibility."""
 
     @staticmethod
     def _scenario_id(value):
         if value is None:
             return None
-        value = str(value).strip()
-        return value or None
+        raw = str(value).strip()
+        if not raw:
+            return None
+        try:
+            return str(UUID(raw))
+        except (TypeError, ValueError, AttributeError):
+            try:
+                return str(UUID(int=int(raw)))
+            except (TypeError, ValueError, OverflowError):
+                return raw
+
+    @staticmethod
+    def _wrap(row):
+        value = dict(row) if row else None
+        if value and value.get("id") is not None:
+            value["id"] = ScenarioId(value["id"])
+        return value
 
     def list_active(self):
         with self.SessionLocal() as session:
@@ -23,14 +46,14 @@ class ScenarioRepository(DatabaseRepository):
                 "from public.mafia_scenarios where is_active = true "
                 "order by sort_order nulls last, id"
             )).mappings().all()
-            return [dict(row) for row in rows]
+            return [self._wrap(row) for row in rows]
 
     def get_by_name(self, name):
         with self.SessionLocal() as session:
             row = session.execute(text(
                 "select * from public.mafia_scenarios where name = :name limit 1"
             ), {"name": name}).mappings().first()
-            return dict(row) if row else None
+            return self._wrap(row)
 
     def get_by_id(self, scenario_id):
         scenario_id = self._scenario_id(scenario_id)
@@ -40,7 +63,7 @@ class ScenarioRepository(DatabaseRepository):
             row = session.execute(text(
                 "select * from public.mafia_scenarios where id = :scenario_id limit 1"
             ), {"scenario_id": scenario_id}).mappings().first()
-            return dict(row) if row else None
+            return self._wrap(row)
 
     def upsert(self, name, description=None, min_players=None, max_players=None, roles=None, config=None, is_active=True):
         import json
@@ -54,8 +77,7 @@ class ScenarioRepository(DatabaseRepository):
                 "on conflict (name) do update set description = excluded.description, "
                 "min_players = excluded.min_players, max_players = excluded.max_players, "
                 "roles = excluded.roles, config = excluded.config, is_active = excluded.is_active, "
-                "updated_at = now() "
-                "returning id"
+                "updated_at = now() returning id"
             ), {
                 "name": name, "description": description, "min_players": min_players,
                 "max_players": max_players, "roles": json.dumps(roles or [], ensure_ascii=False),
@@ -65,7 +87,6 @@ class ScenarioRepository(DatabaseRepository):
             return str(row)
 
     def update_by_id(self, scenario_id, name, description=None, min_players=None, max_players=None, roles=None, config=None, is_active=True):
-        """Update an existing scenario without creating a duplicate when its name changes."""
         import json
         scenario_id = self._scenario_id(scenario_id)
         if not scenario_id:
