@@ -7,7 +7,7 @@ from .base import DatabaseRepository
 
 
 class GameId(str):
-    """Canonical UUID game id with compatibility for legacy int(callback) paths."""
+    """Canonical UUID game id with a compact event-number representation for callbacks."""
 
     def __new__(cls, value, event_number=None):
         obj = super().__new__(cls, str(value))
@@ -15,6 +15,12 @@ class GameId(str):
         return obj
 
     def __int__(self):
+        # Telegram callback_data is limited to 64 bytes. Returning the UUID's
+        # huge integer made valid lobby buttons exceed that limit. The repository
+        # already resolves small integers as durable event_number values, so use
+        # the compact event number whenever it is available.
+        if self.event_number is not None:
+            return int(self.event_number)
         try:
             return UUID(str(self)).int
         except (TypeError, ValueError, AttributeError):
@@ -50,7 +56,6 @@ class GameRepository(DatabaseRepository):
         """Resolve canonical UUIDs, UUID-int callbacks, and old event numbers."""
         if self._is_uuid(game_id):
             return str(game_id)
-
         if isinstance(game_id, int):
             if game_id > 2**63:
                 try:
@@ -67,7 +72,6 @@ class GameRepository(DatabaseRepository):
                 return str(UUID(int=game_id))
             except (ValueError, OverflowError):
                 raise ValueError("بازی پیدا نشد")
-
         raw = str(game_id).strip()
         if not raw:
             raise ValueError("game id is required")
