@@ -47,10 +47,6 @@ class LobbyService:
         if active:
             status = str(active.get("status") or "")
             if status in {"running", "paused"}:
-                # A genuinely running game is never auto-finished. However,
-                # an old restart can leave a game marked running after its
-                # current turn disappeared. That stale record must not block
-                # the next lobby forever.
                 try:
                     if self._turns is None:
                         self._turns = TurnRepository()
@@ -83,13 +79,10 @@ class LobbyService:
         return self.repository.update_game(game_id, moderator_id=int(moderator_id))
 
     def join(self, game_id: str, player_id: int, seat: Optional[int] = None, is_substitute: bool = False) -> int:
-        # New callbacks carry the numeric compatibility id returned by int(GameId),
-        # while the repository resolves it to the authoritative UUID.
         resolved = self.repository.get_game(game_id)
         if resolved:
             game_id = resolved["id"]
         else:
-            # Legacy callers may still pass group_chat_id.
             active = self.repository.get_active_game(int(game_id))
             if not active:
                 raise ValueError("بازی پیدا نشد")
@@ -118,7 +111,7 @@ class LobbyService:
         rows = self.repository.list_players(game_id)
         return [{
             "id": row.get("id"), "player_id": row.get("player_id"), "seat": row.get("seat"), "status": row.get("status"),
-            "role": row.get("role"), "is_alive": row.get("is_alive", True), "is_substitute": row.get("is_substitute", False),
+            "is_alive": row.get("is_alive", True), "is_substitute": row.get("is_substitute", False),
             "username": row.get("username"), "first_name": row.get("first_name"), "last_name": row.get("last_name"), "nickname": row.get("nickname"),
         } for row in rows]
 
