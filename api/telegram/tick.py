@@ -52,7 +52,7 @@ def _repair_webhook_if_needed() -> dict:
 
 
 def app(environ, start_response):
-    # Supabase pg_cron invokes this endpoint every 10 seconds. Use the patched
+    # Supabase pg_cron invokes this endpoint every minute. Use the patched
     # runtime helpers installed by main.py and keep each transition idempotent.
     result = {}
     try:
