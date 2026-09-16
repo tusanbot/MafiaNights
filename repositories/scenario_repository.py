@@ -5,18 +5,17 @@ from .base import DatabaseRepository
 
 
 class ScenarioId(str):
-    """Scenario id with compatibility for both UUID and legacy numeric ids."""
+    """Canonical UUID scenario id with legacy integer callback compatibility."""
 
     def __new__(cls, value):
         return super().__new__(cls, str(value))
 
     def __int__(self):
-        """Support legacy int(id) callers without assuming the DB type is UUID."""
         raw = str(self).strip()
         try:
-            return int(raw)
-        except (TypeError, ValueError):
             return UUID(raw).int
+        except (TypeError, ValueError, AttributeError):
+            return int(raw)
 
 
 class ScenarioRepository(DatabaseRepository):
@@ -26,15 +25,23 @@ class ScenarioRepository(DatabaseRepository):
     def _scenario_id(value):
         if value is None:
             return None
+        if isinstance(value, int):
+            try:
+                return str(UUID(int=value))
+            except (ValueError, OverflowError):
+                return str(value)
         raw = str(value).strip()
         if not raw:
             return None
         try:
             return str(UUID(raw))
         except (TypeError, ValueError, AttributeError):
-            # Legacy installations may still have integer scenario ids.
             try:
-                return str(int(raw))
+                numeric = int(raw)
+                # UUID integer representation used by legacy callback handlers.
+                if numeric > 2**63:
+                    return str(UUID(int=numeric))
+                return str(numeric)
             except (TypeError, ValueError, OverflowError):
                 return raw
 
@@ -107,7 +114,8 @@ class ScenarioRepository(DatabaseRepository):
                 "id": scenario_id, "name": name, "description": description,
                 "min_players": min_players, "max_players": max_players,
                 "roles": json.dumps(roles or [], ensure_ascii=False),
-                "config": json.dumps(config or {}, ensure_ascii=False), "is_active": is_active,
+                "config": json.dumps(config or {}, ensure_ascii=False),
+                "is_active": is_active,
             }).scalar_one_or_none()
             if row is None:
                 raise ValueError("scenario not found")
