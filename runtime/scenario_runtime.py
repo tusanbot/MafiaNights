@@ -14,6 +14,9 @@ class ScenarioRuntime:
     is copied into game.state when selected so the running game keeps the
     exact rules that were selected, even if an administrator edits the
     scenario later.
+
+    Scenario IDs are UUIDs in the authoritative Supabase schema and must not
+    be coerced to integers.
     """
 
     def __init__(self, app: Any):
@@ -30,24 +33,25 @@ class ScenarioRuntime:
                 value = {}
         return value if isinstance(value, dict) else {}
 
-    def get(self, scenario_id: Optional[int]) -> Optional[dict[str, Any]]:
+    def get(self, scenario_id: Optional[str]) -> Optional[dict[str, Any]]:
         if not scenario_id:
             return None
-        row = self.repo.get_by_id(int(scenario_id))
+        row = self.repo.get_by_id(str(scenario_id))
         if not row or not row.get("is_active", True):
             return None
         row = dict(row)
+        row["id"] = str(row["id"])
         row["config"] = self._config(row)
         row["roles"] = list(row.get("roles") or [])
         return row
 
-    def snapshot(self, scenario_id: Optional[int]) -> Optional[dict[str, Any]]:
+    def snapshot(self, scenario_id: Optional[str]) -> Optional[dict[str, Any]]:
         row = self.get(scenario_id)
         if not row:
             return None
         cfg = row["config"]
         return {
-            "id": int(row["id"]),
+            "id": str(row["id"]),
             "name": row.get("name"),
             "description": row.get("description"),
             "min_players": int(row.get("min_players") or 0),
@@ -60,8 +64,8 @@ class ScenarioRuntime:
             "settings": cfg.get("settings") or {},
         }
 
-    def apply_to_game(self, game_id: str, scenario_id: int) -> dict[str, Any]:
-        scenario = self.snapshot(scenario_id)
+    def apply_to_game(self, game_id: str, scenario_id: str) -> dict[str, Any]:
+        scenario = self.snapshot(str(scenario_id))
         if not scenario:
             raise ValueError("سناریوی انتخاب‌شده معتبر یا فعال نیست")
         game = self.app.runtime.state.games.get_game(game_id)
@@ -80,7 +84,7 @@ class ScenarioRuntime:
         state["challenge_usage"] = {}
         self.app.runtime.state.games.update_game(
             game_id,
-            scenario_id=int(scenario_id),
+            scenario_id=str(scenario_id),
             state=state,
         )
         return scenario
