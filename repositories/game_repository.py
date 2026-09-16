@@ -7,13 +7,7 @@ from .base import DatabaseRepository
 
 
 class GameId(str):
-    """Canonical UUID game id with compatibility for legacy int(callback) paths.
-
-    Older handlers cast the UUID to int before putting it in Telegram callback
-    data.  We keep that compatibility by exposing the UUID's integer form.
-    The repository then converts that integer back to the same UUID instead of
-    treating it as an event number.
-    """
+    """Canonical UUID game id with compatibility for legacy int(callback) paths."""
 
     def __new__(cls, value, event_number=None):
         obj = super().__new__(cls, str(value))
@@ -53,14 +47,27 @@ class GameRepository(DatabaseRepository):
             return False
 
     def _resolve_id(self, session, game_id):
-        """Resolve canonical UUIDs and legacy UUID-int callback identifiers."""
+        """Resolve canonical UUIDs, UUID-int callbacks, and old event numbers."""
         if self._is_uuid(game_id):
             return str(game_id)
+
         if isinstance(game_id, int):
+            if game_id > 2**63:
+                try:
+                    return str(UUID(int=game_id))
+                except (ValueError, OverflowError):
+                    pass
+            row = session.execute(
+                text("select id from public.mafia_games where event_number=:event_number order by created_at desc limit 1"),
+                {"event_number": game_id},
+            ).scalar_one_or_none()
+            if row is not None:
+                return str(row)
             try:
                 return str(UUID(int=game_id))
             except (ValueError, OverflowError):
-                pass
+                raise ValueError("بازی پیدا نشد")
+
         raw = str(game_id).strip()
         if not raw:
             raise ValueError("game id is required")
@@ -68,7 +75,6 @@ class GameRepository(DatabaseRepository):
             return str(UUID(raw))
         except (TypeError, ValueError, AttributeError):
             pass
-        # Genuine legacy installations may still send event_number values.
         try:
             numeric = int(raw)
         except (TypeError, ValueError, OverflowError):
