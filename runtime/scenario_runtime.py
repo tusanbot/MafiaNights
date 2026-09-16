@@ -8,16 +8,7 @@ from repositories.scenario_repository import ScenarioRepository
 
 
 class ScenarioRuntime:
-    """Resolve a persisted scenario and expose its gameplay configuration.
-
-    The lobby stores only ``scenario_id``.  The complete scenario definition
-    is copied into game.state when selected so the running game keeps the
-    exact rules that were selected, even if an administrator edits the
-    scenario later.
-
-    Scenario IDs are UUIDs in the authoritative Supabase schema and must not
-    be coerced to integers.
-    """
+    """Resolve a persisted scenario and expose its gameplay configuration."""
 
     def __init__(self, app: Any):
         self.app = app
@@ -70,19 +61,26 @@ class ScenarioRuntime:
             raise ValueError("سناریوی انتخاب‌شده معتبر یا فعال نیست")
 
         games = self.app.runtime.state.games
-        try:
-            game = games.get_game(game_id)
-        except Exception:
-            game = None
+        game = None
 
-        # The lobby callback already knows the authoritative group.  Refresh
-        # the active game from that group when a legacy callback id cannot be
-        # be resolved.  This avoids saving against a stale event-number/id
-        # representation left by older lobby code.
-        if not game:
-            group_id = getattr(self.app, "group_chat_id", None)
-            if group_id is not None:
+        # The group chat is the authoritative context for a lobby callback.
+        # Older lobby/private-recovery handlers may carry an event number or a
+        # stale in-memory id instead of the canonical UUID. Prefer the active
+        # game for the current group whenever that context is available.
+        group_id = getattr(self.app, "group_chat_id", None)
+        if group_id is not None:
+            try:
                 game = self.app.runtime.state.active_game(int(group_id))
+            except Exception:
+                game = None
+
+        # Keep direct callers compatible: if no group context is available,
+        # resolve the supplied game id normally.
+        if not game:
+            try:
+                game = games.get_game(game_id)
+            except Exception:
+                game = None
 
         if not game:
             raise ValueError("بازی پیدا نشد")
@@ -99,11 +97,12 @@ class ScenarioRuntime:
         }
         state["scenario_name"] = scenario["name"]
         state["challenge_usage"] = {}
-        games.update_game(
+        if not games.update_game(
             resolved_game_id,
             scenario_id=str(scenario_id),
             state=state,
-        )
+        ):
+            raise ValueError("ذخیره سناریو روی بازی انجام نشد")
         return scenario
 
     def current(self, group_id: int) -> Optional[dict[str, Any]]:
