@@ -1,6 +1,9 @@
 """Production entry point for the persistent MafiaNights runtime."""
 import logging
+from types import SimpleNamespace
 import main1 as main
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.dispatcher.handler import CancelHandler
 from runtime.production_bridge import install as install_persistent_bridge, startup as persistent_startup
 from player_service import player_service
 from runtime.webhook_safety import install_latency, install_safe_callback_answer
@@ -22,6 +25,10 @@ main.game_management = GameManagement(main)
 main.game_management.install()
 from runtime.end_game_control import install as install_manual_end_game
 install_manual_end_game(main)
+# role_distribution expects the legacy gameplay bridge object to exist. Keep the
+# compatibility object without replacing any desktop/runtime UI implementation.
+if not hasattr(main, "ui") or main.ui is None:
+    main.ui = SimpleNamespace()
 from runtime.role_distribution import install as install_role_distribution
 install_role_distribution(main)
 main._canonical_distribute_roles = main._role_distribution_handler
@@ -71,6 +78,182 @@ from runtime.voting_runtime import install as install_voting_runtime
 install_stable_round_engine(main); install_live_controls_v2(main); install_lobby_challenge_v2(main); install_stable_round_policy(main); install_stable_challenge_button_guard(main); install_transition_ui_dedup(main); install_voting_runtime(main)
 from runtime.game_info_security_v2 import install as install_game_info_security_v2
 install_game_info_security_v2(main)
+
+
+def _install_canonical_management_surface():
+    """Keep one group-management surface and remove dead/duplicate entries."""
+    management = getattr(main, "game_management", None)
+    if management is None or getattr(main, "_canonical_management_surface", False):
+        return
+    main._canonical_management_surface = True
+    original_panel = management.panel
+
+    def panel(game_id):
+        original = original_panel(game_id)
+        # Rebuild from the existing functional controls, deliberately dropping
+        # the dead refresh/close actions. No lobby implementation is duplicated.
+        keep = []
+        seen_callbacks = set()
+        blocked_text = {"🔄 بازسازی لابی", "✖️ بستن", "بازی های گذشته", "📚 بازی های گذشته", "ثبت اتفاقات", "📝 ثبت اتفاقات"}
+        for row in getattr(original, "inline_keyboard", []):
+            out = []
+            for button in row:
+                text = str(getattr(button, "text", ""))
+                data = getattr(button, "callback_data", None)
+                if text in blocked_text:
+                    continue
+                if data in seen_callbacks:
+                    continue
+                seen_callbacks.add(data)
+                out.append(button)
+            if out:
+                keep.append(out)
+
+        # Add the controls requested for the canonical management panel.
+        def add(text, action):
+            keep.append([InlineKeyboardButton(text, callback_data=f"mgmt:{int(game_id)}:{action}")])
+
+        add("ℹ️ اطلاعات بازی", "info")
+        add("🦵 کیک از بازی", "kick")
+        add("⚠️ تذکر بازیکن", "warning")
+        add("⬅️ بازگشت به لابی", "back_lobby")
+        return InlineKeyboardMarkup(inline_keyboard=keep)
+
+    management.panel = panel
+
+    async def info(callback):
+        gid = int(callback.message.chat.id)
+        game = management._game(gid)
+        if not game or not await management._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True); return
+        rows = management._rows(game)
+        state = management._state(game)
+        await callback.message.edit_text(
+            f"ℹ️ <b>اطلاعات بازی {int(game.get('event_number') or 1)}</b>\n\n"
+            f"📌 وضعیت: <b>{str(game.get('status') or '---')}</b>\n"
+            f"👥 بازیکنان: <b>{sum(1 for r in rows if r.get('seat') is not None)}</b>\n"
+            f"🎩 گرداننده: <b>{int(game.get('moderator_id') or 0)}</b>\n"
+            f"📅 روز: <b>{int(game.get('current_day') or 0)}</b>\n"
+            f"🌙 دور: <b>{int(game.get('current_round') or 0)}</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("⬅️ مدیریت بازی", callback_data=f"mgmt:{int(game['id'])}:open")),
+        )
+        await callback.answer()
+
+    async def player_picker(callback, action, title):
+        gid = int(callback.message.chat.id); game = management._game(gid)
+        if not game or not await management._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True); return
+        rows = [r for r in management._rows(game) if r.get("seat") is not None and str(r.get("status") or "") not in {"removed", "dead", "finished"}]
+        kb = InlineKeyboardMarkup(row_width=2)
+        for row in rows:
+            uid = int(row["player_id"]); seat = int(row.get("seat") or 0)
+            name = management._name(row)
+            kb.insert(InlineKeyboardButton(f"{seat:02d}. {name}", callback_data=f"mgmt:{int(game['id'])}:{action}_pick:{uid}"))
+        kb.row(InlineKeyboardButton("⬅️ مدیریت", callback_data=f"mgmt:{int(game['id'])}:open"))
+        await callback.message.edit_text(title, parse_mode="HTML", reply_markup=kb)
+        await callback.answer()
+
+    async def kick(callback):
+        await player_picker(callback, "kick", "🦵 <b>کیک از بازی</b>\n\nبازیکن موردنظر را انتخاب کنید:")
+
+    async def kick_pick(callback):
+        parts = str(callback.data or "").split(":")
+        if len(parts) != 4: return
+        gid = int(callback.message.chat.id); uid = int(parts[3]); game = management._game(gid)
+        if not game or not await management._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        row = next((r for r in management._rows(game) if int(r["player_id"]) == uid), None)
+        if not row or row.get("seat") is None:
+            await callback.answer("❌ بازیکن پیدا نشد.", show_alert=True); return
+        management.app.runtime.state.games.set_player_seat(game["id"], uid, None)
+        management.app.runtime.state.games.set_player_status(game["id"], uid, "kicked")
+        alive = getattr(management.app.runtime.state.games, "set_player_alive", None)
+        if alive: alive(game["id"], uid, False)
+        state = management._state(game); kicks = dict(state.get("kicks") or {}); kicks[str(uid)] = int(kicks.get(str(uid), 0)) + 1
+        management._save(game, kicks=kicks, warnings=dict(state.get("warnings") or {}))
+        await callback.message.edit_text(f"🦵 <b>{management._name(row)}</b> از بازی کیک شد.\n📉 امتیاز منفی کیک در پایان بازی ثبت می‌شود.", parse_mode="HTML", reply_markup=management.panel(game["id"]))
+        await callback.answer("🦵 بازیکن از بازی کیک شد.")
+
+    async def warning(callback):
+        await player_picker(callback, "warning", "⚠️ <b>تذکر بازیکن</b>\n\nبازیکنی را برای ثبت تذکر انتخاب کنید:")
+
+    async def warning_pick(callback):
+        parts = str(callback.data or "").split(":")
+        if len(parts) != 4: return
+        gid = int(callback.message.chat.id); uid = int(parts[3]); game = management._game(gid)
+        if not game or not await management._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        row = next((r for r in management._rows(game) if int(r["player_id"]) == uid), None)
+        if not row:
+            await callback.answer("❌ بازیکن پیدا نشد.", show_alert=True); return
+        state = management._state(game); warnings = dict(state.get("warnings") or {}); key = str(uid); count = int(warnings.get(key, 0)) + 1; warnings[key] = count
+        management._save(game, warnings=warnings)
+        penalty = min(count, 5)
+        await callback.message.edit_text(f"⚠️ <b>تذکر ثبت شد.</b>\n\n{management._name(row)}\n🔢 تعداد تذکر: <b>{count}</b>\n📉 جریمه این تذکر: <b>-{penalty}</b>", parse_mode="HTML", reply_markup=management.panel(game["id"]))
+        await callback.answer("⚠️ تذکر ثبت شد.")
+
+    async def back_lobby(callback):
+        gid = int(callback.message.chat.id); game = management._game(gid)
+        if not game or not await management._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True); return
+        renderer = getattr(main, "_render_final_lobby", None)
+        if renderer and str(game.get("status") or "") == "lobby":
+            try:
+                await renderer(callback)
+                await callback.answer("⬅️ به لابی برگشتید.")
+                return
+            except Exception:
+                logging.exception("canonical management back-to-lobby failed")
+        await callback.answer("ℹ️ بازی در حال اجراست؛ لابی فعال نیست.", show_alert=True)
+
+    async def ready(callback):
+        """Authoritative readiness handler; answer Telegram before any DB/edit work."""
+        parts = str(callback.data or "").split(":")
+        if len(parts) != 3 or parts[0] != "mgmt" or parts[2] != "attendance_ready":
+            return
+        gid = int(callback.message.chat.id); uid = int(callback.from_user.id); game = management._game(gid)
+        if not game:
+            await callback.answer("❌ بازی فعالی وجود ندارد.", show_alert=True); raise CancelHandler()
+        rows = management._rows(game)
+        player = next((r for r in rows if int(r["player_id"]) == uid), None)
+        if not player or player.get("seat") is None or str(player.get("status") or "") in {"removed", "dead", "finished", "kicked"}:
+            await callback.answer("⛔ فقط بازیکنان حاضر در بازی می‌توانند اعلام آمادگی کنند.", show_alert=True); raise CancelHandler()
+        await callback.answer("✅ آمادگی شما ثبت شد")
+        state = management._state(game); attendance = dict(state.get("attendance") or {}); attendance[str(uid)] = True
+        management._save(game, attendance=attendance, attendance_announced=False)
+        message_id = state.get("attendance_message_id") or callback.message.message_id
+        active = [r for r in rows if r.get("seat") is not None and str(r.get("status") or "") not in {"removed", "dead", "finished", "kicked"}]
+        lines = ["🟢 <b>بازیکنان حاضر در لیست</b>", ""]
+        for row in sorted(active, key=lambda r: int(r.get("seat") or 999)):
+            mark = "✅" if bool(attendance.get(str(int(row["player_id"])), False)) else "⚪️"
+            lines.append(f"{mark} {int(row['seat']):02d}. <a href=\"tg://user?id={int(row['player_id'])}\"><b>{html.escape(management._name(row))}</b></a>")
+        kb = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("آماده‌ام ✅", callback_data=f"mgmt:{int(game['id'])}:attendance_ready"))
+        try:
+            await main.bot.edit_message_text("\n".join(lines) + "\n\nلطفاً برای اعلام حاضری، «آماده‌ام» را بزنید.", gid, int(message_id), parse_mode="HTML", reply_markup=kb)
+        except Exception:
+            logging.exception("canonical readiness render failed game=%s", game.get("id"))
+        raise CancelHandler()
+
+    dp = main.dp
+    dp.register_callback_query_handler(info, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["info"], state="*")
+    dp.register_callback_query_handler(kick, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["kick"], state="*")
+    dp.register_callback_query_handler(kick_pick, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["kick_pick"], state="*")
+    dp.register_callback_query_handler(warning, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["warning"], state="*")
+    dp.register_callback_query_handler(warning_pick, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["warning_pick"], state="*")
+    dp.register_callback_query_handler(back_lobby, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["back_lobby"], state="*")
+    dp.register_callback_query_handler(ready, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").endswith(":attendance_ready"), state="*")
+    # Put the canonical handlers ahead of legacy management/navigation handlers.
+    registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", [])
+    names = {"info", "kick", "kick_pick", "warning", "warning_pick", "back_lobby", "ready"}
+    selected = [x for x in registry if getattr(getattr(x, "handler", None) or getattr(x, "callback", None), "__name__", "") in names]
+    for item in reversed(selected):
+        try:
+            registry.remove(item); registry.insert(0, item)
+        except ValueError:
+            pass
+
+_install_canonical_management_surface()
 
 def _finalize_lobby_routes():
     dp = main.dp
