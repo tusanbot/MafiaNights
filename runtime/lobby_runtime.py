@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from sqlalchemy import text
+
 from runtime.game_state import GameState
 
 
@@ -75,8 +77,37 @@ class PersistentLobbyRuntime:
         }
 
     def set_moderator(self, group_chat_id: int, moderator_id: int) -> bool:
-        game = self.state.active_game(group_chat_id)
-        return bool(game and self.state.lobby.set_moderator(game["id"], moderator_id))
+        """Persist the moderator using the already validated group-scoped game row.
+
+        This deliberately bypasses GameRepository._resolve_id(). Telegram lobby
+        state can contain legacy/mixed game-id representations, while the group
+        id is authoritative at this point in the callback flow.
+        """
+        gid = int(group_chat_id)
+        game = self.state.active_game(gid)
+        if not game:
+            return False
+
+        game_id = str(game["id"])
+        with self.state.games.SessionLocal() as session:
+            result = session.execute(
+                text("""
+                    update public.mafia_games
+                    set moderator_id=:moderator_id, updated_at=now()
+                    where id=:game_id
+                      and group_chat_id=:group_chat_id
+                      and status in ('lobby','running','paused')
+                """),
+                {
+                    "moderator_id": int(moderator_id),
+                    "game_id": game_id,
+                    "group_chat_id": gid,
+                },
+            )
+            session.commit()
+
+        self.state.games._invalidate(group_chat_id=gid, game_id=game_id)
+        return result.rowcount > 0
 
     def set_scenario(self, group_chat_id: int, scenario_id: str) -> bool:
         game = self.state.active_game(group_chat_id)
