@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from aiogram import types
@@ -39,29 +40,43 @@ def install(app: Any) -> bool:
             await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند بازی را لغو کند.")
             return
 
+        status = str(game.get("status") or "")
+        if status not in {"lobby", "running", "paused"}:
+            await message.reply("ℹ️ این بازی دیگر قابل لغو نیست.")
+            return
+
         state = dict(game.get("state") or {})
-        # Invalidate the durable game first; active_game() will then stop
-        # exposing it and the next «بازی جدید» can create a fresh game.
-        ok = app.runtime.state.games.update_game(game["id"], status="finished", state={})
+        state["cancelled"] = True
+        state["cancelled_at"] = datetime.now(timezone.utc).isoformat()
+        state["cancel_reason"] = "command"
+        state["cancelled_from_status"] = status
+
+        # Keep the complete game and player snapshot. A cancelled game is an
+        # archive record, not a finished game, so it must never affect rating,
+        # history, achievements or other player statistics.
+        ok = app.runtime.state.games.update_game(game["id"], status="cancelled", state=state)
         if not ok:
             await message.reply("❌ لغو بازی انجام نشد.")
             return
 
-        try:
-            app.runtime.state.games.clear_game_players(game["id"])
-        except Exception:
-            logging.exception("failed to clear cancelled game players game=%s", game.get("id"))
-
-        for owner, attr in ((getattr(app, "ui", None), "turn_timer_task"), (app, "_voting_task")):
+        for owner, attr in (
+            (getattr(app, "ui", None), "turn_timer_task"),
+            (getattr(app, "ui", None), "voting_timer_task"),
+            (getattr(app, "ui", None), "day_timer_task"),
+            (app, "_voting_task"),
+        ):
             task = getattr(owner, attr, None) if owner is not None else None
             if task is not None and hasattr(task, "done") and not task.done():
-                task.cancel()
+                try:
+                    task.cancel()
+                except Exception:
+                    logging.exception("failed to cancel task %s", attr)
 
         lobby_message_id = state.get("lobby_message_id")
         if lobby_message_id:
             try:
                 await app.bot.edit_message_text(
-                    "🚫 <b>این بازی لغو شد.</b>",
+                    "🚫 <b>این بازی لغو شد.</b>\n\nاطلاعات بازی در بایگانی بازی‌های لغوشده نگهداری شد.",
                     gid,
                     int(lobby_message_id),
                     parse_mode="HTML",
@@ -72,7 +87,7 @@ def install(app: Any) -> bool:
 
         await message.reply(
             f"🚫 <b>بازی شماره {int(game.get('event_number') or 1)} لغو شد.</b>\n"
-            "اکنون می‌توانید «بازی جدید» را ایجاد کنید.",
+            "در تاریخچه بازی‌های انجام‌شده ثبت نمی‌شود و امتیاز و سابقه بازیکنان تغییر نمی‌کند.",
             parse_mode="HTML",
         )
 
