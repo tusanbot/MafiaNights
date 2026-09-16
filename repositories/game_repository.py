@@ -1,21 +1,73 @@
 import time
 import json
+from uuid import UUID
 
 from sqlalchemy import text
 from .base import DatabaseRepository
 
 
+class GameId(str):
+    """UUID game id that remains compatible with legacy int(callback) paths.
+
+    Telegram callback code historically used the numeric event number as the
+    callback identifier.  The database now uses UUID primary keys.  Keeping a
+    UUID string at the persistence boundary while making int(game_id) return
+    event_number lets old callback contracts continue to work safely.
+    """
+
+    def __new__(cls, value, event_number=None):
+        obj = super().__new__(cls, str(value))
+        obj.event_number = int(event_number) if event_number is not None else None
+        return obj
+
+    def __int__(self):
+        if self.event_number is not None:
+            return self.event_number
+        try:
+            return UUID(str(self)).int
+        except Exception:
+            return int(str(self))
+
+
 class GameRepository(DatabaseRepository):
     """Persistence for mafia_games and mafia_game_players with short TTL caches."""
 
-    # Lobby callbacks often arrive in bursts. Mutations invalidate immediately,
-    # so a slightly longer read TTL does not make normal lobby updates stale.
     CACHE_TTL = 2.0
 
     def __init__(self, database_url=None):
         super().__init__(database_url)
         self._active_cache: dict[int, tuple[float, dict | None]] = {}
         self._players_cache: dict[str, tuple[float, list[dict]]] = {}
+
+    @staticmethod
+    def _wrap(row):
+        value = dict(row) if row else None
+        if value and value.get("id") is not None:
+            value["id"] = GameId(value["id"], value.get("event_number"))
+        return value
+
+    @staticmethod
+    def _is_uuid(value):
+        try:
+            UUID(str(value))
+            return True
+        except (TypeError, ValueError, AttributeError):
+            return False
+
+    def _resolve_id(self, session, game_id):
+        """Resolve UUIDs directly and legacy numeric callback ids by event_number."""
+        if self._is_uuid(game_id):
+            return str(game_id)
+        raw = str(game_id).strip()
+        if not raw:
+            raise ValueError("game id is required")
+        row = session.execute(
+            text("select id from public.mafia_games where event_number=:event_number limit 1"),
+            {"event_number": int(raw)},
+        ).scalar_one_or_none()
+        if row is None:
+            raise ValueError("بازی پیدا نشد")
+        return str(row)
 
     def _invalidate(self, group_chat_id=None, game_id=None):
         if group_chat_id is None:
@@ -45,13 +97,15 @@ class GameRepository(DatabaseRepository):
 
     def get_game(self, game_id):
         with self.SessionLocal() as session:
-            row = session.execute(text("select * from public.mafia_games where id=:game_id limit 1"), {"game_id": int(game_id)}).mappings().first()
-            return dict(row) if row else None
+            resolved = self._resolve_id(session, game_id)
+            row = session.execute(text("select * from public.mafia_games where id=:game_id limit 1"), {"game_id": resolved}).mappings().first()
+            return self._wrap(row)
 
     def get_finished_game(self, game_id):
         with self.SessionLocal() as session:
-            row = session.execute(text("select * from public.mafia_games where id=:game_id and status='finished' limit 1"), {"game_id": int(game_id)}).mappings().first()
-            return dict(row) if row else None
+            resolved = self._resolve_id(session, game_id)
+            row = session.execute(text("select * from public.mafia_games where id=:game_id and status='finished' limit 1"), {"game_id": resolved}).mappings().first()
+            return self._wrap(row)
 
     def list_finished_games(self, group_chat_id=None, limit=50):
         with self.SessionLocal() as session:
@@ -59,7 +113,7 @@ class GameRepository(DatabaseRepository):
                 rows = session.execute(text("select * from public.mafia_games where status='finished' order by finished_at desc nulls last, created_at desc limit :limit"), {"limit": int(limit)}).mappings().all()
             else:
                 rows = session.execute(text("select * from public.mafia_games where group_chat_id=:group_chat_id and status='finished' order by finished_at desc nulls last, created_at desc limit :limit"), {"group_chat_id": int(group_chat_id), "limit": int(limit)}).mappings().all()
-            return [dict(row) for row in rows]
+            return [self._wrap(row) for row in rows]
 
     def get_active_game(self, group_chat_id):
         gid = int(group_chat_id)
@@ -72,14 +126,14 @@ class GameRepository(DatabaseRepository):
                 where group_chat_id=:group_chat_id and status in ('lobby','running','paused')
                 order by created_at desc limit 1
             """), {"group_chat_id": gid}).mappings().first()
-            value = dict(row) if row else None
+            value = self._wrap(row)
         self._active_cache[gid] = (time.monotonic(), value)
         return dict(value) if value else None
 
     def list_active_games(self):
         with self.SessionLocal() as session:
             rows = session.execute(text("select * from public.mafia_games where status in ('running','paused') order by updated_at desc")).mappings().all()
-            return [dict(row) for row in rows]
+            return [self._wrap(row) for row in rows]
 
     def list_games(self, group_chat_id=None, limit=100):
         with self.SessionLocal() as session:
@@ -87,24 +141,26 @@ class GameRepository(DatabaseRepository):
                 rows = session.execute(text("select * from public.mafia_games order by created_at desc limit :limit"), {"limit": int(limit)}).mappings().all()
             else:
                 rows = session.execute(text("select * from public.mafia_games where group_chat_id=:group_chat_id order by created_at desc limit :limit"), {"group_chat_id": int(group_chat_id), "limit": int(limit)}).mappings().all()
-            return [dict(row) for row in rows]
+            return [self._wrap(row) for row in rows]
 
     def update_game(self, game_id, **fields):
         allowed = {"event_number","moderator_id","scenario_id","status","current_turn_seat","current_turn_index","state","started_at","finished_at"}
         fields = {k:v for k,v in fields.items() if k in allowed}
         if not fields:
             return False
-        params = {"game_id": game_id}
-        assignments = []
-        for key, value in fields.items():
-            if key == "state":
-                assignments.append("state=CAST(:state AS jsonb)")
-                params[key] = json.dumps(value or {}, ensure_ascii=False)
-            else:
-                assignments.append(f"{key}=:{key}")
-                params[key] = value
-        assignments.append("updated_at=now()")
         with self.SessionLocal() as session:
+            params = {"game_id": self._resolve_id(session, game_id)}
+            assignments = []
+            for key, value in fields.items():
+                if key == "state":
+                    assignments.append("state=CAST(:state AS jsonb)")
+                    params[key] = json.dumps(value or {}, ensure_ascii=False)
+                else:
+                    assignments.append(f"{key}=:{key}")
+                    params[key] = value
+            if fields.get("status") == "finished" and "finished_at" not in fields:
+                assignments.append("finished_at=coalesce(finished_at, now())")
+            assignments.append("updated_at=now()")
             result = session.execute(text(f"update public.mafia_games set {', '.join(assignments)} where id=:game_id"), params)
             session.commit()
         self._active_cache.clear()
@@ -114,12 +170,13 @@ class GameRepository(DatabaseRepository):
     def add_player(self, game_id, player_id, seat=None, role=None, status="active", is_substitute=False):
         uid = int(player_id)
         with self.SessionLocal() as session:
-            existing = session.execute(text("select id from public.mafia_game_players where game_id=:game_id and (player_id=:player_id or user_id=:user_id) limit 1"), {"game_id": game_id, "player_id": uid, "user_id": uid}).mappings().first()
+            resolved = self._resolve_id(session, game_id)
+            existing = session.execute(text("select id from public.mafia_game_players where game_id=:game_id and (player_id=:player_id or user_id=:user_id) limit 1"), {"game_id": resolved, "player_id": uid, "user_id": uid}).mappings().first()
             if existing:
                 return existing["id"]
-            if seat is not None and session.execute(text("select 1 from public.mafia_game_players where game_id=:game_id and seat=:seat limit 1"), {"game_id": game_id, "seat": int(seat)}).first():
+            if seat is not None and session.execute(text("select 1 from public.mafia_game_players where game_id=:game_id and seat=:seat limit 1"), {"game_id": resolved, "seat": int(seat)}).first():
                 raise ValueError("این صندلی قبلاً رزرو شده است")
-            row = session.execute(text("insert into public.mafia_game_players(game_id,user_id,player_id,seat,role,status,is_substitute) values(:game_id,:user_id,:player_id,:seat,:role,:status,:is_substitute) returning id"), {"game_id": game_id, "user_id": uid, "player_id": uid, "seat": seat, "role": role, "status": status, "is_substitute": is_substitute}).scalar_one()
+            row = session.execute(text("insert into public.mafia_game_players(game_id,user_id,player_id,seat,role,status,is_substitute) values(:game_id,:user_id,:player_id,:seat,:role,:status,:is_substitute) returning id"), {"game_id": resolved, "user_id": uid, "player_id": uid, "seat": seat, "role": role, "status": status, "is_substitute": is_substitute}).scalar_one()
             session.commit()
         self._invalidate(game_id=game_id)
         return row
@@ -130,67 +187,75 @@ class GameRepository(DatabaseRepository):
         if cached and time.monotonic() - cached[0] < self.CACHE_TTL:
             return [dict(row) for row in cached[1]]
         with self.SessionLocal() as session:
+            resolved = self._resolve_id(session, game_id)
             rows = session.execute(text("""
                 select gp.*, p.username, p.first_name, p.last_name, p.nickname
                 from public.mafia_game_players gp
                 left join public.mafia_players p on p.user_id=gp.player_id
                 where gp.game_id=:game_id
                 order by gp.seat nulls last, gp.joined_at
-            """), {"game_id": game_id}).mappings().all()
+            """), {"game_id": resolved}).mappings().all()
             value = [dict(row) for row in rows]
         self._players_cache[key] = (time.monotonic(), value)
         return [dict(row) for row in value]
 
     def set_player_role(self, game_id, player_id, role):
         with self.SessionLocal() as session:
-            result=session.execute(text("update public.mafia_game_players set role=:role, updated_at=now() where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id":game_id,"player_id":int(player_id),"role":role})
+            resolved = self._resolve_id(session, game_id)
+            result=session.execute(text("update public.mafia_game_players set role=:role, updated_at=now() where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id":resolved,"player_id":int(player_id),"role":role})
             session.commit()
         self._invalidate(game_id=game_id)
         return result.rowcount>0
 
     def remove_player(self, game_id, player_id):
         with self.SessionLocal() as session:
-            result=session.execute(text("delete from public.mafia_game_players where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id":game_id,"player_id":int(player_id)})
+            resolved = self._resolve_id(session, game_id)
+            result=session.execute(text("delete from public.mafia_game_players where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id":resolved,"player_id":int(player_id)})
             session.commit()
         self._invalidate(game_id=game_id)
         return result.rowcount>0
 
     def clear_game_players(self, game_id):
         with self.SessionLocal() as session:
-            result = session.execute(text("delete from public.mafia_game_players where game_id=:game_id"), {"game_id": int(game_id)})
+            resolved = self._resolve_id(session, game_id)
+            result = session.execute(text("delete from public.mafia_game_players where game_id=:game_id"), {"game_id": resolved})
             session.commit()
         self._invalidate(game_id=game_id)
         return result.rowcount
 
     def set_player_seat(self, game_id, player_id, seat):
         with self.SessionLocal() as session:
-            if seat is not None and session.execute(text("select player_id from public.mafia_game_players where game_id=:game_id and seat=:seat and player_id<>:player_id limit 1"), {"game_id":game_id,"seat":int(seat),"player_id":int(player_id)}).first():
+            resolved = self._resolve_id(session, game_id)
+            if seat is not None and session.execute(text("select player_id from public.mafia_game_players where game_id=:game_id and seat=:seat and player_id<>:player_id limit 1"), {"game_id":resolved,"seat":int(seat),"player_id":int(player_id)}).first():
                 raise ValueError("این صندلی قبلاً رزرو شده است")
-            result=session.execute(text("update public.mafia_game_players set seat=:seat,status=:status where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id":game_id,"player_id":int(player_id),"seat":seat,"status":"waiting" if seat is None else "active"})
+            result=session.execute(text("update public.mafia_game_players set seat=:seat,status=:status where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id":resolved,"player_id":int(player_id),"seat":seat,"status":"waiting" if seat is None else "active"})
             session.commit()
         self._invalidate(game_id=game_id)
         return result.rowcount>0
 
     def set_player_status(self, game_id, player_id, status):
         with self.SessionLocal() as session:
-            result=session.execute(text("update public.mafia_game_players set status=:status where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id":game_id,"player_id":int(player_id),"status":status})
+            resolved = self._resolve_id(session, game_id)
+            result=session.execute(text("update public.mafia_game_players set status=:status where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id":resolved,"player_id":int(player_id),"status":status})
             session.commit()
         self._invalidate(game_id=game_id)
         return result.rowcount>0
 
     def set_player_alive(self, game_id, player_id, is_alive=True):
         with self.SessionLocal() as session:
-            result=session.execute(text("update public.mafia_game_players set is_alive=:is_alive, updated_at=now() where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id":game_id,"player_id":int(player_id),"is_alive":bool(is_alive)})
+            resolved = self._resolve_id(session, game_id)
+            result=session.execute(text("update public.mafia_game_players set is_alive=:is_alive, updated_at=now() where game_id=:game_id and (player_id=:player_id or user_id=:player_id)"), {"game_id":resolved,"player_id":int(player_id),"is_alive":bool(is_alive)})
             session.commit()
         self._invalidate(game_id=game_id)
         return result.rowcount>0
 
     def promote_waiting_player(self, game_id, seat):
         with self.SessionLocal() as session:
-            row=session.execute(text("select id,player_id,user_id from public.mafia_game_players where game_id=:game_id and seat is null and status='waiting' order by joined_at limit 1"), {"game_id":game_id}).mappings().first()
+            resolved = self._resolve_id(session, game_id)
+            row=session.execute(text("select id,player_id,user_id from public.mafia_game_players where game_id=:game_id and seat is null and status='waiting' order by joined_at limit 1"), {"game_id":resolved}).mappings().first()
             if not row:
                 return None
-            if session.execute(text("select 1 from public.mafia_game_players where game_id=:game_id and seat=:seat limit 1"), {"game_id":game_id,"seat":int(seat)}).first():
+            if session.execute(text("select 1 from public.mafia_game_players where game_id=:game_id and seat=:seat limit 1"), {"game_id":resolved,"seat":int(seat)}).first():
                 raise ValueError("این صندلی قبلاً رزرو شده است")
             session.execute(text("update public.mafia_game_players set seat=:seat,status='active',is_substitute=false where id=:id"), {"id":row["id"],"seat":int(seat)})
             session.commit()
