@@ -20,6 +20,8 @@ install_final_lobby(main)
 from runtime.game_management import GameManagement
 main.game_management = GameManagement(main)
 main.game_management.install()
+from runtime.end_game_control import install as install_manual_end_game
+install_manual_end_game(main)
 from runtime.role_distribution import install as install_role_distribution
 install_role_distribution(main)
 main._canonical_distribute_roles = main._role_distribution_handler
