@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from repositories.game_repository import GameRepository
+from repositories.turn_repository import TurnRepository
 
 
 class LobbyService:
@@ -10,6 +11,7 @@ class LobbyService:
 
     def __init__(self, repository: Optional[GameRepository] = None):
         self.repository = repository or GameRepository()
+        self._turns = TurnRepository()
 
     def get_or_create(self, group_chat_id: int, moderator_id: Optional[int] = None,
                       scenario_id: Optional[str] = None, event_number: Optional[int] = None) -> Dict[str, Any]:
@@ -28,11 +30,27 @@ class LobbyService:
         active = self.repository.get_active_game(group_chat_id)
         if active:
             status = str(active.get("status") or "")
-            if status in {"running", "paused"}: raise RuntimeError("یک بازی در حال اجراست و امکان ایجاد بازی جدید وجود ندارد")
-            if status == "lobby": self.repository.update_game(active["id"], status="finished")
-        if event_number is None: event_number = self.repository.next_event_number(group_chat_id)
+            if status in {"running", "paused"}:
+                # A genuinely running game is never auto-finished.  However,
+                # an old deployment/restart can leave a game marked running
+                # after its current turn has already disappeared.  Such a
+                # record is stale and must not block the next lobby forever.
+                try:
+                    current_turn = self._turns.current_turn(active["id"])
+                except Exception:
+                    # If turn state cannot be verified, fail closed: the game
+                    # may really be running, so require explicit manual finish.
+                    current_turn = object()
+                if current_turn:
+                    raise RuntimeError("یک بازی در حال اجراست و امکان ایجاد بازی جدید وجود ندارد")
+                self.repository.update_game(active["id"], status="finished", state={})
+            elif status == "lobby":
+                self.repository.update_game(active["id"], status="finished", state={})
+        if event_number is None:
+            event_number = self.repository.next_event_number(group_chat_id)
         number = int(event_number)
-        if number < 1: raise ValueError("شماره بازی باید حداقل ۱ باشد")
+        if number < 1:
+            raise ValueError("شماره بازی باید حداقل ۱ باشد")
         game_id = self.repository.create_game(group_chat_id=group_chat_id, moderator_id=None, scenario_id=None, event_number=number, state={"phase": "scenario_selection", "waiting": [], "seat_count": 0})
         return self.repository.get_active_game(group_chat_id) or {"id": game_id, "group_chat_id": int(group_chat_id), "event_number": number, "status": "lobby", "scenario_id": None, "moderator_id": None}
 
