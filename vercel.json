@@ -3,9 +3,6 @@
   "version": 2,
   "fluid": true,
   "regions": ["iad1"],
-  "crons": [
-    { "path": "/api/telegram/tick", "schedule": "* * * * *" }
-  ],
   "routes": [
     { "src": "/api/telegram/webhook", "dest": "/api/telegram_app.py" },
     { "src": "/api/telegram/setup", "dest": "/api/telegram_app.py" },
