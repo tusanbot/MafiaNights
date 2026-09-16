@@ -68,9 +68,26 @@ class ScenarioRuntime:
         scenario = self.snapshot(str(scenario_id))
         if not scenario:
             raise ValueError("سناریوی انتخاب‌شده معتبر یا فعال نیست")
-        game = self.app.runtime.state.games.get_game(game_id)
+
+        games = self.app.runtime.state.games
+        try:
+            game = games.get_game(game_id)
+        except Exception:
+            game = None
+
+        # The lobby callback already knows the authoritative group.  Refresh
+        # the active game from that group when a legacy callback id cannot be
+        # be resolved.  This avoids saving against a stale event-number/id
+        # representation left by older lobby code.
+        if not game:
+            group_id = getattr(self.app, "group_chat_id", None)
+            if group_id is not None:
+                game = self.app.runtime.state.active_game(int(group_id))
+
         if not game:
             raise ValueError("بازی پیدا نشد")
+
+        resolved_game_id = game["id"]
         state = dict(game.get("state") or {})
         state["scenario"] = scenario
         state["scenario_config"] = {
@@ -82,8 +99,8 @@ class ScenarioRuntime:
         }
         state["scenario_name"] = scenario["name"]
         state["challenge_usage"] = {}
-        self.app.runtime.state.games.update_game(
-            game_id,
+        games.update_game(
+            resolved_game_id,
             scenario_id=str(scenario_id),
             state=state,
         )
