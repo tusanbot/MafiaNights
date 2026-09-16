@@ -53,7 +53,7 @@ class GameRepository(DatabaseRepository):
             return False
 
     def _resolve_id(self, session, game_id):
-        """Resolve canonical UUIDs, UUID-int callbacks, and old event numbers."""
+        """Resolve canonical UUIDs, legacy numeric primary keys, UUID-int callbacks, and event numbers."""
         if self._is_uuid(game_id):
             return str(game_id)
         if isinstance(game_id, int):
@@ -62,6 +62,15 @@ class GameRepository(DatabaseRepository):
                     return str(UUID(int=game_id))
                 except (ValueError, OverflowError):
                     pass
+            # Legacy installations can expose a numeric primary key as the
+            # lobby game id. Prefer the actual id before interpreting the same
+            # number as an event_number; these two values are not interchangeable.
+            row = session.execute(
+                text("select id from public.mafia_games where id=:game_id limit 1"),
+                {"game_id": game_id},
+            ).scalar_one_or_none()
+            if row is not None:
+                return str(row)
             row = session.execute(
                 text("select id from public.mafia_games where event_number=:event_number order by created_at desc limit 1"),
                 {"event_number": game_id},
@@ -83,6 +92,14 @@ class GameRepository(DatabaseRepository):
             numeric = int(raw)
         except (TypeError, ValueError, OverflowError):
             raise ValueError("بازی پیدا نشد")
+        # Same compatibility rule for numeric strings, which are common when
+        # GameId is passed through Telegram/runtime boundaries.
+        row = session.execute(
+            text("select id from public.mafia_games where id=:game_id limit 1"),
+            {"game_id": numeric},
+        ).scalar_one_or_none()
+        if row is not None:
+            return str(row)
         row = session.execute(
             text("select id from public.mafia_games where event_number=:event_number order by created_at desc limit 1"),
             {"event_number": numeric},
@@ -109,47 +126,10 @@ class GameRepository(DatabaseRepository):
     def create_game(self, group_chat_id, moderator_id=None, scenario_id=None, event_number=None, state=None):
         event_number = int(event_number) if event_number is not None else self.next_event_number(group_chat_id)
         with self.SessionLocal() as session:
-            row = session.execute(text("""
-                insert into public.mafia_games(event_number,group_chat_id,moderator_id,scenario_id,status,state)
-                values(:event_number,:group_chat_id,:moderator_id,:scenario_id,'lobby',CAST(:state AS jsonb)) returning id
-            """), {"event_number": event_number, "group_chat_id": int(group_chat_id), "moderator_id": moderator_id, "scenario_id": scenario_id, "state": json.dumps(state or {}, ensure_ascii=False)}).scalar_one()
+            row = session.execute(text("insert into public.mafia_games(group_chat_id,event_number,moderator_id,scenario_id,status,state) values(:group_chat_id,:event_number,:moderator_id,:scenario_id,'lobby',CAST(:state AS jsonb)) returning id"), {"group_chat_id": int(group_chat_id), "event_number": event_number, "moderator_id": moderator_id, "scenario_id": scenario_id, "state": json.dumps(state or {}, ensure_ascii=False)}).scalar_one()
             session.commit()
-        self._invalidate(int(group_chat_id), row)
-        return row
-
-    def get_game(self, game_id):
-        with self.SessionLocal() as session:
-            resolved = self._resolve_id(session, game_id)
-            row = session.execute(text("select * from public.mafia_games where id=:game_id limit 1"), {"game_id": resolved}).mappings().first()
-            return self._wrap(row)
-
-    def get_finished_game(self, game_id):
-        with self.SessionLocal() as session:
-            resolved = self._resolve_id(session, game_id)
-            row = session.execute(text("select * from public.mafia_games where id=:game_id and status='finished' limit 1"), {"game_id": resolved}).mappings().first()
-            return self._wrap(row)
-
-    def list_finished_games(self, group_chat_id=None, limit=50):
-        with self.SessionLocal() as session:
-            if group_chat_id is None:
-                rows = session.execute(text("select * from public.mafia_games where status='finished' order by finished_at desc nulls last, created_at desc limit :limit"), {"limit": int(limit)}).mappings().all()
-            else:
-                rows = session.execute(text("select * from public.mafia_games where group_chat_id=:group_chat_id and status='finished' order by finished_at desc nulls last, created_at desc limit :limit"), {"group_chat_id": int(group_chat_id), "limit": int(limit)}).mappings().all()
-            return [self._wrap(row) for row in rows]
-
-    def list_cancelled_games(self, group_chat_id=None, limit=50):
-        with self.SessionLocal() as session:
-            if group_chat_id is None:
-                rows = session.execute(text("select * from public.mafia_games where status='cancelled' order by finished_at desc nulls last, created_at desc limit :limit"), {"limit": int(limit)}).mappings().all()
-            else:
-                rows = session.execute(text("select * from public.mafia_games where group_chat_id=:group_chat_id and status='cancelled' order by finished_at desc nulls last, created_at desc limit :limit"), {"group_chat_id": int(group_chat_id), "limit": int(limit)}).mappings().all()
-            return [self._wrap(row) for row in rows]
-
-    def get_cancelled_game(self, game_id):
-        with self.SessionLocal() as session:
-            resolved = self._resolve_id(session, game_id)
-            row = session.execute(text("select * from public.mafia_games where id=:game_id and status='cancelled' limit 1"), {"game_id": resolved}).mappings().first()
-            return self._wrap(row)
+        self._active_cache.pop(int(group_chat_id), None)
+        return str(row)
 
     def get_active_game(self, group_chat_id):
         gid = int(group_chat_id)
@@ -157,26 +137,20 @@ class GameRepository(DatabaseRepository):
         if cached and time.monotonic() - cached[0] < self.CACHE_TTL:
             return dict(cached[1]) if cached[1] else None
         with self.SessionLocal() as session:
-            row = session.execute(text("""
-                select * from public.mafia_games
-                where group_chat_id=:group_chat_id and status in ('lobby','running','paused')
-                order by created_at desc limit 1
-            """), {"group_chat_id": gid}).mappings().first()
+            row = session.execute(text("select * from public.mafia_games where group_chat_id=:group_chat_id and status in ('lobby','running','paused') order by created_at desc limit 1"), {"group_chat_id": gid}).mappings().first()
             value = self._wrap(row)
         self._active_cache[gid] = (time.monotonic(), value)
         return dict(value) if value else None
 
+    def get_game(self, game_id):
+        with self.SessionLocal() as session:
+            resolved = self._resolve_id(session, game_id)
+            row = session.execute(text("select * from public.mafia_games where id=:game_id limit 1"), {"game_id": resolved}).mappings().first()
+            return self._wrap(row)
+
     def list_active_games(self):
         with self.SessionLocal() as session:
-            rows = session.execute(text("select * from public.mafia_games where status in ('running','paused') order by updated_at desc")).mappings().all()
-            return [self._wrap(row) for row in rows]
-
-    def list_games(self, group_chat_id=None, limit=100):
-        with self.SessionLocal() as session:
-            if group_chat_id is None:
-                rows = session.execute(text("select * from public.mafia_games order by created_at desc limit :limit"), {"limit": int(limit)}).mappings().all()
-            else:
-                rows = session.execute(text("select * from public.mafia_games where group_chat_id=:group_chat_id order by created_at desc limit :limit"), {"group_chat_id": int(group_chat_id), "limit": int(limit)}).mappings().all()
+            rows = session.execute(text("select * from public.mafia_games where status in ('lobby','running','paused') order by created_at desc")).mappings().all()
             return [self._wrap(row) for row in rows]
 
     def update_game(self, game_id, **fields):
