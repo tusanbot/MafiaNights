@@ -41,7 +41,6 @@ def install(app):
         action = parts[2]
         if action == "players":
             private_roles = await allowed_moderator(callback, game)
-            # Active-game roles are strictly private/moderator-only. Public lists never contain roles.
             lines = [f"👥 <b>لیست بازیکنان بازی {int(game.get('event_number') or 1)}</b>", ""]
             for row in sorted(rows, key=lambda r: int(r.get("seat") or 999)):
                 seat = int(row.get("seat") or 0)
@@ -74,7 +73,6 @@ def install(app):
             )
             await callback.answer()
             raise CancelHandler()
-        # Keep stats/events public-safe by delegating to the existing archive owner for those views.
         return
 
     dp.register_callback_query_handler(info, lambda c: str(c.data or "").startswith("game_info:"), state="*")
@@ -82,4 +80,16 @@ def install(app):
         if getattr(item, "callback", None) is info:
             reg.insert(0, reg.pop(i))
             break
+
+    # This is intentionally installed last in the production chain. It observes
+    # the already-registered speaker selectors and stable round handlers and
+    # makes the selected speaker the durable source of turn order.
+    try:
+        from runtime.speaker_order_authority import install as install_speaker_order_authority
+        install_speaker_order_authority(app)
+    except Exception:
+        # Speaker authority is a runtime enhancement; do not prevent the
+        # security/info surface from starting if it cannot be attached.
+        import logging
+        logging.exception("failed to install speaker order authority")
     return True
