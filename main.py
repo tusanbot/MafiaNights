@@ -22,6 +22,7 @@ from runtime.voting_end_target_patch import install as install_voting_end_target
 from runtime.voting_postfix import install as install_voting_postfix
 from runtime.user_stats import install as install_user_stats
 from runtime.player_scoring import install as install_player_scoring
+from runtime.mafia_progress_events import install as install_mafia_progress_events
 from runtime.end_game_control import install as install_end_game_control
 from runtime.production_consistency_loader import install as install_production_consistency
 from runtime.dual_winner_support import install as install_dual_winner_support
@@ -59,11 +60,12 @@ install_speaker_order_authority(app)
 install_final_identity_authority(app)
 install_user_stats(app)
 install_player_scoring(app)
+install_mafia_progress_events(app)
 install_end_game_control(app)
 install_production_consistency(app)
 install_dual_winner_support(app)
 
-logging.info("PRODUCTION_RUNTIME_ACTIVE lobby=runtime.lobby_ui_final management=game_management+management_surface_final")
+logging.info("PRODUCTION_RUNTIME_ACTIVE lobby=runtime.lobby_ui_final management=game_management+management_surface_final progress=achievements+tags+events+incidents")
 
 
 async def on_startup(dp):
