@@ -26,7 +26,7 @@ def _protect_legacy_management_assignment() -> None:
     def guarded_setattr(self, name: str, value: Any) -> None:
         if name == "panel":
             app = getattr(self, "app", None)
-            if app is not None and getattr(app, "_management_surface_final", False):
+            if app is not None and getattr(app, "_management_surface_final", False) and getattr(value, "__module__", "") != "runtime.management_surface_final":
                 logging.info("PRODUCTION CUTOVER: ignored legacy management.panel replacement")
                 return
         original_setattr(self, name, value)
