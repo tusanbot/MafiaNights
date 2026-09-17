@@ -1,12 +1,9 @@
 from .game_state import GameState
 
-# The Vercel Telegram webhook uses player_runtime_entry/main1 rather than the
-# polling main.py entrypoint. Arm the same final production authorities there.
-try:
-    from . import production_cutover_final
-    production_cutover_final.install()
-except Exception:
-    import logging
-    logging.exception("Failed to arm production cutover hooks")
+# Do not initialize production cutover here. runtime/__init__.py is executed
+# while player_runtime_entry is still being imported, before that module has
+# created its `main` object and before its final installers have run. The old
+# eager hook therefore saw no production app and became a permanent no-op.
+# The production entrypoint explicitly arms the cutover after all installers.
 
 __all__ = ["GameState"]
