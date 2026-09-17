@@ -1,8 +1,7 @@
 """Small, isolated lobby UI fixes.
 
-This module intentionally patches only lobby-management presentation and the
-attendance callback. Gameplay, turns, voting and role distribution are left
-untouched.
+This module patches only lobby-management presentation and attendance. Gameplay,
+turns, voting and role distribution are intentionally untouched.
 """
 from __future__ import annotations
 
@@ -10,20 +9,17 @@ import html
 import logging
 from typing import Any
 
-from aiogram import types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from runtime.game_management import GameManagement
 
 
 def install(app: Any, management: GameManagement) -> bool:
-    """Install isolated lobby fixes after all existing lobby handlers load."""
-
-    original_panel = management.panel
+    """Install isolated lobby fixes after the existing lobby handlers load."""
 
     def panel(game_id: int):
-        # Preserve every existing management action except the two lobby UI
-        # actions explicitly removed by the product requirement.
+        # Keep every existing management action except the two explicitly
+        # removed lobby actions, and replace them with one back-to-lobby action.
         kb = InlineKeyboardMarkup(row_width=3)
         items = [
             ("🔢 شماره بازی", "event"),
@@ -82,8 +78,6 @@ def install(app: Any, management: GameManagement) -> bool:
             await callback.answer("❌ بازیکن فعالی در بازی وجود ندارد.", show_alert=True)
             return
 
-        # Always read the latest DB-backed game snapshot before changing the
-        # attendance map. This avoids editing a stale in-memory game object.
         fresh = self._game(gid) or game
         state = self._state(fresh)
         attendance = {str(k): bool(v) for k, v in dict(state.get("attendance") or {}).items()}
@@ -144,38 +138,39 @@ def install(app: Any, management: GameManagement) -> bool:
             await callback.answer("⛔ فقط بازیکنان حاضر در بازی می‌توانند اعلام آمادگی کنند.", show_alert=True)
             return
 
-        # Persist against a fresh snapshot, then fetch again for rendering.
         fresh = self._game(gid) or game
         attendance = dict(self._state(fresh).get("attendance") or {})
         attendance[str(uid)] = True
         self._save(fresh, attendance=attendance)
         fresh = self._game(gid) or fresh
 
-        message_id = dict(self._state(fresh).get("attendance_message_id") or {}) if False else self._state(fresh).get("attendance_message_id")
+        message_id = self._state(fresh).get("attendance_message_id")
+        attendance = dict(self._state(fresh).get("attendance") or {})
+        players = [
+            r for r in self._rows(fresh)
+            if r.get("seat") is not None
+            and str(r.get("status") or "active") not in {"removed", "dead", "finished"}
+        ]
+        active_ids = {str(int(r["player_id"])) for r in players}
+        attendance = {str(k): bool(v) for k, v in attendance.items() if str(k) in active_ids}
+        for pid in active_ids:
+            attendance.setdefault(pid, False)
+
+        def mention(row: dict[str, Any]) -> str:
+            pid = int(row["player_id"])
+            label = row.get("nickname") or row.get("first_name") or row.get("username") or pid
+            return f'<a href="tg://user?id={pid}"><b>{html.escape(str(label))}</b></a>'
+
+        lines = ["🟢 <b>بازیکنان حاضر در لیست</b>", ""]
+        for row in sorted(players, key=lambda r: int(r.get("seat") or 999)):
+            ready = bool(attendance.get(str(int(row["player_id"])), False))
+            lines.append(f"{'🟢' if ready else '⚪️'} {int(row['seat']):02d}. {mention(row)}")
+        lines.extend(["", "برای اعلام آمادگی، دکمه «آماده‌ام» را بزنید."])
+        kb = InlineKeyboardMarkup(row_width=1).add(
+            InlineKeyboardButton("آماده‌ام", callback_data=f"mgmt:{int(fresh['id'])}:attendance_ready")
+        )
+
         if message_id:
-            rows = [
-                r for r in self._rows(fresh)
-                if r.get("seat") is not None
-                and str(r.get("status") or "active") not in {"removed", "dead", "finished"}
-            ]
-            active_ids = {str(int(r["player_id"])) for r in rows}
-            attendance = {str(k): bool(v) for k, v in dict(self._state(fresh).get("attendance") or {}).items() if str(k) in active_ids}
-            for pid in active_ids:
-                attendance.setdefault(pid, False)
-
-            def mention(row: dict[str, Any]) -> str:
-                pid = int(row["player_id"])
-                label = row.get("nickname") or row.get("first_name") or row.get("username") or pid
-                return f'<a href="tg://user?id={pid}"><b>{html.escape(str(label))}</b></a>'
-
-            lines = ["🟢 <b>بازیکنان حاضر در لیست</b>", ""]
-            for row in sorted(rows, key=lambda r: int(r.get("seat") or 999)):
-                ready = bool(attendance.get(str(int(row["player_id"])), False))
-                lines.append(f"{'🟢' if ready else '⚪️'} {int(row['seat']):02d}. {mention(row)}")
-            lines.extend(["", "برای اعلام آمادگی، دکمه «آماده‌ام» را بزنید."])
-            kb = InlineKeyboardMarkup(row_width=1).add(
-                InlineKeyboardButton("آماده‌ام", callback_data=f"mgmt:{int(fresh['id'])}:attendance_ready")
-            )
             try:
                 await self.app.bot.edit_message_text(
                     "\n".join(lines), gid, int(message_id), parse_mode="HTML", reply_markup=kb
@@ -183,14 +178,8 @@ def install(app: Any, management: GameManagement) -> bool:
             except Exception:
                 logging.exception("attendance ready render failed game=%s user=%s", fresh.get("id"), uid)
 
-        players = [
-            r for r in self._rows(fresh)
-            if r.get("seat") is not None
-            and str(r.get("status") or "active") not in {"removed", "dead", "finished"}
-        ]
         if players and all(bool(attendance.get(str(int(r["player_id"])), False)) for r in players):
-            state = self._state(fresh)
-            if not state.get("attendance_announced"):
+            if not self._state(fresh).get("attendance_announced"):
                 self._save(fresh, attendance_announced=True)
                 try:
                     await self.app.bot.send_message(gid, "🎉 <b>همه بازیکنان آماده‌اند.</b>", parse_mode="HTML")
@@ -201,14 +190,13 @@ def install(app: Any, management: GameManagement) -> bool:
     GameManagement.attendance = attendance
     GameManagement.attendance_ready = attendance_ready
 
-    # The previous attendance-ready handler was registered before this patch.
-    # Remove only that exact callback family and register the patched one.
+    # management_navigation registered an earlier attendance_ready callback.
+    # Remove only that callback family, then register the patched handler last.
     registry = getattr(getattr(app.dp, "callback_query_handlers", None), "handlers", [])
     kept = []
     for item in registry:
         fn = getattr(item, "callback", None) or getattr(item, "handler", None)
-        name = getattr(fn, "__name__", "")
-        if name == "attendance_ready":
+        if getattr(fn, "__name__", "") == "attendance_ready":
             continue
         kept.append(item)
     registry[:] = kept
