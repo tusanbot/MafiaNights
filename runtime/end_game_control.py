@@ -66,9 +66,11 @@ def install(app: Any) -> bool:
     from runtime.game_end import install as install_game_end
     install_game_end(app)
 
-    # Make terminal DB status authoritative for the process-local flags used by
-    # the legacy-backed production lobby. This is what allows the next game to
-    # start immediately after confirmed cancellation/finalization.
+    # Final canonical management UI is installed after game_end has added its
+    # completion/history actions, so the panel is deduplicated in one place.
+    from runtime.management_surface_final import install as install_management_surface_final
+    install_management_surface_final(app)
+
     games = app.runtime.state.games
     original_update_game = getattr(games, "update_game", None)
     if original_update_game and not getattr(games, "_production_terminal_guard", False):
@@ -81,8 +83,6 @@ def install(app: Any) -> bool:
         games.update_game = guarded_update_game
         games._production_terminal_guard = True
 
-    # Bring the newer text-command/security surfaces onto the actual production
-    # dispatcher. The desktop lobby/runtime files are not replaced.
     from runtime.text_commands import install as install_text_commands
     from runtime.command_surface_v3 import install as install_command_surface_v3
     from runtime.player_kick import install as install_player_discipline
@@ -171,7 +171,7 @@ def install(app: Any) -> bool:
             try:
                 await app.bot.edit_message_text("🚫 <b>این بازی لغو شد.</b>\n\nبازی دیگر فعال نیست و می‌توانید بازی جدید را شروع کنید.", gid, int(lid), parse_mode="HTML", reply_markup=None)
             except Exception: logging.info("cancelled game message edit failed game=%s", game.get("id"))
-        await callback.message.edit_text(f"🚫 <b>بازی شماره {int(game.get('event_number') or 1)} لغو شد.</b>\n\nبازی جدید اکنون قابل ایجاد است.", parse_mode="HTML")
+        await callback.message.edit_text("🚫 <b>بازی لغو شد.</b>\n\nبازی جدید اکنون قابل ایجاد است.", parse_mode="HTML")
         await callback.answer("🚫 بازی با موفقیت لغو شد.")
 
     dp = app.dp
@@ -185,5 +185,5 @@ def install(app: Any) -> bool:
     _move_front(_callback_registry(dp), lambda fn: getattr(fn, "__name__", "") in {"cancel_confirm", "cancel_confirmed", "finish_menu"})
 
     app._manual_end_game_installed = True
-    logging.info("MANUAL_END_GAME installed: finish/archive + confirmed cancel + text command surfaces")
+    logging.info("MANUAL_END_GAME installed: finish/archive + confirmed cancel + text command surfaces + final management")
     return True
