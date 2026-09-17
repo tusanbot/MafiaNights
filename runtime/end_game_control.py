@@ -145,6 +145,8 @@ def install(app: Any) -> bool:
         )
         await callback.answer()
 
+    app._confirm_cancel_game = cancel_confirm
+
     async def cancel_confirmed(callback: types.CallbackQuery):
         gid = int(callback.message.chat.id)
         game = app.runtime.state.active_game(gid)
