@@ -4,7 +4,7 @@ from __future__ import annotations
 import html
 import logging
 import sys
-from typing import Any, Callable
+from typing import Any
 
 from aiogram.dispatcher.handler import CancelHandler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -81,34 +81,48 @@ def _install_lobby_attendance_fix(app: Any) -> None:
     logging.info("PRODUCTION ATTENDANCE FIX active")
 
 
+def _install_final_management_panel(app: Any) -> None:
+    management = getattr(app, "game_management", None)
+    if management is None or getattr(app, "_management_panel_cutover", False): return
+    app._management_panel_cutover = True
+    def panel(game_id):
+        gid = int(getattr(app, "group_chat_id", 0) or 0)
+        game = management._game(gid) or {}
+        status = str(game.get("status") or "lobby")
+        items = [
+            ("🔢 شماره بازی", "event"), ("📝 تغییر سناریو", "scenario"), ("🗑 حذف بازیکن", "remove"),
+            ("🎟 لغو رزرو", "unreserve"), ("🔄 جایگزین بازیکن", "replace"), ("✅ حاضری", "attendance"),
+            ("🎂 تولد بازیکن", "birthday"), ("⚔ وضعیت چالش", "challenge"), ("⏭ مدیریت نکست", "next"),
+            ("🚫 لغو بازی", "cancel"),\ ("ℹ️ اطلاعات بازی", "info"), ("🦵 کیک از بازی", "kick"),
+            ("⚠️ تذکر بازیکن", "warning"),
+        ]
+        if status == "lobby": items.append(("⬅️ بازگشت به لابی", "back_lobby"))
+        else: items.append(("⬅️ بازگشت", "back_lobby"))
+        kb = InlineKeyboardMarkup(row_width=3)
+        for i in range(0, len(items), 3): kb.row(*(InlineKeyboardButton(t, callback_data=f"mgmt:{int(game_id)}:{a}") for t,a in items[i:i+3]))
+        return kb
+    management.panel = panel
+    logging.info("FINAL MANAGEMENT PANEL active: refresh/close removed; back_lobby retained")
+
+
 def _finalize(app: Any) -> None:
     global _INSTALLED
     if app is None or getattr(app, "_production_cutover_final", False): return
     app._production_cutover_final=True
+    _install_final_management_panel(app)
     from runtime.final_identity_authority import install as install_identity; install_identity(app)
     from runtime.speaker_order_authority import install as install_speaker; install_speaker(app)
     from runtime.production_consistency_loader import install as install_consistency; install_consistency(app)
     from runtime.dual_winner_support import install as install_dual_winner; install_dual_winner(app)
     _install_lobby_attendance_fix(app)
-    from runtime.lobby_seat_authority import install as install_lobby_seat
-    install_lobby_seat(app)
-    from runtime.command_authority_final import install as install_command_authority
-    install_command_authority(app)
+    from runtime.lobby_seat_authority import install as install_lobby_seat; install_lobby_seat(app)
+    from runtime.command_authority_final import install as install_command_authority; install_command_authority(app)
     logging.info("PRODUCTION CUTOVER FINAL active: speaker=canonical management=canonical result=canonical attendance=canonical seats=canonical commands=canonical")
     _INSTALLED=True
 
 
-def _wrap_final_installer(module_name: str, function_name: str = "install") -> None:
-    module=__import__(module_name,fromlist=[function_name]); original=getattr(module,function_name); marker=f"_production_cutover_wrapped_{function_name}"
-    if getattr(module,marker,False): return
-    def wrapped(app,*args,**kwargs):
-        result=original(app,*args,**kwargs); _finalize(app); return result
-    wrapped.__name__=getattr(original,"__name__",function_name); wrapped.__doc__=getattr(original,"__doc__",None)
-    setattr(module,function_name,wrapped); setattr(module,marker,True)
-
-
 def install() -> None:
     if _production_app() is None: return
-    _protect_legacy_management_assignment(); _wrap_final_installer("runtime.game_info_security_v2")
+    _protect_legacy_management_assignment()
     app=_production_app()
     if app is not None and not getattr(app,"_production_cutover_final",False): _finalize(app)
