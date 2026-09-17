@@ -4,34 +4,44 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_production_entrypoint_has_one_lobby_installer():
-    main = (ROOT / "main.py").read_text(encoding="utf-8")
-    assert "runtime.production_lobby_priority" not in main
-    assert "runtime.new_game_guard" not in main
-    assert main.count("install_production_lobby(app)") == 1
+def test_production_entrypoint_uses_single_lobby_and_management_owner():
+    source = (ROOT / "player_runtime_entry.py").read_text(encoding="utf-8")
+    assert "runtime.lobby_ui_final" in source
+    assert "runtime.management_surface_final" in source
+    assert "canonical_lobby_management" not in source
+    assert "lobby_final_patch" not in source
+    assert "lobby_management_fix" not in source
+    assert "management_navigation" not in source
 
 
-def test_feature_parity_v4_does_not_register_legacy_lobby():
-    source = (ROOT / "runtime" / "feature_parity_v4.py").read_text(encoding="utf-8")
-    for token in ("legacy_join", "legacy_leave", "join_game", "leave_game", "slot_", "join_waiting", "leave_waiting"):
-        assert token not in source
+def test_production_cutover_contains_no_lobby_or_management_ui():
+    source = (ROOT / "runtime" / "production_cutover_final.py").read_text(encoding="utf-8")
+    assert "management_surface_final" not in source
+    assert "lobby_ui_final" not in source
+    assert "cancel_confirm" not in source
+    assert "_install_management_cancel_bridge" not in source
 
 
-def test_lobby_callbacks_are_game_bound():
-    source = (ROOT / "runtime" / "production_lobby.py").read_text(encoding="utf-8")
-    assert 'callback_data=f"lobby:{int(game[\'id\'])}:toggle"' in source
-    assert 'callback_data=f"lobby:{int(game[\'id\'])}:seat:{seat_no}"' in source
-    assert 'callback_data=f"lobby:{int(game[\'id\'])}:cancel"' in source
+def test_management_surface_owns_panel_navigation_and_cancel_confirmation():
+    source = (ROOT / "runtime" / "management_surface_final.py").read_text(encoding="utf-8")
+    for token in ("def panel", "cancel_confirm", "cancel_back", "back_lobby"):
+        assert token in source
+    assert "بازسازی لابی" not in source
+    assert "✖️ بستن" not in source
 
 
-def test_lobby_has_explicit_stale_game_guard_and_seat_bounds():
-    source = (ROOT / "runtime" / "production_lobby.py").read_text(encoding="utf-8")
-    assert "expected_id is not None" in source
-    assert "target < 1 or target > cap" in source
-    assert 'str(game.get("status") or "") != "lobby"' in source
+def test_final_lobby_owns_lobby_callbacks_and_ready_state():
+    source = (ROOT / "runtime" / "lobby_ui_final.py").read_text(encoding="utf-8")
+    for token in ("fl_new", "fl_toggle", "fl_reserve", "fl_manage", "fl_cancel", "ready_players"):
+        assert token in source
 
 
-def test_lobby_message_id_is_durable_per_game():
-    source = (ROOT / "runtime" / "production_lobby.py").read_text(encoding="utf-8")
-    assert 'state.get("lobby_message_id")' in source
-    assert 'save_lobby_state(game, lobby_message_id=int(msg.message_id))' in source
+def test_deleted_duplicate_modules_are_not_imported():
+    for path in (
+        "runtime/canonical_lobby_management.py",
+        "runtime/lobby_final_patch.py",
+        "runtime/lobby_management_fix.py",
+        "runtime/lobby_migration.py",
+        "runtime/management_navigation.py",
+    ):
+        assert not (ROOT / path).exists()
