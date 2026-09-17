@@ -154,7 +154,7 @@ def install(main):
         main.runtime.lobby.set_moderator(gid,uid); main.moderator_id=uid; main.group_chat_id=gid; main.lobby_active=True; main.game_running=False; main.round_active=False
         g = game(gid)
         if g:
-            s = state(g); s["moderator_name"] = str(moderator_name); save(g, moderator_name=str(moderator_name))
+            save(g, moderator_name=str(moderator_name))
         await render(c); await c.answer("✅ لابی نهایی فعال شد")
 
     async def toggle(c):
@@ -191,6 +191,10 @@ def install(main):
     async def cancel(c):
         g=game(c.message.chat.id)
         if not g or not await allowed(c,g): await c.answer("⛔ دسترسی ندارید.",show_alert=True); return
+        confirmer = getattr(main, "_confirm_cancel_game", None)
+        if confirmer:
+            await confirmer(c)
+            return
         await main.game_management.cancel(c)
 
     async def scenario_menu(c):
