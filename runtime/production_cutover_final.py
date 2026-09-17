@@ -201,6 +201,80 @@ def _install_speaker_order_guard(app: Any) -> None:
     app._speaker_order_start_guard = True
 
 
+def _install_management_cancel_bridge(app: Any) -> None:
+    """Own the management cancel flow so cancel and its back button cannot fall through to legacy handlers."""
+    if getattr(app, "_management_cancel_bridge", False):
+        return
+    registry = getattr(getattr(app.dp, "callback_query_handlers", None), "handlers", None)
+    management = getattr(app, "game_management", None)
+    if registry is None or management is None:
+        return
+
+    async def cancel(callback):
+        gid = int(callback.message.chat.id)
+        game = management._game(gid)
+        if not game or not await management._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True)
+            return
+        kb = InlineKeyboardMarkup(row_width=2)
+        kb.row(
+            InlineKeyboardButton("🚫 بله، لغو شود", callback_data=f"mgmt:{int(game['id'])}:cancel_confirm"),
+            InlineKeyboardButton("⬅️ بازگشت", callback_data=f"mgmt:{int(game['id'])}:cancel_back"),
+        )
+        await callback.message.edit_text("⚠️ <b>لغو بازی</b>\n\nآیا مطمئن هستید که می‌خواهید این بازی لغو شود؟", parse_mode="HTML", reply_markup=kb)
+        await callback.answer()
+
+    async def cancel_back(callback):
+        gid = int(callback.message.chat.id)
+        game = management._game(gid)
+        if not game or not await management._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True)
+            return
+        await callback.message.edit_text(
+            f"⚙️ <b>مدیریت بازی</b>\n\n🔢 شماره: {int(game.get('event_number') or 0)}\n📌 وضعیت: {html.escape(str(game.get('status') or 'lobby'))}\n\nاین پنل در لابی و حین بازی قابل استفاده است.",
+            parse_mode="HTML", reply_markup=management.panel(int(game["id"]))
+        )
+        await callback.answer("⬅️ بازگشت به مدیریت")
+
+    async def cancel_confirm(callback):
+        gid = int(callback.message.chat.id)
+        game = management._game(gid)
+        if not game or not await management._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True)
+            return
+        try:
+            await management.cancel(callback)
+        except Exception:
+            logging.exception("management cancel failed")
+            await callback.answer("❌ لغو بازی انجام نشد.", show_alert=True)
+
+    handlers = [
+        (cancel, "cancel"),
+        (cancel_confirm, "cancel_confirm"),
+        (cancel_back, "cancel_back"),
+    ]
+    for fn, action in handlers:
+        async def wrapped(callback, _fn=fn):
+            return await _fn(callback)
+        wrapped.__name__ = fn.__name__
+        wrapped._production_cancel_bridge = True
+        app.dp.register_callback_query_handler(
+            wrapped,
+            lambda c, a=action: (lambda p: len(p) >= 3 and p[0] == "mgmt" and p[2] == a)(str(c.data or "").split(":")),
+            state="*",
+        )
+        _move_to_front(registry, wrapped)
+    app._management_cancel_bridge = True
+    logging.info("PRODUCTION MANAGEMENT CANCEL BRIDGE active: confirm/back/cancel are single-owner")
+
+
+def _move_to_front(registry, fn):
+    for i, item in enumerate(list(registry)):
+        if _handler(item) is fn:
+            registry.insert(0, registry.pop(i))
+            return
+
+
 def _install_management_fallback_panel(app: Any) -> None:
     """Fallback only if management_surface_final cannot be loaded."""
     management = getattr(app, "game_management", None)
@@ -250,9 +324,10 @@ def _finalize(app: Any) -> None:
     install_lobby_seat(app)
     from runtime.command_authority_final import install as install_command_authority
     install_command_authority(app)
+    _install_management_cancel_bridge(app)
     if not getattr(app, "_management_surface_final", False):
         _install_management_fallback_panel(app)
-    logging.info("PRODUCTION CUTOVER FINAL active: single-management=1 uuid-scenario=1 attendance=ready_players speaker-order=persisted")
+    logging.info("PRODUCTION CUTOVER FINAL active: single-management=1 uuid-scenario=1 attendance=ready_players speaker-order=persisted cancel-confirm=1")
     _INSTALLED = True
 
 
