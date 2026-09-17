@@ -5,18 +5,17 @@ import logging
 import os
 
 from main_refactored_v4 import MafiaApplicationV4
-from runtime.cancel_command import install as install_cancel_command
 from runtime.final_persistence import install as install_persistence
 from runtime.game_management import GameManagement
 from runtime.game_management_compat import install as install_management_compat
-from runtime.game_end import install as install_game_end
-from runtime.game_archive_v2 import install as install_game_archive
 from runtime.game_lifecycle import install as install_game_lifecycle
 from runtime.management_navigation import install as install_management_navigation
 from runtime.lobby import install as install_lobby
 from runtime.role_distribution import install as install_role_distribution
 from runtime.lobby_management_fix import install as install_lobby_management_fix
 from runtime.stable_round_engine import install as install_stable_round_engine
+from runtime.speaker_order_authority import install as install_speaker_order_authority
+from runtime.final_identity_authority import install as install_final_identity_authority
 from runtime.voting_end_game_patch import install as install_voting_end_game_patch
 from runtime.voting_runtime import install as install_voting_runtime
 from runtime.voting_timer_patch import install as install_voting_timer_patch
@@ -25,8 +24,7 @@ from runtime.voting_end_target_patch import install as install_voting_end_target
 from runtime.voting_postfix import install as install_voting_postfix
 from runtime.user_stats import install as install_user_stats
 from runtime.player_scoring import install as install_player_scoring
-from runtime.player_kick import install as install_player_kick
-from runtime.text_commands import install as install_text_commands
+from runtime.end_game_control import install as install_end_game_control
 
 TOKEN = os.getenv("API_TOKEN")
 if not TOKEN:
@@ -40,14 +38,12 @@ dp = app.dp
 
 persistence_status = install_persistence(app)
 management = GameManagement(app)
+# One canonical management owner. Downstream installers use this reference.
+app.game_management = management
 install_management_navigation(app, management)
-# Install the lifecycle invariant before management registers its callbacks.
 game_lifecycle_status = install_game_lifecycle(app, management)
 management.install()
 install_management_compat(app, management)
-install_game_end(app)
-game_archive_status = install_game_archive(app)
-install_cancel_command(app)
 lobby_status = install_lobby(app)
 role_distribution_status = install_role_distribution(app)
 app._canonical_distribute_roles = app._role_distribution_handler
@@ -59,20 +55,54 @@ voting_timer_status = install_voting_timer_patch(app)
 voting_serverless_status = install_voting_serverless_patch(app)
 voting_end_target_status = install_voting_end_target_patch(app)
 voting_postfix_status = install_voting_postfix(app)
+speaker_order_status = install_speaker_order_authority(app)
+final_identity_status = install_final_identity_authority(app)
 user_stats_status = install_user_stats(app)
 player_scoring_status = install_player_scoring(app)
-player_discipline_status = install_player_kick(app)
-text_commands_status = install_text_commands(app)
+# This installer activates the final management surface, manual completion,
+# confirmed cancellation and final-message/history handlers on the real dispatcher.
+end_game_control_status = install_end_game_control(app)
+
+
+def _activate_canonical_management_aliases() -> None:
+    """Remove the old feature-parity management panel from the dispatcher.
+
+    FeatureParityV4 remains active for scenario CRUD/challenge and other
+    non-panel features, but it no longer owns a second management UI.
+    """
+    registry = getattr(getattr(app.dp, "callback_query_handlers", None), "handlers", [])
+    legacy_management_methods = {
+        "open_panel", "list_players", "resend_roles", "remove_player", "remove_confirm",
+        "replace_player", "choose_replace_seat", "replace_confirm", "revive_player",
+        "revive_confirm", "moderator_menu", "set_moderator", "toggle_next", "cancel",
+    }
+    kept = []
+    for item in registry:
+        fn = getattr(item, "callback", None) or getattr(item, "handler", None)
+        owner = getattr(fn, "__self__", None)
+        if owner is getattr(app, "feature_parity", None) and getattr(fn, "__name__", "") in legacy_management_methods:
+            continue
+        kept.append(item)
+    registry[:] = kept
+
+    app.dp.register_callback_query_handler(
+        management.open,
+        lambda c: str(c.data or "") in {"manage_game", "fp:panel"},
+        state="*",
+    )
+
+
+_activate_canonical_management_aliases()
 logging.info(
-    "PRODUCTION_RUNTIME_ACTIVE persistent=%s lifecycle=%s lobby=%s management=active game_end=active game_archive=%s role_distribution=%s lobby_management_fix=%s stable_round=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s discipline=%s text_commands=%s",
-    persistence_status, game_lifecycle_status, lobby_status, game_archive_status, role_distribution_status, lobby_management_fix_status, stable_round_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status, player_discipline_status, text_commands_status,
+    "PRODUCTION_RUNTIME_ACTIVE persistent=%s lifecycle=%s lobby=%s management=canonical game_end_control=%s role_distribution=%s lobby_management_fix=%s stable_round=%s speaker_order=%s final_identity=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s",
+    persistence_status, game_lifecycle_status, lobby_status, end_game_control_status, role_distribution_status, lobby_management_fix_status, stable_round_status, speaker_order_status, final_identity_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status,
 )
 
 
 async def on_startup(dp):
     logging.info(
-        "MafiaNights production startup; persistence=%s lifecycle=%s lobby=%s management=active game_end=active game_archive=%s role_distribution=%s lobby_management_fix=%s stable_round=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s discipline=%s text_commands=%s",
-        persistence_status, game_lifecycle_status, lobby_status, game_archive_status, role_distribution_status, lobby_management_fix_status, stable_round_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status, player_discipline_status, text_commands_status,
+        "MafiaNights production startup; persistence=%s lifecycle=%s lobby=%s management=canonical game_end_control=%s role_distribution=%s lobby_management_fix=%s stable_round=%s speaker_order=%s final_identity=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s",
+        persistence_status, game_lifecycle_status, lobby_status, end_game_control_status, role_distribution_status, lobby_management_fix_status, stable_round_status, speaker_order_status, final_identity_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status,
     )
     await app.startup()
     try:
@@ -89,8 +119,6 @@ async def on_startup(dp):
             app.turn_order = [int(x) for x in state.get("turn_order") or sorted(app.player_slots)]
             app.current_turn_index = int(active_game.get("current_turn_index") or 0)
         else:
-            # Never resurrect a process-local running flag when the durable
-            # game record is already terminal/absent.
             app.game_running = False
             app.round_active = False
             app.lobby_active = False

@@ -1,7 +1,7 @@
 """Canonical separation of lobby-management and live-game management.
 
 This module is the single lifecycle/navigation layer for the central management
-panel.  It does not create a second lobby implementation: it only shapes the
+panel. It does not create a second lobby implementation: it only shapes the
 existing management panel according to the authoritative game status.
 """
 from __future__ import annotations
@@ -10,14 +10,12 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from aiogram.types import InlineKeyboardButton
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 LOBBY_ONLY_ACTIONS = {
     "unreserve",
     "unreserve_pick",
-    "attendance",
-    "attendance_pick",
     "refresh",
     "close",
     "scenario",
@@ -27,8 +25,6 @@ LOBBY_ONLY_ACTIONS = {
 LIVE_OBSOLETE_ACTIONS = {
     "unreserve",
     "unreserve_pick",
-    "attendance",
-    "attendance_pick",
     "refresh",
     "close",
     "scenario",
@@ -72,10 +68,8 @@ def _filter_panel(kb, status: str, game_id: int):
     kb.inline_keyboard = rows
 
     if status in {"running", "paused", "turn"}:
-        # The live message is the canonical "شروع روز" control message.
         kb.row(InlineKeyboardButton("⬅️ بازگشت", callback_data=f"mgmt:{game_id}:back_live"))
     else:
-        # In lobby this returns to the canonical lobby renderer.
         kb.row(InlineKeyboardButton("⬅️ بازگشت به لابی", callback_data=f"mgmt:{game_id}:return_lobby"))
     return kb
 
@@ -150,7 +144,7 @@ def install(app: Any, management: Any) -> bool:
         gid = int(callback.message.chat.id)
         game = management._game(gid)
         if not game or not await management._allowed(callback, gid, game):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True)
+            await callback.answer("⛔ دسترسی ندارید", show_alert=True)
             return
         status = str(game.get("status") or "")
         if status not in {"lobby", "running", "paused", "turn"}:
@@ -168,23 +162,15 @@ def install(app: Any, management: Any) -> bool:
         lid = state.get("lobby_message_id") or state.get("control_message_id")
         if lid:
             try:
-                await app.bot.edit_message_text(
-                    "🚫 <b>این بازی لغو شد.</b>\n\nاطلاعات بازی حفظ شد و بازی دیگر فعال نیست.",
-                    gid, int(lid), parse_mode="HTML", reply_markup=None,
-                )
+                await app.bot.edit_message_text("🚫 <b>این بازی لغو شد.</b>\n\nاطلاعات بازی حفظ شد و بازی دیگر فعال نیست.", gid, int(lid), parse_mode="HTML", reply_markup=None)
             except Exception:
                 logging.info("cancelled game message could not be edited game=%s", game.get("id"))
         try:
-            await callback.message.edit_text(
-                "🚫 <b>بازی لغو شد.</b>\n\nاین بازی در تاریخچه بازی‌های انجام‌شده ثبت نمی‌شود و امتیازی برای آن محاسبه نمی‌شود.",
-                parse_mode="HTML",
-            )
+            await callback.message.edit_text("🚫 <b>بازی لغو شد.</b>\n\nاین بازی در تاریخچه بازی‌های انجام‌شده ثبت نمی‌شود و امتیازی برای آن محاسبه نمی‌شود.", parse_mode="HTML")
         except Exception:
             pass
         await callback.answer("🚫 بازی لغو شد؛ بازی جدید قابل شروع است.")
 
-    # Replace the old management cancellation registration with the canonical
-    # cancelled status path above.
     table = getattr(getattr(dp, "callback_query_handlers", None), "handlers", [])
     table[:] = [
         item for item in table
@@ -210,9 +196,6 @@ def install(app: Any, management: Any) -> bool:
         state="*",
     )
 
-    # Make "بازی جدید" authoritative: a stale process flag must never block a
-    # new lobby when the database has no active game. Conversely, an active DB
-    # game must block creation even if process-local flags were cleared.
     handlers = getattr(getattr(dp, "callback_query_handlers", None), "handlers", [])
     for item in handlers:
         fn = getattr(item, "callback", None)
@@ -236,8 +219,6 @@ def install(app: Any, management: Any) -> bool:
                     app.round_active = False
                     await callback.answer("⚠️ یک لابی فعال وجود دارد.", show_alert=True)
                 return
-            # DB is authoritative. Terminal/absent records cannot keep the
-            # process-local flags alive.
             app.game_running = False
             app.round_active = False
             app.lobby_active = False
