@@ -39,12 +39,47 @@ def _move_front(registry, predicate) -> int:
     return len(selected)
 
 
+def _clear_runtime_flags(app: Any) -> None:
+    app.game_running = False
+    app.round_active = False
+    app.lobby_active = False
+    app.current_turn_index = 0
+    app.current_turn_seat = None
+    app.turn_order = []
+    app.player_slots = {}
+    app.pending_challenges = {}
+    app.active_challenger_seats = set()
+    app._stable_day_active = False
+    app._stable_day_ended = False
+    app._stable_phase = "normal"
+    for owner, attr in ((getattr(app, "ui", None), "turn_timer_task"), (getattr(app, "ui", None), "voting_timer_task"), (getattr(app, "ui", None), "day_timer_task"), (app, "_voting_task")):
+        task = getattr(owner, attr, None) if owner is not None else None
+        if task is not None and hasattr(task, "done") and not task.done():
+            try: task.cancel()
+            except Exception: pass
+
+
 def install(app: Any) -> bool:
     if getattr(app, "_manual_end_game_installed", False):
         return False
 
     from runtime.game_end import install as install_game_end
     install_game_end(app)
+
+    # Make terminal DB status authoritative for the process-local flags used by
+    # the legacy-backed production lobby. This is what allows the next game to
+    # start immediately after confirmed cancellation/finalization.
+    games = app.runtime.state.games
+    original_update_game = getattr(games, "update_game", None)
+    if original_update_game and not getattr(games, "_production_terminal_guard", False):
+        def guarded_update_game(game_id, **changes):
+            result = original_update_game(game_id, **changes)
+            status = str(changes.get("status") or "").lower()
+            if result and status in {"finished", "cancelled"}:
+                _clear_runtime_flags(app)
+            return result
+        games.update_game = guarded_update_game
+        games._production_terminal_guard = True
 
     # Bring the newer text-command/security surfaces onto the actual production
     # dispatcher. The desktop lobby/runtime files are not replaced.
@@ -130,17 +165,7 @@ def install(app: Any) -> bool:
         if not ok:
             await callback.answer("❌ لغو بازی انجام نشد.", show_alert=True)
             return
-
-        app.game_running = False; app.round_active = False; app.lobby_active = False
-        app.current_turn_index = 0; app.current_turn_seat = None; app.turn_order = []; app.player_slots = {}
-        app.pending_challenges = {}; app.active_challenger_seats = set()
-        app._stable_day_active = False; app._stable_day_ended = False; app._stable_phase = "normal"
-        for owner, attr in ((getattr(app, "ui", None), "turn_timer_task"), (getattr(app, "ui", None), "voting_timer_task"), (app, "_voting_task")):
-            task = getattr(owner, attr, None) if owner is not None else None
-            if task is not None and hasattr(task, "done") and not task.done():
-                try: task.cancel()
-                except Exception: pass
-
+        _clear_runtime_flags(app)
         lid = state.get("lobby_message_id") or state.get("control_message_id")
         if lid:
             try:
@@ -154,10 +179,6 @@ def install(app: Any) -> bool:
     dp.register_callback_query_handler(cancel_confirmed, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["cancel_confirm"], state="*")
     dp.register_message_handler(finish_command, lambda m: (m.text or "").strip().casefold() in {x.casefold() for x in ALIASES}, content_types=types.ContentTypes.TEXT, state="*")
 
-    # Exact handler ownership: TextCommands handles general commands, the
-    # discipline object handles تذکر/کیک, and command_surface_v3 handles the
-    # security/management commands it owns. Avoid moving unrelated generic
-    # handlers named "command" ahead of these authorities.
     _move_front(_message_registry(dp), lambda fn: getattr(getattr(fn, "__self__", None), "__class__", type(None)).__name__ == "TextCommands")
     _move_front(_message_registry(dp), lambda fn: getattr(getattr(fn, "__self__", None), "__class__", type(None)).__name__ == "PlayerDiscipline")
     _move_front(_message_registry(dp), lambda fn: getattr(fn, "__name__", "") == "finish_command")
