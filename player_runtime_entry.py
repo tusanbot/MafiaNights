@@ -25,8 +25,6 @@ main.game_management = GameManagement(main)
 main.game_management.install()
 from runtime.end_game_control import install as install_manual_end_game
 install_manual_end_game(main)
-# role_distribution expects the legacy gameplay bridge object to exist. Keep the
-# compatibility object without replacing any desktop/runtime UI implementation.
 if not hasattr(main, "ui") or main.ui is None:
     main.ui = SimpleNamespace()
 from runtime.role_distribution import install as install_role_distribution
@@ -79,6 +77,14 @@ install_stable_round_engine(main); install_live_controls_v2(main); install_lobby
 from runtime.game_info_security_v2 import install as install_game_info_security_v2
 install_game_info_security_v2(main)
 
+# CRITICAL: runtime/__init__.py runs too early (while this module is importing),
+# so production_cutover_final cannot be armed from there. Arm it explicitly only
+# after every runtime installer above has finished. This makes the canonical
+# speaker order, identity, result/history callbacks, and management surface
+# authoritative in the actual Vercel webhook runtime.
+from runtime import production_cutover_final
+production_cutover_final.install()
+
 
 def _install_canonical_management_surface():
     """Keep one group-management surface and remove dead/duplicate entries."""
@@ -90,8 +96,6 @@ def _install_canonical_management_surface():
 
     def panel(game_id):
         original = original_panel(game_id)
-        # Rebuild from the existing functional controls, deliberately dropping
-        # the dead refresh/close actions. No lobby implementation is duplicated.
         keep = []
         seen_callbacks = set()
         blocked_text = {"🔄 بازسازی لابی", "✖️ بستن", "بازی های گذشته", "📚 بازی های گذشته", "ثبت اتفاقات", "📝 ثبت اتفاقات"}
@@ -108,11 +112,8 @@ def _install_canonical_management_surface():
                 out.append(button)
             if out:
                 keep.append(out)
-
-        # Add the controls requested for the canonical management panel.
         def add(text, action):
             keep.append([InlineKeyboardButton(text, callback_data=f"mgmt:{int(game_id)}:{action}")])
-
         add("ℹ️ اطلاعات بازی", "info")
         add("🦵 کیک از بازی", "kick")
         add("⚠️ تذکر بازیکن", "warning")
@@ -208,7 +209,6 @@ def _install_canonical_management_surface():
         await callback.answer("ℹ️ بازی در حال اجراست؛ لابی فعال نیست.", show_alert=True)
 
     async def ready(callback):
-        """Authoritative readiness handler; answer Telegram before any DB/edit work."""
         parts = str(callback.data or "").split(":")
         if len(parts) != 3 or parts[0] != "mgmt" or parts[2] != "attendance_ready":
             return
@@ -243,7 +243,6 @@ def _install_canonical_management_surface():
     dp.register_callback_query_handler(warning_pick, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["warning_pick"], state="*")
     dp.register_callback_query_handler(back_lobby, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["back_lobby"], state="*")
     dp.register_callback_query_handler(ready, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").endswith(":attendance_ready"), state="*")
-    # Put the canonical handlers ahead of legacy management/navigation handlers.
     registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", [])
     names = {"info", "kick", "kick_pick", "warning", "warning_pick", "back_lobby", "ready"}
     selected = [x for x in registry if getattr(getattr(x, "handler", None) or getattr(x, "callback", None), "__name__", "") in names]
@@ -274,8 +273,6 @@ _finalize_lobby_routes()
 
 _original_startup=main.on_startup
 async def on_startup(dp):
-    # Startup recovery is auxiliary. A recovery/database failure must never
-    # abort Telegram update dispatch on a request-driven Vercel webhook.
     try:
         results=await persistent_startup(main,_original_startup)
         logging.info("Persistent runtime startup recovery completed: %s",results)
