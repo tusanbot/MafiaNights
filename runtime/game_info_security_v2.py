@@ -81,9 +81,6 @@ def install(app):
             reg.insert(0, reg.pop(i))
             break
 
-    # This is intentionally installed last in the production chain. It observes
-    # the already-registered speaker selectors and stable round handlers and
-    # makes the selected speaker the durable source of turn order.
     try:
         from runtime.speaker_order_authority import install as install_speaker_order_authority
         install_speaker_order_authority(app)
@@ -91,14 +88,20 @@ def install(app):
         import logging
         logging.exception("failed to install speaker order authority")
 
-    # IMPORTANT: this must run after every production installer above. Otherwise
-    # later legacy/compatibility installers can replace the canonical management
-    # and finished-game handlers again, which causes duplicate buttons and dead
-    # callbacks in production.
     try:
         from runtime.production_consistency_loader import install as install_production_consistency
         install_production_consistency(app)
     except Exception:
         import logging
         logging.exception("failed to install final production consistency runtime")
+
+    # This installer is reached after command_surface_v2 in player_runtime_entry.
+    # It therefore becomes the final command precedence boundary and prevents
+    # the compatibility v2 handler from masking the final v3/manual-end handlers.
+    try:
+        from runtime.command_authority_final import install as install_command_authority_final
+        install_command_authority_final(app)
+    except Exception:
+        import logging
+        logging.exception("failed to install final text command authority")
     return True
