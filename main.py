@@ -35,7 +35,7 @@ app = MafiaApplicationV4(TOKEN)
 bot = app.bot
 dp = app.dp
 
-install_persistence(app)
+persistence_status = install_persistence(app)
 management = GameManagement(app)
 app.game_management = management
 install_game_lifecycle(app, management)
