@@ -28,6 +28,7 @@ from runtime.player_scoring import install as install_player_scoring
 from runtime.end_game_control import install as install_end_game_control
 from runtime.production_consistency_loader import install as install_production_consistency
 from runtime.dual_winner_support import install as install_dual_winner_support
+from runtime.canonical_lobby_management import install as install_canonical_lobby_management
 
 TOKEN = os.getenv("API_TOKEN")
 if not TOKEN:
@@ -45,7 +46,6 @@ app.game_management = management
 install_management_navigation(app, management)
 game_lifecycle_status = install_game_lifecycle(app, management)
 management.install()
-install_management_compat(app, management)
 lobby_status = install_lobby(app)
 role_distribution_status = install_role_distribution(app)
 app._canonical_distribute_roles = app._role_distribution_handler
@@ -86,7 +86,8 @@ def _activate_canonical_management_aliases() -> None:
 _activate_canonical_management_aliases()
 production_consistency_status = install_production_consistency(app)
 dual_winner_status = install_dual_winner_support(app)
-logging.info("PRODUCTION_RUNTIME_ACTIVE management=canonical consistency=%s dual_winner=%s lobby_final=%s", production_consistency_status, dual_winner_status, lobby_final_status)
+canonical_lobby_management_status = install_canonical_lobby_management(app, management)
+logging.info("PRODUCTION_RUNTIME_ACTIVE management=canonical consistency=%s dual_winner=%s lobby_final=%s canonical_lobby_management=%s", production_consistency_status, dual_winner_status, lobby_final_status, canonical_lobby_management_status)
 
 
 async def on_startup(dp):
