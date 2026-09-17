@@ -43,13 +43,11 @@ def install(app: Any) -> bool:
     if getattr(app, "_manual_end_game_installed", False):
         return False
 
-    # Production was previously missing the newer finish/archive flow. Install
-    # it on the real dispatcher used by player_runtime_entry.
     from runtime.game_end import install as install_game_end
     install_game_end(app)
 
-    # Activate the newer text-command surfaces on the same dispatcher. Their
-    # handlers are reordered below so old generic handlers cannot swallow them.
+    # Bring the newer text-command/security surfaces onto the actual production
+    # dispatcher. The desktop lobby/runtime files are not replaced.
     from runtime.text_commands import install as install_text_commands
     from runtime.command_surface_v3 import install as install_command_surface_v3
     from runtime.player_kick import install as install_player_discipline
@@ -78,10 +76,7 @@ def install(app: Any) -> bool:
             return
         from runtime.game_end import _main_markup, _summary_text
         state = dict(game.get("state") or {})
-        await message.reply(
-            _summary_text(game), parse_mode="HTML",
-            reply_markup=_main_markup(int(game["id"]), state.get("game_result"), bool((state.get("game_events") or {}).get("enabled"))),
-        )
+        await message.reply(_summary_text(game), parse_mode="HTML", reply_markup=_main_markup(int(game["id"]), state.get("game_result"), bool((state.get("game_events") or {}).get("enabled"))))
 
     async def _allowed(obj, gid=None, game=None):
         gid = int(gid or obj.message.chat.id)
@@ -125,13 +120,8 @@ def install(app: Any) -> bool:
             await callback.answer("ℹ️ این بازی دیگر فعال نیست.", show_alert=True)
             return
         state = dict(game.get("state") or {})
-        state.update({
-            "cancelled": True,
-            "cancelled_from_status": status,
-            "cancel_reason": "management_confirmed",
-            "cancelled_at": datetime.now(timezone.utc).isoformat(),
-        })
         now = datetime.now(timezone.utc)
+        state.update({"cancelled": True, "cancelled_from_status": status, "cancel_reason": "management_confirmed", "cancelled_at": now.isoformat()})
         try:
             ok = app.runtime.state.games.update_game(game["id"], status="cancelled", state=state, finished_at=now)
         except Exception:
@@ -164,11 +154,13 @@ def install(app: Any) -> bool:
     dp.register_callback_query_handler(cancel_confirmed, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["cancel_confirm"], state="*")
     dp.register_message_handler(finish_command, lambda m: (m.text or "").strip().casefold() in {x.casefold() for x in ALIASES}, content_types=types.ContentTypes.TEXT, state="*")
 
-    # Canonical text commands first; then security/management commands; then
-    # the finish/cancel lifecycle handlers. Callback handlers are kept ordered
-    # so mgmt:cancel is not consumed by the legacy GameManagement.cancel.
-    _move_front(_message_registry(dp), lambda fn: getattr(fn, "__self__", None).__class__.__name__ in {"TextCommands", "PlayerDiscipline"})
-    _move_front(_message_registry(dp), lambda fn: getattr(fn, "__name__", "") in {"command", "text_command", "finish_command"})
+    # Exact handler ownership: TextCommands handles general commands, the
+    # discipline object handles تذکر/کیک, and command_surface_v3 handles the
+    # security/management commands it owns. Avoid moving unrelated generic
+    # handlers named "command" ahead of these authorities.
+    _move_front(_message_registry(dp), lambda fn: getattr(getattr(fn, "__self__", None), "__class__", type(None)).__name__ == "TextCommands")
+    _move_front(_message_registry(dp), lambda fn: getattr(getattr(fn, "__self__", None), "__class__", type(None)).__name__ == "PlayerDiscipline")
+    _move_front(_message_registry(dp), lambda fn: getattr(fn, "__name__", "") == "finish_command")
     _move_front(_callback_registry(dp), lambda fn: getattr(fn, "__name__", "") in {"cancel_confirm", "cancel_confirmed", "finish_menu"})
 
     app._manual_end_game_installed = True
