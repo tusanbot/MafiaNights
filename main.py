@@ -15,6 +15,7 @@ from runtime.role_distribution import install as install_role_distribution
 from runtime.lobby_management_fix import install as install_lobby_management_fix
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.speaker_order_authority import install as install_speaker_order_authority
+from runtime.final_identity_authority import install as install_final_identity_authority
 from runtime.voting_end_game_patch import install as install_voting_end_game_patch
 from runtime.voting_runtime import install as install_voting_runtime
 from runtime.voting_timer_patch import install as install_voting_timer_patch
@@ -55,21 +56,22 @@ voting_serverless_status = install_voting_serverless_patch(app)
 voting_end_target_status = install_voting_end_target_patch(app)
 voting_postfix_status = install_voting_postfix(app)
 speaker_order_status = install_speaker_order_authority(app)
+final_identity_status = install_final_identity_authority(app)
 user_stats_status = install_user_stats(app)
 player_scoring_status = install_player_scoring(app)
 # This installer activates the final management surface, manual completion,
 # confirmed cancellation and final-message/history handlers on the real dispatcher.
 end_game_control_status = install_end_game_control(app)
 logging.info(
-    "PRODUCTION_RUNTIME_ACTIVE persistent=%s lifecycle=%s lobby=%s management=canonical game_end_control=%s role_distribution=%s lobby_management_fix=%s stable_round=%s speaker_order=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s",
-    persistence_status, game_lifecycle_status, lobby_status, end_game_control_status, role_distribution_status, lobby_management_fix_status, stable_round_status, speaker_order_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status,
+    "PRODUCTION_RUNTIME_ACTIVE persistent=%s lifecycle=%s lobby=%s management=canonical game_end_control=%s role_distribution=%s lobby_management_fix=%s stable_round=%s speaker_order=%s final_identity=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s",
+    persistence_status, game_lifecycle_status, lobby_status, end_game_control_status, role_distribution_status, lobby_management_fix_status, stable_round_status, speaker_order_status, final_identity_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status,
 )
 
 
 async def on_startup(dp):
     logging.info(
-        "MafiaNights production startup; persistence=%s lifecycle=%s lobby=%s management=canonical game_end_control=%s role_distribution=%s lobby_management_fix=%s stable_round=%s speaker_order=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s",
-        persistence_status, game_lifecycle_status, lobby_status, end_game_control_status, role_distribution_status, lobby_management_fix_status, stable_round_status, speaker_order_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status,
+        "MafiaNights production startup; persistence=%s lifecycle=%s lobby=%s management=canonical game_end_control=%s role_distribution=%s lobby_management_fix=%s stable_round=%s speaker_order=%s final_identity=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s",
+        persistence_status, game_lifecycle_status, lobby_status, end_game_control_status, role_distribution_status, lobby_management_fix_status, stable_round_status, speaker_order_status, final_identity_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status,
     )
     await app.startup()
     try:
