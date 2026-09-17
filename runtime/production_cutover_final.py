@@ -86,28 +86,26 @@ def _install_final_management_panel(app: Any) -> None:
     if management is None or getattr(app, "_management_panel_cutover", False): return
     app._management_panel_cutover = True
     def panel(game_id):
-        gid = int(getattr(app, "group_chat_id", 0) or 0)
-        game = management._game(gid) or {}
+        game = management.app.runtime.state.games.get_game(game_id) or {}
         status = str(game.get("status") or "lobby")
         items = [
             ("🔢 شماره بازی", "event"), ("📝 تغییر سناریو", "scenario"), ("🗑 حذف بازیکن", "remove"),
             ("🎟 لغو رزرو", "unreserve"), ("🔄 جایگزین بازیکن", "replace"), ("✅ حاضری", "attendance"),
             ("🎂 تولد بازیکن", "birthday"), ("⚔ وضعیت چالش", "challenge"), ("⏭ مدیریت نکست", "next"),
-            ("🚫 لغو بازی", "cancel"),\ ("ℹ️ اطلاعات بازی", "info"), ("🦵 کیک از بازی", "kick"),
+            ("🚫 لغو بازی", "cancel"), ("ℹ️ اطلاعات بازی", "info"), ("🦵 کیک از بازی", "kick"),
             ("⚠️ تذکر بازیکن", "warning"),
         ]
-        if status == "lobby": items.append(("⬅️ بازگشت به لابی", "back_lobby"))
-        else: items.append(("⬅️ بازگشت", "back_lobby"))
-        kb = InlineKeyboardMarkup(row_width=3)
-        for i in range(0, len(items), 3): kb.row(*(InlineKeyboardButton(t, callback_data=f"mgmt:{int(game_id)}:{a}") for t,a in items[i:i+3]))
+        items.append(("⬅️ بازگشت به لابی" if status == "lobby" else "⬅️ بازگشت", "back_lobby"))
+        kb=InlineKeyboardMarkup(row_width=3)
+        for i in range(0,len(items),3): kb.row(*(InlineKeyboardButton(t,callback_data=f"mgmt:{int(game_id)}:{a}") for t,a in items[i:i+3]))
         return kb
-    management.panel = panel
-    logging.info("FINAL MANAGEMENT PANEL active: refresh/close removed; back_lobby retained")
+    management.panel=panel
+    logging.info("FINAL MANAGEMENT PANEL active: refresh=removed close=removed back_lobby=active")
 
 
 def _finalize(app: Any) -> None:
     global _INSTALLED
-    if app is None or getattr(app, "_production_cutover_final", False): return
+    if app is None or getattr(app,"_production_cutover_final",False): return
     app._production_cutover_final=True
     _install_final_management_panel(app)
     from runtime.final_identity_authority import install as install_identity; install_identity(app)
