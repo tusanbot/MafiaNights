@@ -13,6 +13,7 @@ from runtime.management_navigation import install as install_management_navigati
 from runtime.lobby import install as install_lobby
 from runtime.role_distribution import install as install_role_distribution
 from runtime.lobby_management_fix import install as install_lobby_management_fix
+from runtime.lobby_final_patch import install as install_lobby_final_patch
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.speaker_order_authority import install as install_speaker_order_authority
 from runtime.final_identity_authority import install as install_final_identity_authority
@@ -49,6 +50,7 @@ lobby_status = install_lobby(app)
 role_distribution_status = install_role_distribution(app)
 app._canonical_distribute_roles = app._role_distribution_handler
 lobby_management_fix_status = install_lobby_management_fix(app, management)
+lobby_final_status = install_lobby_final_patch(app, management)
 stable_round_status = install_stable_round_engine(app)
 voting_end_game_status = install_voting_end_game_patch(app)
 voting_runtime_status = install_voting_runtime(app)
@@ -84,7 +86,7 @@ def _activate_canonical_management_aliases() -> None:
 _activate_canonical_management_aliases()
 production_consistency_status = install_production_consistency(app)
 dual_winner_status = install_dual_winner_support(app)
-logging.info("PRODUCTION_RUNTIME_ACTIVE management=canonical consistency=%s dual_winner=%s", production_consistency_status, dual_winner_status)
+logging.info("PRODUCTION_RUNTIME_ACTIVE management=canonical consistency=%s dual_winner=%s lobby_final=%s", production_consistency_status, dual_winner_status, lobby_final_status)
 
 
 async def on_startup(dp):
