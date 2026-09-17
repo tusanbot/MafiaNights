@@ -146,7 +146,15 @@ def install(main):
         gid = int(c.message.chat.id); uid = int(str(c.data).split(":",1)[1])
         admins = {int(a.user.id) for a in await main.bot.get_chat_administrators(gid)}
         if uid not in admins: await c.answer("❌ گرداننده باید مدیر گروه باشد.",show_alert=True); return
+        try:
+            member = await main.bot.get_chat_member(gid, uid)
+            moderator_name = main.display_name(uid, member.user.full_name)
+        except Exception:
+            moderator_name = main.display_name(uid, None) or str(uid)
         main.runtime.lobby.set_moderator(gid,uid); main.moderator_id=uid; main.group_chat_id=gid; main.lobby_active=True; main.game_running=False; main.round_active=False
+        g = game(gid)
+        if g:
+            s = state(g); s["moderator_name"] = str(moderator_name); save(g, moderator_name=str(moderator_name))
         await render(c); await c.answer("✅ لابی نهایی فعال شد")
 
     async def toggle(c):
