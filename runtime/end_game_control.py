@@ -1,8 +1,7 @@
 """Production game-end and command entrypoint.
 
-The production webhook runs through player_runtime_entry/main1. This module
-bridges the newer game-end and command surfaces into that real dispatcher
-without replacing the desktop lobby implementation.
+This module is the final production bridge for manual completion, history,
+confirmed cancellation and the canonical management surface.
 """
 from __future__ import annotations
 
@@ -52,11 +51,18 @@ def _clear_runtime_flags(app: Any) -> None:
     app._stable_day_active = False
     app._stable_day_ended = False
     app._stable_phase = "normal"
-    for owner, attr in ((getattr(app, "ui", None), "turn_timer_task"), (getattr(app, "ui", None), "voting_timer_task"), (getattr(app, "ui", None), "day_timer_task"), (app, "_voting_task")):
+    for owner, attr in (
+        (getattr(app, "ui", None), "turn_timer_task"),
+        (getattr(app, "ui", None), "voting_timer_task"),
+        (getattr(app, "ui", None), "day_timer_task"),
+        (app, "_voting_task"),
+    ):
         task = getattr(owner, attr, None) if owner is not None else None
         if task is not None and hasattr(task, "done") and not task.done():
-            try: task.cancel()
-            except Exception: pass
+            try:
+                task.cancel()
+            except Exception:
+                pass
 
 
 def install(app: Any) -> bool:
@@ -159,7 +165,12 @@ def install(app: Any) -> bool:
             return
         state = dict(game.get("state") or {})
         now = datetime.now(timezone.utc)
-        state.update({"cancelled": True, "cancelled_from_status": status, "cancel_reason": "management_confirmed", "cancelled_at": now.isoformat()})
+        state.update({
+            "cancelled": True,
+            "cancelled_from_status": status,
+            "cancel_reason": "management_confirmed",
+            "cancelled_at": now.isoformat(),
+        })
         try:
             ok = app.runtime.state.games.update_game(game["id"], status="cancelled", state=state, finished_at=now)
         except Exception:
@@ -172,15 +183,49 @@ def install(app: Any) -> bool:
         lid = state.get("lobby_message_id") or state.get("control_message_id")
         if lid:
             try:
-                await app.bot.edit_message_text("🚫 <b>این بازی لغو شد.</b>\n\nبازی دیگر فعال نیست و می‌توانید بازی جدید را شروع کنید.", gid, int(lid), parse_mode="HTML", reply_markup=None)
-            except Exception: logging.info("cancelled game message edit failed game=%s", game.get("id"))
-        await callback.message.edit_text("🚫 <b>بازی لغو شد.</b>\n\nبازی جدید اکنون قابل ایجاد است.", parse_mode="HTML")
+                await app.bot.edit_message_text(
+                    "🚫 <b>این بازی لغو شد.</b>\n\nبازی دیگر فعال نیست و می‌توانید بازی جدید را شروع کنید.",
+                    gid,
+                    int(lid),
+                    parse_mode="HTML",
+                    reply_markup=None,
+                )
+            except Exception:
+                logging.info("cancelled game message edit failed game=%s", game.get("id"))
+        try:
+            await callback.message.edit_text(
+                "🚫 <b>بازی لغو شد.</b>\n\nبازی جدید اکنون قابل ایجاد است.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
         await callback.answer("🚫 بازی با موفقیت لغو شد.")
 
     dp = app.dp
-    dp.register_callback_query_handler(cancel_confirm, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["cancel"], state="*")
-    dp.register_callback_query_handler(cancel_confirmed, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["cancel_confirm"], state="*")
-    dp.register_message_handler(finish_command, lambda m: (m.text or "").strip().casefold() in {x.casefold() for x in ALIASES}, content_types=types.ContentTypes.TEXT, state="*")
+    # Both the canonical management panel and the canonical lobby route feed
+    # the same two-step cancellation flow.
+    dp.register_callback_query_handler(
+        cancel_confirm,
+        lambda c: (
+            str(c.data or "").startswith("mgmt:")
+            and str(c.data or "").split(":")[2:3] == ["cancel"]
+        ) or (
+            str(c.data or "").startswith("lobby:")
+            and str(c.data or "").endswith(":cancel")
+        ),
+        state="*",
+    )
+    dp.register_callback_query_handler(
+        cancel_confirmed,
+        lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["cancel_confirm"],
+        state="*",
+    )
+    dp.register_message_handler(
+        finish_command,
+        lambda m: (m.text or "").strip().casefold() in {x.casefold() for x in ALIASES},
+        content_types=types.ContentTypes.TEXT,
+        state="*",
+    )
 
     _move_front(_message_registry(dp), lambda fn: getattr(getattr(fn, "__self__", None), "__class__", type(None)).__name__ == "TextCommands")
     _move_front(_message_registry(dp), lambda fn: getattr(getattr(fn, "__self__", None), "__class__", type(None)).__name__ == "PlayerDiscipline")
@@ -188,5 +233,5 @@ def install(app: Any) -> bool:
     _move_front(_callback_registry(dp), lambda fn: getattr(fn, "__name__", "") in {"cancel_confirm", "cancel_confirmed", "finish_menu"})
 
     app._manual_end_game_installed = True
-    logging.info("MANUAL_END_GAME installed: finish/archive + confirmed cancel + text command surfaces + final management + result guard")
+    logging.info("MANUAL_END_GAME installed: final management + confirmed cancellation + finish/archive/history")
     return True
