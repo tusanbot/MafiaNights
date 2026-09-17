@@ -31,6 +31,24 @@ def _find(registry, name):
     return None, None
 
 
+def _hydrate_persisted_controls(main):
+    """Load management selections from DB before a new day starts.
+
+    Vercel may recreate the Python process between Telegram updates, so the
+    in-memory sets used by StableRoundEngine cannot be the only source.
+    """
+    try:
+        gid = int(getattr(main, "group_chat_id", 0) or 0)
+        game = main.runtime.state.active_game(gid)
+        if not game:
+            return
+        state = dict(game.get("state") or {})
+        main._gm_muted_next_round = set(int(x) for x in (state.get("muted_next_round_seats") or []))
+        main._gm_extra_next_round = set(int(x) for x in (state.get("extra_turn_seats") or []))
+    except Exception:
+        logging.exception("stable round policy: persisted management controls could not be loaded")
+
+
 def install(main):
     if getattr(main, "_stable_round_policy_installed", False):
         return False
@@ -47,6 +65,8 @@ def install(main):
 
     async def start_round_with_policy(callback):
         _ensure_state(main)
+        main.group_chat_id = int(callback.message.chat.id)
+        _hydrate_persisted_controls(main)
         if (
             callback.message
             and callback.message.chat.type in {"group", "supergroup"}
@@ -84,8 +104,6 @@ def install(main):
     challenge_item.handler = challenge_request_with_policy
     main._stable_round_policy_installed = True
 
-    # Voting is attached after the stable engine has registered its authoritative
-    # DAY-end function. It does not introduce another NEXT/round engine.
     try:
         from runtime.voting_runtime import install as install_voting_runtime
         install_voting_runtime(main)
@@ -93,5 +111,5 @@ def install(main):
         logging.exception("stable round policy: failed to install voting runtime")
         raise
 
-    logging.info("Stable round policy installed: pending mute -> active day state; muted challenge blocked")
+    logging.info("Stable round policy installed: persisted mute/extra controls + day policy")
     return True
