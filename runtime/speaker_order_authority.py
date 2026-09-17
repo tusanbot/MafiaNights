@@ -56,52 +56,88 @@ def _persist(main, seat, order):
         logging.exception("speaker order persistence failed")
 
 
+def _candidate(name: str) -> bool:
+    # Cover both the old speaker_auto/manual flow and the newer head selector.
+    # The exact selected-seat callback may have a legacy function name, so do
+    # not depend on one historical function name only.
+    return (
+        name in {"speaker_auto", "speaker_manual", "head_set_handler", "set_head", "head_pick", "speaker_select", "select_speaker"}
+        or "speaker" in name
+        or "head_pick" in name
+    )
+
+
+def _selected_from_callback(callback):
+    data = str(getattr(callback, "data", "") or "")
+    parts = data.split(":")
+    # Canonical head picker uses ...:head_pick:<seat>.
+    if "head_pick" in parts:
+        try:
+            return int(parts[-1])
+        except Exception:
+            pass
+    # Legacy/manual selectors commonly encode the seat as the last numeric
+    # callback segment. Only inspect callbacks that are clearly speaker/head
+    # related to avoid stealing unrelated numeric callbacks.
+    lowered = data.lower()
+    if any(token in lowered for token in ("speaker", "head")):
+        try:
+            return int(parts[-1])
+        except Exception:
+            return None
+    return None
+
+
+def _apply_selected(main, callback, seat=None):
+    if seat is None:
+        seat = getattr(main, "current_speaker", None)
+    if seat is None:
+        seat = getattr(main, "_canonical_speaker_seat", None)
+    if seat is None:
+        try:
+            game = main.runtime.state.active_game(int(callback.message.chat.id))
+            seat = (game or {}).get("state", {}).get("head_seat")
+        except Exception:
+            seat = None
+    if seat is None:
+        seat = _selected_from_callback(callback)
+    if seat is None:
+        return
+    seat = int(seat)
+    order = _active_order(main, seat)
+    if not order:
+        return
+    main.current_speaker = seat
+    main._canonical_speaker_seat = seat
+    main.turn_order = order
+    main.current_turn_index = 0
+    main._stable_normal_order = list(order)
+    main._gm_normal_order = list(order)
+    _persist(main, seat, order)
+
+
 def install(main):
     if getattr(main, "_speaker_order_authority", False):
         return False
     reg = _registry(main.dp)
     main._speaker_order_authority = True
 
-    # The production head selector is named set_head. Legacy speaker selectors
-    # are kept supported, but all of them now feed the same durable turn_order.
+    # Wrap every known speaker/head selector, including the manual selector.
+    # Previously speaker_manual was omitted, so its visual list was correct but
+    # the actual round engine reconstructed the order from seat numbers.
     for item in list(reg):
         fn = _handler(item)
         name = getattr(fn, "__name__", "")
-        if name not in {"speaker_auto", "head_set_handler", "set_head"} or getattr(fn, "_speaker_authority_wrapped", False):
+        if not _candidate(name) or getattr(fn, "_speaker_authority_wrapped", False):
             continue
         original = fn
 
         async def wrapped(callback, _original=original):
             result = await _original(callback)
-            seat = getattr(main, "current_speaker", None)
-            if seat is None:
-                seat = getattr(main, "_canonical_speaker_seat", None)
-            if seat is None:
-                try:
-                    game = main.runtime.state.active_game(int(callback.message.chat.id))
-                    seat = (game or {}).get("state", {}).get("head_seat")
-                except Exception:
-                    seat = None
-            if seat is None:
-                data = str(callback.data or "")
-                if ":head_pick:" in data:
-                    try:
-                        seat = int(data.rsplit(":", 1)[1])
-                    except Exception:
-                        seat = None
-            if seat is not None:
-                try:
-                    seat = int(seat)
-                    main._canonical_speaker_seat = seat
-                    order = _active_order(main, seat)
-                    if order:
-                        main.turn_order = order
-                        main.current_turn_index = 0
-                        main._stable_normal_order = list(order)
-                        main._gm_normal_order = list(order)
-                        _persist(main, seat, order)
-                except Exception:
-                    logging.exception("failed to apply selected speaker order")
+            try:
+                _apply_selected(main, callback)
+            except Exception:
+                logging.exception("failed to apply selected speaker order")
             return result
 
         wrapped.__name__ = name
