@@ -6,9 +6,14 @@ runtime authorities without duplicating another UI implementation.
 """
 from __future__ import annotations
 
+import html
 import logging
 import sys
+from functools import wraps
 from typing import Any, Callable
+
+from aiogram.dispatcher.handler import CancelHandler
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 _INSTALLED = False
@@ -20,12 +25,7 @@ def _production_app() -> Any | None:
 
 
 def _protect_legacy_management_assignment() -> None:
-    """Do not let player_runtime_entry replace the final management panel.
-
-    Its old compatibility surface is still executed for other handlers, but
-    once the canonical final surface is installed, its later ``panel = ...``
-    assignment must be ignored.
-    """
+    """Do not let player_runtime_entry replace the final management panel."""
     from runtime.game_management import GameManagement
 
     if getattr(GameManagement, "_production_panel_assignment_guard", False):
@@ -45,6 +45,127 @@ def _protect_legacy_management_assignment() -> None:
     GameManagement._production_panel_assignment_guard = True
 
 
+def _install_lobby_attendance_fix(app: Any) -> None:
+    """Make the lobby's ready state render from the just-written state.
+
+    The old handler saved ``ready_players`` and then called ``attendance()``
+    again.  In the persistent production runtime that second game lookup can
+    return a cached game snapshot, so the freshly selected player is rendered
+    as white again even though the database write succeeded.  Render directly
+    from the updated player set instead.
+    """
+    if getattr(app, "_production_attendance_fix", False):
+        return
+
+    registry = getattr(getattr(app.dp, "callback_query_handlers", None), "handlers", None)
+    if registry is None:
+        logging.warning("PRODUCTION ATTENDANCE FIX: callback registry unavailable")
+        return
+
+    target = None
+    for item in registry:
+        handler = getattr(item, "handler", None) or getattr(item, "callback", None)
+        if handler is None:
+            continue
+        if getattr(handler, "__module__", "") != "runtime.lobby_ui_final":
+            continue
+        if getattr(handler, "__name__", "") == "ready":
+            target = item
+            break
+
+    if target is None:
+        logging.warning("PRODUCTION ATTENDANCE FIX: lobby ready handler not found")
+        return
+
+    original = getattr(target, "handler", None) or getattr(target, "callback", None)
+    if getattr(original, "_production_attendance_fix", False):
+        app._production_attendance_fix = True
+        return
+
+    def game(gid: int):
+        return app.runtime.state.active_game(int(gid))
+
+    def players(g: dict[str, Any]):
+        return app.runtime.state.games.list_players(g["id"]) if g else []
+
+    def state(g: dict[str, Any]) -> dict[str, Any]:
+        return dict((g or {}).get("state") or {})
+
+    def pname(p: dict[str, Any]) -> str:
+        return str(p.get("nickname") or p.get("first_name") or p.get("username") or p.get("player_id") or "👤")
+
+    def mention(uid: int, fallback: str | None = None) -> str:
+        try:
+            name = app.display_name(int(uid), fallback or app.players.get(int(uid)))
+        except Exception:
+            name = fallback or app.players.get(int(uid)) or str(uid)
+        return f'<a href="tg://user?id={int(uid)}"><b>{html.escape(str(name))}</b></a>'
+
+    async def fixed_ready(callback, _original=original):
+        gid = int(callback.message.chat.id)
+        uid = int(callback.from_user.id)
+        g = game(gid)
+        ps = players(g) if g else []
+        player = next((p for p in ps if int(p.get("player_id") or 0) == uid), None)
+
+        if not g or not player or player.get("seat") is None or str(player.get("status") or "active") in {"removed", "dead", "finished", "kicked"}:
+            await callback.answer("⛔ فقط بازیکنان داخل بازی می‌توانند آماده شوند.", show_alert=True)
+            raise CancelHandler()
+
+        current_state = state(g)
+        ready_players = {int(x) for x in (current_state.get("ready_players") or []) if str(x).lstrip("-").isdigit()}
+        ready_players.add(uid)
+
+        # Keep the in-memory object synchronized before rendering, while also
+        # persisting the exact list used below. This avoids a stale cache read.
+        current_state["ready_players"] = sorted(ready_players)
+        g["state"] = current_state
+        app.runtime.state.games.update_game(g["id"], state=current_state)
+
+        active = [
+            p for p in ps
+            if p.get("seat") is not None
+            and str(p.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
+        ]
+        active.sort(key=lambda p: int(p.get("seat") or 999))
+
+        lines = ["📢 <b>تگ لیست / حاضری</b>", ""]
+        for p in active:
+            pid = int(p["player_id"])
+            mark = "🟢" if pid in ready_players else "⚪️"
+            lines.append(f"{mark} {int(p['seat']):02d}. {mention(pid, pname(p))}")
+        lines.extend(["", " ".join(mention(int(p["player_id"]), pname(p)) for p in active)])
+
+        kb = InlineKeyboardMarkup(row_width=1).add(
+            InlineKeyboardButton("🙋‍♂️ آماده‌ام", callback_data="fl_ready"),
+            InlineKeyboardButton("⬅️ بازگشت به لابی", callback_data="fl_back"),
+        )
+
+        try:
+            await callback.message.edit_text(
+                "\n".join(lines),
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+        except Exception:
+            logging.exception("PRODUCTION ATTENDANCE FIX: message render failed game=%s", g.get("id"))
+            await callback.answer("❌ بروزرسانی حاضری انجام نشد.", show_alert=True)
+            raise CancelHandler()
+
+        await callback.answer("✅ آماده‌ام ثبت شد")
+        raise CancelHandler()
+
+    fixed_ready._production_attendance_fix = True
+    target.handler = fixed_ready
+    try:
+        registry.remove(target)
+    except ValueError:
+        pass
+    registry.insert(0, target)
+    app._production_attendance_fix = True
+    logging.info("PRODUCTION ATTENDANCE FIX active: ready state renders from fresh write")
+
+
 def _finalize(app: Any) -> None:
     global _INSTALLED
     if app is None:
@@ -53,24 +174,21 @@ def _finalize(app: Any) -> None:
         return
     app._production_cutover_final = True
 
-    # The role selector must persist the moderator's human-readable identity.
     from runtime.final_identity_authority import install as install_identity
     install_identity(app)
 
-    # Manual head/speaker selection is the sole source of the normal turn order.
     from runtime.speaker_order_authority import install as install_speaker
     install_speaker(app)
 
-    # Final result/history/events callbacks and moderator hydration must be the
-    # highest-priority handlers in the Vercel runtime as well.
     from runtime.production_consistency_loader import install as install_consistency
     install_consistency(app)
 
-    # Keep the final winner/scoring compatibility layer active on this entrypoint.
     from runtime.dual_winner_support import install as install_dual_winner
     install_dual_winner(app)
 
-    logging.info("PRODUCTION CUTOVER FINAL active: speaker=canonical management=canonical result=canonical")
+    _install_lobby_attendance_fix(app)
+
+    logging.info("PRODUCTION CUTOVER FINAL active: speaker=canonical management=canonical result=canonical attendance=canonical")
     _INSTALLED = True
 
 
@@ -98,13 +216,8 @@ def install() -> None:
         return
 
     _protect_legacy_management_assignment()
-
-    # game_info_security_v2 is the last production runtime installer before
-    # player_runtime_entry's legacy management compatibility block.
     _wrap_final_installer("runtime.game_info_security_v2")
 
-    # Ensure the final cutover also happens if that installer is skipped in a
-    # future production composition.
     app = _production_app()
     if app is not None and not getattr(app, "_production_cutover_final", False):
         logging.info("PRODUCTION CUTOVER FINAL hooks armed")
