@@ -170,9 +170,20 @@ def install(app: Any) -> bool:
             "cancelled_from_status": status,
             "cancel_reason": "management_confirmed",
             "cancelled_at": now.isoformat(),
+            "event_number_before_cancel": int(game.get("event_number") or 0),
         })
         try:
-            ok = app.runtime.state.games.update_game(game["id"], status="cancelled", state=state, finished_at=now)
+            # A cancelled game must not consume a game number. The repository's
+            # next_event_number() already ignores cancelled rows; clearing this
+            # field also prevents the cancelled record itself from displaying a
+            # misleading game number.
+            ok = app.runtime.state.games.update_game(
+                game["id"],
+                status="cancelled",
+                event_number=0,
+                state=state,
+                finished_at=now,
+            )
         except Exception:
             logging.exception("confirmed cancellation failed game=%s", game.get("id"))
             ok = False
@@ -202,8 +213,6 @@ def install(app: Any) -> bool:
         await callback.answer("🚫 بازی با موفقیت لغو شد.")
 
     dp = app.dp
-    # Both the canonical management panel and the canonical lobby route feed
-    # the same two-step cancellation flow.
     dp.register_callback_query_handler(
         cancel_confirm,
         lambda c: (
