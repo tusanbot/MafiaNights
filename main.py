@@ -26,6 +26,7 @@ from runtime.user_stats import install as install_user_stats
 from runtime.player_scoring import install as install_player_scoring
 from runtime.end_game_control import install as install_end_game_control
 from runtime.production_consistency_v4 import install as install_production_consistency
+from runtime.dual_winner_support import install as install_dual_winner_support
 
 TOKEN = os.getenv("API_TOKEN")
 if not TOKEN:
@@ -82,7 +83,8 @@ def _activate_canonical_management_aliases() -> None:
 
 _activate_canonical_management_aliases()
 production_consistency_status = install_production_consistency(app)
-logging.info("PRODUCTION_RUNTIME_ACTIVE management=canonical consistency=%s", production_consistency_status)
+dual_winner_status = install_dual_winner_support(app)
+logging.info("PRODUCTION_RUNTIME_ACTIVE management=canonical consistency=%s dual_winner=%s", production_consistency_status, dual_winner_status)
 
 
 async def on_startup(dp):
