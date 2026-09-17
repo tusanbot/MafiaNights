@@ -24,6 +24,7 @@ from runtime.game_management import GameManagement
 LEGACY_MODULES = {
     "runtime.game_management",
     "runtime.management_navigation",
+    "runtime.lobby",
     "runtime.lobby_final_patch",
     "runtime.lobby_management_fix",
 }
@@ -32,7 +33,7 @@ LEGACY_NAMES = {
     "moderator_pick", "remove", "remove_pick", "unreserve", "unreserve_pick",
     "replace", "replace_sub", "replace_target", "attendance", "attendance_pick",
     "attendance_ready", "birthday", "birthday_pick", "challenge", "challenge_toggle",
-    "next", "next_toggle", "cancel", "refresh", "close", "back_lobby",
+    "next", "next_toggle", "cancel", "refresh", "close", "back_lobby", "management",
 }
 
 
@@ -59,9 +60,7 @@ def _callback_module(fn: Any) -> str:
 
 def _remove_competing_handlers(app: Any) -> int:
     removed = 0
-    registries = [
-        getattr(getattr(app, "dp", None), "callback_query_handlers", None),
-    ]
+    registries = [getattr(getattr(app, "dp", None), "callback_query_handlers", None)]
     for registry_obj in registries:
         table = getattr(registry_obj, "handlers", None)
         if table is None:
@@ -76,6 +75,7 @@ def _remove_competing_handlers(app: Any) -> int:
                 continue
             kept.append(item)
         table[:] = kept
+    logging.info("CANONICAL_LOBBY_MANAGEMENT removed_competing_handlers=%d", removed)
     return removed
 
 
@@ -215,9 +215,7 @@ def install(app: Any, management: GameManagement) -> bool:
             icon = "🟢" if attendance_state.get(str(int(row["player_id"])), False) else "⚪️"
             lines.append(f"{icon} {int(row['seat']):02d}. {mention(row)}")
         lines += ["", "برای اعلام آمادگی، دکمه «آماده‌ام» را بزنید."]
-        kb = InlineKeyboardMarkup(row_width=1).add(
-            InlineKeyboardButton("آماده‌ام", callback_data=f"mgmt:{int(game['id'])}:attendance_ready")
-        )
+        kb = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("آماده‌ام", callback_data=f"mgmt:{int(game['id'])}:attendance_ready"))
         mid = state(game).get("attendance_message_id")
         try:
             if mid:
@@ -255,9 +253,7 @@ def install(app: Any, management: GameManagement) -> bool:
             icon = "🟢" if attendance_state.get(str(int(row["player_id"])), False) else "⚪️"
             lines.append(f"{icon} {int(row['seat']):02d}. {mention(row)}")
         lines += ["", "برای اعلام آمادگی، دکمه «آماده‌ام» را بزنید."]
-        kb = InlineKeyboardMarkup(row_width=1).add(
-            InlineKeyboardButton("آماده‌ام", callback_data=f"mgmt:{int(current['id'])}:attendance_ready")
-        )
+        kb = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("آماده‌ام", callback_data=f"mgmt:{int(current['id'])}:attendance_ready"))
         mid = state(current).get("attendance_message_id")
         if mid:
             try:
@@ -283,13 +279,10 @@ def install(app: Any, management: GameManagement) -> bool:
         game = data.get("game") or game
         rows = data.get("players") or app.runtime.state.games.list_players(int(game["id"]))
         cap = capacity(game, rows)
-        if cap <= 0:
-            logging.warning("canonical lobby: scenario has no capacity game=%s scenario=%s", game.get("id"), game.get("scenario_id"))
         active = sorted([r for r in rows if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed", "dead", "finished"}], key=lambda r: int(r.get("seat") or 999))
         waiting = [r for r in rows if r.get("seat") is None and str(r.get("status") or "waiting") in {"waiting", "substitute"}]
         occupied = {int(r["seat"]): r for r in active}
         sid = game.get("scenario_id")
-        scenario = None
         try:
             scenario = scenarios.get_by_id(int(sid)) if sid is not None else None
         except (TypeError, ValueError):
@@ -319,10 +312,7 @@ def install(app: Any, management: GameManagement) -> bool:
             row = occupied.get(seat)
             label = f"{seat:02d} {name(row)[:10]}" if row else f"{seat:02d} ⬜"
             kb.insert(InlineKeyboardButton(label, callback_data=f"lobby:{int(game['id'])}:seat:{seat}"))
-        kb.row(
-            InlineKeyboardButton("✅ ورود", callback_data=f"lobby:{int(game['id'])}:join"),
-            InlineKeyboardButton("❌ خروج", callback_data=f"lobby:{int(game['id'])}:leave"),
-        )
+        kb.row(InlineKeyboardButton("✅ ورود", callback_data=f"lobby:{int(game['id'])}:join"), InlineKeyboardButton("❌ خروج", callback_data=f"lobby:{int(game['id'])}:leave"))
         if cap > 0 and len(active) >= cap:
             kb.row(InlineKeyboardButton("🎟 رزرو / لغو رزرو", callback_data=f"lobby:{int(game['id'])}:reserve"))
             kb.row(InlineKeyboardButton("🎭 پخش نقش", callback_data=f"lobby:{int(game['id'])}:distribute"))
@@ -356,7 +346,6 @@ def install(app: Any, management: GameManagement) -> bool:
     app._render_production_lobby = render_lobby
     app._production_lobby_render = render_lobby
 
-    # Management callbacks.
     dp = app.dp
     dp.register_callback_query_handler(open_management, lambda c: str(c.data or "") in {"manage_game", "fp:panel"}, state="*")
     dp.register_callback_query_handler(open_management, lambda c: str(c.data or "").startswith("lobby:") and str(c.data or "").endswith(":management"), state="*")
@@ -364,8 +353,6 @@ def install(app: Any, management: GameManagement) -> bool:
     dp.register_callback_query_handler(back_lobby, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").endswith(":back_lobby"), state="*")
     dp.register_callback_query_handler(attendance_ready, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").endswith(":attendance_ready"), state="*")
 
-    # Delegate all remaining management actions to the canonical GameManagement
-    # implementation after removing its old competing registrations.
     delegated = {
         "event": management.event, "event_delta": management.event_delta, "event_input": management.event_input,
         "scenario": management.scenario, "scenario_pick": management.scenario_pick, "moderator_pick": management.moderator_pick,
@@ -376,16 +363,10 @@ def install(app: Any, management: GameManagement) -> bool:
         "next_toggle": management.next_toggle, "cancel": management.cancel,
     }
     for action, fn in delegated.items():
-        dp.register_callback_query_handler(
-            fn,
-            lambda c, a=action: (lambda p: len(p) >= 3 and p[0] == "mgmt" and p[2] == a)(str(c.data or "").split(":")),
-            state="*",
-        )
-    dp.register_callback_query_handler(attendance, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2] == "attendance", state="*")
+        dp.register_callback_query_handler(fn, lambda c, a=action: (lambda p: len(p) >= 3 and p[0] == "mgmt" and p[2] == a)(str(c.data or "").split(":")), state="*")
+    dp.register_callback_query_handler(attendance, lambda c: str(c.data or "").startswith("mgmt:") and len(str(c.data or "").split(":")) >= 3 and str(c.data or "").split(":")[2] == "attendance", state="*")
     dp.register_callback_query_handler(management.attendance_pick, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2] == "attendance_pick", state="*")
 
-    # Text commands: one source of truth for opening attendance and marking the
-    # sender ready. Both Persian spacing variants and slash forms are accepted.
     def normalize(value: str | None) -> str:
         text = (value or "").strip().replace("‌", " ")
         text = " ".join(text.split()).casefold()
@@ -411,18 +392,9 @@ def install(app: Any, management: GameManagement) -> bool:
             return
         await attendance_ready(_callback_like(message, int(game["id"]), "attendance_ready"))
 
-    dp.register_message_handler(
-        text_attendance,
-        lambda m: normalize(getattr(m, "text", None)) in {"حاضری", "حاضری لیست", "attendance"},
-        content_types=types.ContentTypes.TEXT,
-        state="*",
-    )
-    dp.register_message_handler(
-        text_ready,
-        lambda m: normalize(getattr(m, "text", None)) in {"آماده ام", "آماده‌ام", "آمادهام", "آماده", "ready"},
-        content_types=types.ContentTypes.TEXT,
-        state="*",
-    )
+    for command in ("حاضری", "/حاضری", "حاضری لیست", "attendance"):
+        dp.register_message_handler(text_attendance, lambda m, cmd=command: normalize(m.text) == normalize(cmd), state="*")
+    for command in ("آماده ام", "آماده‌ام", "آمادهام", "آماده", "ready"):
+        dp.register_message_handler(text_ready, lambda m, cmd=command: normalize(m.text) == normalize(cmd), state="*")
 
-    logging.info("CANONICAL_LOBBY_MANAGEMENT installed removed=%s", removed)
-    return True
+    return bool(removed >= 0)
