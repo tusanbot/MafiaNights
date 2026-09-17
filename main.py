@@ -22,7 +22,7 @@ from runtime.voting_end_target_patch import install as install_voting_end_target
 from runtime.voting_postfix import install as install_voting_postfix
 from runtime.user_stats import install as install_user_stats
 from runtime.player_scoring import install as install_player_scoring
-from runtime.mafia_progress_events import install as install_mafia_progress_events
+from runtime.progress_features_v3 import install as install_progress_features
 from runtime.end_game_control import install as install_end_game_control
 from runtime.production_consistency_loader import install as install_production_consistency
 from runtime.dual_winner_support import install as install_dual_winner_support
@@ -36,12 +36,12 @@ management=GameManagement(app);app.game_management=management
 install_game_lifecycle(app,management);management.install();install_lobby_ui(app);install_management_surface(app)
 install_role_distribution(app);app._canonical_distribute_roles=app._role_distribution_handler
 if getattr(app,"_render_final_lobby",None):app._render_production_lobby=app._render_final_lobby
-install_stable_round_engine(app);install_voting_end_game_patch(app);install_voting_runtime(app);install_voting_timer_patch(app);install_voting_serverless_patch(app);install_voting_end_target_patch(app);install_voting_postfix(app);install_speaker_order_authority(app);install_final_identity_authority(app);install_user_stats(app);install_player_scoring(app);install_mafia_progress_events(app)
+install_stable_round_engine(app);install_voting_end_game_patch(app);install_voting_runtime(app);install_voting_timer_patch(app);install_voting_serverless_patch(app);install_voting_end_target_patch(app);install_voting_postfix(app);install_speaker_order_authority(app);install_final_identity_authority(app);install_user_stats(app);install_player_scoring(app);install_progress_features(app)
 
 # Keep the group publication command ahead of the private FSM fallback.
 for _item in list(getattr(dp.message_handlers,"handlers",[])):
     _callback=getattr(_item,"callback",None) or getattr(_item,"handler",None)
-    if getattr(_callback,"__name__","")=="group_incidents":
+    if getattr(_callback,"__name__","")=="group_command":
         dp.message_handlers.handlers.remove(_item);dp.message_handlers.handlers.insert(0,_item);break
 
 install_end_game_control(app);install_production_consistency(app);install_dual_winner_support(app)
