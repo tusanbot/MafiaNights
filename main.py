@@ -25,6 +25,7 @@ from runtime.voting_postfix import install as install_voting_postfix
 from runtime.user_stats import install as install_user_stats
 from runtime.player_scoring import install as install_player_scoring
 from runtime.end_game_control import install as install_end_game_control
+from runtime.production_consistency_v3 import install as install_production_consistency
 
 TOKEN = os.getenv("API_TOKEN")
 if not TOKEN:
@@ -38,7 +39,6 @@ dp = app.dp
 
 persistence_status = install_persistence(app)
 management = GameManagement(app)
-# One canonical management owner. Downstream installers use this reference.
 app.game_management = management
 install_management_navigation(app, management)
 game_lifecycle_status = install_game_lifecycle(app, management)
@@ -59,17 +59,10 @@ speaker_order_status = install_speaker_order_authority(app)
 final_identity_status = install_final_identity_authority(app)
 user_stats_status = install_user_stats(app)
 player_scoring_status = install_player_scoring(app)
-# This installer activates the final management surface, manual completion,
-# confirmed cancellation and final-message/history handlers on the real dispatcher.
 end_game_control_status = install_end_game_control(app)
 
 
 def _activate_canonical_management_aliases() -> None:
-    """Remove the old feature-parity management panel from the dispatcher.
-
-    FeatureParityV4 remains active for scenario CRUD/challenge and other
-    non-panel features, but it no longer owns a second management UI.
-    """
     registry = getattr(getattr(app.dp, "callback_query_handlers", None), "handlers", [])
     legacy_management_methods = {
         "open_panel", "list_players", "resend_roles", "remove_player", "remove_confirm",
@@ -84,26 +77,16 @@ def _activate_canonical_management_aliases() -> None:
             continue
         kept.append(item)
     registry[:] = kept
-
-    app.dp.register_callback_query_handler(
-        management.open,
-        lambda c: str(c.data or "") in {"manage_game", "fp:panel"},
-        state="*",
-    )
+    app.dp.register_callback_query_handler(management.open, lambda c: str(c.data or "") in {"manage_game", "fp:panel"}, state="*")
 
 
 _activate_canonical_management_aliases()
-logging.info(
-    "PRODUCTION_RUNTIME_ACTIVE persistent=%s lifecycle=%s lobby=%s management=canonical game_end_control=%s role_distribution=%s lobby_management_fix=%s stable_round=%s speaker_order=%s final_identity=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s",
-    persistence_status, game_lifecycle_status, lobby_status, end_game_control_status, role_distribution_status, lobby_management_fix_status, stable_round_status, speaker_order_status, final_identity_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status,
-)
+production_consistency_status = install_production_consistency(app)
+logging.info("PRODUCTION_RUNTIME_ACTIVE management=canonical consistency=%s", production_consistency_status)
 
 
 async def on_startup(dp):
-    logging.info(
-        "MafiaNights production startup; persistence=%s lifecycle=%s lobby=%s management=canonical game_end_control=%s role_distribution=%s lobby_management_fix=%s stable_round=%s speaker_order=%s final_identity=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s",
-        persistence_status, game_lifecycle_status, lobby_status, end_game_control_status, role_distribution_status, lobby_management_fix_status, stable_round_status, speaker_order_status, final_identity_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status,
-    )
+    logging.info("MafiaNights production startup")
     await app.startup()
     try:
         allowed_group_id = int(os.getenv("ALLOWED_GROUP_ID", "-1002356353761"))
