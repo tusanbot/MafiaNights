@@ -62,6 +62,37 @@ player_scoring_status = install_player_scoring(app)
 # This installer activates the final management surface, manual completion,
 # confirmed cancellation and final-message/history handlers on the real dispatcher.
 end_game_control_status = install_end_game_control(app)
+
+
+def _activate_canonical_management_aliases() -> None:
+    """Remove the old feature-parity management panel from the dispatcher.
+
+    FeatureParityV4 remains active for scenario CRUD/challenge and other
+    non-panel features, but it no longer owns a second management UI.
+    """
+    registry = getattr(getattr(app.dp, "callback_query_handlers", None), "handlers", [])
+    legacy_management_methods = {
+        "open_panel", "list_players", "resend_roles", "remove_player", "remove_confirm",
+        "replace_player", "choose_replace_seat", "replace_confirm", "revive_player",
+        "revive_confirm", "moderator_menu", "set_moderator", "toggle_next", "cancel",
+    }
+    kept = []
+    for item in registry:
+        fn = getattr(item, "callback", None) or getattr(item, "handler", None)
+        owner = getattr(fn, "__self__", None)
+        if owner is getattr(app, "feature_parity", None) and getattr(fn, "__name__", "") in legacy_management_methods:
+            continue
+        kept.append(item)
+    registry[:] = kept
+
+    app.dp.register_callback_query_handler(
+        management.open,
+        lambda c: str(c.data or "") in {"manage_game", "fp:panel"},
+        state="*",
+    )
+
+
+_activate_canonical_management_aliases()
 logging.info(
     "PRODUCTION_RUNTIME_ACTIVE persistent=%s lifecycle=%s lobby=%s management=canonical game_end_control=%s role_distribution=%s lobby_management_fix=%s stable_round=%s speaker_order=%s final_identity=%s voting_end_game=%s voting=%s voting_timer=%s voting_serverless=%s voting_end_target=%s voting_postfix=%s user_stats=%s scoring=%s",
     persistence_status, game_lifecycle_status, lobby_status, end_game_control_status, role_distribution_status, lobby_management_fix_status, stable_round_status, speaker_order_status, final_identity_status, voting_end_game_status, voting_runtime_status, voting_timer_status, voting_serverless_status, voting_end_target_status, voting_postfix_status, user_stats_status, player_scoring_status,
