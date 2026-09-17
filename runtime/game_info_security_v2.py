@@ -88,8 +88,17 @@ def install(app):
         from runtime.speaker_order_authority import install as install_speaker_order_authority
         install_speaker_order_authority(app)
     except Exception:
-        # Speaker authority is a runtime enhancement; do not prevent the
-        # security/info surface from starting if it cannot be attached.
         import logging
         logging.exception("failed to install speaker order authority")
+
+    # IMPORTANT: this must run after every production installer above. Otherwise
+    # later legacy/compatibility installers can replace the canonical management
+    # and finished-game handlers again, which causes duplicate buttons and dead
+    # callbacks in production.
+    try:
+        from runtime.production_consistency_loader import install as install_production_consistency
+        install_production_consistency(app)
+    except Exception:
+        import logging
+        logging.exception("failed to install final production consistency runtime")
     return True
