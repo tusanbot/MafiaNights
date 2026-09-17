@@ -8,7 +8,6 @@ from main_refactored_v4 import MafiaApplicationV4
 from runtime.final_persistence import install as install_persistence
 from runtime.game_management import GameManagement
 from runtime.game_lifecycle import install as install_game_lifecycle
-from runtime.lobby import install as install_lobby_runtime
 from runtime.lobby_ui_final import install as install_lobby_ui
 from runtime.management_surface_final import install as install_management_surface
 from runtime.role_distribution import install as install_role_distribution
@@ -32,7 +31,6 @@ if not TOKEN:
     raise ValueError("API_TOKEN environment variable is not set!")
 
 logging.basicConfig(level=logging.INFO)
-
 app = MafiaApplicationV4(TOKEN)
 bot = app.bot
 dp = app.dp
@@ -42,10 +40,6 @@ management = GameManagement(app)
 app.game_management = management
 install_game_lifecycle(app, management)
 management.install()
-
-# runtime.lobby is the persistence/service layer used by the final lobby UI;
-# it is not installed as a competing callback surface.
-install_lobby_runtime(app)
 install_lobby_ui(app)
 install_management_surface(app)
 
