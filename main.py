@@ -22,7 +22,7 @@ from runtime.voting_end_target_patch import install as install_voting_end_target
 from runtime.voting_postfix import install as install_voting_postfix
 from runtime.user_stats import install as install_user_stats
 from runtime.player_scoring import install as install_player_scoring
-from runtime.progress_features_v3 import install as install_progress_features
+from runtime.progress_features_v4 import install as install_progress_features
 from runtime.end_game_control import install as install_end_game_control
 from runtime.production_consistency_loader import install as install_production_consistency
 from runtime.dual_winner_support import install as install_dual_winner_support
