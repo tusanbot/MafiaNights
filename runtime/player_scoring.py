@@ -77,20 +77,19 @@ def score_game(app: Any, game: dict[str, Any], rows: list[dict[str, Any]], winne
         delta = win_bonus + challenge_bonus - warning_total - kick_penalty
         result = "draw" if winner == "draw" else ("win" if side == winner else "loss")
         try:
-            repo.record(
-                uid,
-                int(game["id"]),
-                int(delta),
-                result,
-                str(row.get("role") or ""),
-                win_bonus=win_bonus,
-                challenge_bonus=challenge_bonus,
-                warning_penalty=warning_total,
-                kick_penalty=kick_penalty,
-            )
+            repo.record(uid, int(game["id"]), int(delta), result, str(row.get("role") or ""),
+                        win_bonus=win_bonus, challenge_bonus=challenge_bonus,
+                        warning_penalty=warning_total, kick_penalty=kick_penalty)
             recorded.add(key)
         except Exception:
             logging.exception("failed to record rating game=%s user=%s", game.get("id"), uid)
+
+        try:
+            engine = getattr(app, "_achievement_engine", None)
+            if engine is not None:
+                engine.sync_achievements(uid)
+        except Exception:
+            logging.exception("achievement sync failed game=%s user=%s", game.get("id"), uid)
 
     state["rating_recorded_players"] = sorted(recorded)
     app.runtime.state.games.update_game(game["id"], state=state)
@@ -153,11 +152,7 @@ def _install_final_score_hook(app: Any) -> None:
         except Exception:
             logging.exception("final score hook failed game=%s", data[1] if len(data) > 1 else "?")
 
-    dp.register_callback_query_handler(
-        finalized_game_end,
-        lambda c: str(c.data or "").startswith("game_end:"),
-        state="*",
-    )
+    dp.register_callback_query_handler(finalized_game_end, lambda c: str(c.data or "").startswith("game_end:"), state="*")
     game_end._final_score_hook_installed = True
 
 
@@ -166,11 +161,5 @@ def install(app: Any) -> bool:
     game_end._score_players = lambda app_, game_, rows_, winner_: score_game(app_, game_, rows_, winner_)
     _patch_final_report()
     _install_final_score_hook(app)
-    app.player_scoring = {
-        "base": BASE_SCORE,
-        "win": WIN_POINTS,
-        "challenge": CHALLENGE_POINTS,
-        "kick": KICK_PENALTY,
-        "warnings": WARNING_PENALTIES,
-    }
+    app.player_scoring = {"base": BASE_SCORE, "win": WIN_POINTS, "challenge": CHALLENGE_POINTS, "kick": KICK_PENALTY, "warnings": WARNING_PENALTIES}
     return True
