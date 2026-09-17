@@ -79,8 +79,11 @@ def install(app: Any) -> bool:
     app._command_authority_final = True
     dp = app.dp
 
+    async def cancel_text_handler(message: Any):
+        await _cancel_text(message, app)
+
     dp.register_message_handler(
-        lambda message: _cancel_text(message, app),
+        cancel_text_handler,
         lambda m: (m.text or "").strip().casefold().replace("‌", " ") in {
             "لغو بازی", "/لغو_بازی", "/cancel_game", "/cancelgame"
         },
@@ -90,20 +93,18 @@ def install(app: Any) -> bool:
 
     registry = getattr(getattr(dp, "message_handlers", None), "handlers", [])
 
-    # Final precedence. The first matching handler wins in aiogram 2, so the
-    # old v2 generic replies must not mask the final v3/end-game handlers.
-    _move_front(registry, lambda fn: _module_name(fn) == "runtime.end_game_control" and _name(fn) == "finish_command")
-    _move_front(registry, lambda fn: _module_name(fn) == "runtime.command_surface_v3" and _name(fn) == "command")
-    _move_front(registry, lambda fn: _module_name(fn) == "runtime.command_surface_v2" and _name(fn) == "command")
-    _move_front(registry, lambda fn: _module_name(fn) == "runtime.player_kick" and _name(fn) == "text_command")
-    _move_front(registry, lambda fn: _module_name(fn) == "runtime.text_commands" and _name(fn) == "command")
+    # _move_front is intentionally called in reverse desired priority because
+    # every call moves its selected handler(s) to index 0. Final order is:
+    # cancel, manual end, v3, v2, discipline, friendly, tag registry.
     _move_front(registry, lambda fn: _module_name(fn) == "commands" and _name(fn) == "handle_text_commands")
-
-    # The cancel handler created above is intentionally first among the exact
-    # cancel aliases; no legacy command owns these strings.
-    _move_front(registry, lambda fn: _module_name(fn) == "runtime.command_authority_final" and _name(fn) == "<lambda>")
+    _move_front(registry, lambda fn: _module_name(fn) == "runtime.text_commands" and _name(fn) == "command")
+    _move_front(registry, lambda fn: _module_name(fn) == "runtime.player_kick" and _name(fn) == "text_command")
+    _move_front(registry, lambda fn: _module_name(fn) == "runtime.command_surface_v2" and _name(fn) == "command")
+    _move_front(registry, lambda fn: _module_name(fn) == "runtime.command_surface_v3" and _name(fn) == "command")
+    _move_front(registry, lambda fn: _module_name(fn) == "runtime.end_game_control" and _name(fn) == "finish_command")
+    _move_front(registry, lambda fn: _module_name(fn) == "runtime.command_authority_final" and _name(fn) == "cancel_text_handler")
 
     logging.info(
-        "FINAL TEXT COMMAND AUTHORITY active: finish=v3 cancel=active v3=priority v2=compatibility discipline=active"
+        "FINAL TEXT COMMAND AUTHORITY active: cancel=1 finish=2 v3=3 v2=4 discipline=5 friendly=6 tags=7"
     )
     return True
