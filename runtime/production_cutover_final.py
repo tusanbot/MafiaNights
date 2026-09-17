@@ -100,7 +100,8 @@ def _install_final_management_panel(app: Any) -> None:
         for i in range(0,len(items),3): kb.row(*(InlineKeyboardButton(t,callback_data=f"mgmt:{int(game_id)}:{a}") for t,a in items[i:i+3]))
         return kb
     management.panel=panel
-    logging.info("FINAL MANAGEMENT PANEL active: refresh=removed close=removed back_lobby=active")
+    app._management_surface_final = True
+    logging.info("FINAL MANAGEMENT PANEL active: refresh=removed close=removed back_lobby=active locked=1")
 
 
 def _finalize(app: Any) -> None:
