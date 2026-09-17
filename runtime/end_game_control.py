@@ -66,10 +66,11 @@ def install(app: Any) -> bool:
     from runtime.game_end import install as install_game_end
     install_game_end(app)
 
-    # Final canonical management UI is installed after game_end has added its
-    # completion/history actions, so the panel is deduplicated in one place.
     from runtime.management_surface_final import install as install_management_surface_final
     install_management_surface_final(app)
+
+    from runtime.final_game_result_guard import install as install_final_game_result_guard
+    install_final_game_result_guard(app)
 
     games = app.runtime.state.games
     original_update_game = getattr(games, "update_game", None)
@@ -185,5 +186,5 @@ def install(app: Any) -> bool:
     _move_front(_callback_registry(dp), lambda fn: getattr(fn, "__name__", "") in {"cancel_confirm", "cancel_confirmed", "finish_menu"})
 
     app._manual_end_game_installed = True
-    logging.info("MANUAL_END_GAME installed: finish/archive + confirmed cancel + text command surfaces + final management")
+    logging.info("MANUAL_END_GAME installed: finish/archive + confirmed cancel + text command surfaces + final management + result guard")
     return True
