@@ -62,9 +62,6 @@ class GameRepository(DatabaseRepository):
                     return str(UUID(int=game_id))
                 except (ValueError, OverflowError):
                     pass
-            # Legacy installations can expose a numeric primary key as the
-            # lobby game id. Prefer the actual id before interpreting the same
-            # number as an event_number; these two values are not interchangeable.
             row = session.execute(
                 text("select id from public.mafia_games where id=:game_id limit 1"),
                 {"game_id": game_id},
@@ -92,8 +89,6 @@ class GameRepository(DatabaseRepository):
             numeric = int(raw)
         except (TypeError, ValueError, OverflowError):
             raise ValueError("بازی پیدا نشد")
-        # Same compatibility rule for numeric strings, which are common when
-        # GameId is passed through Telegram/runtime boundaries.
         row = session.execute(
             text("select id from public.mafia_games where id=:game_id limit 1"),
             {"game_id": numeric},
@@ -119,8 +114,19 @@ class GameRepository(DatabaseRepository):
             self._players_cache.pop(str(game_id), None)
 
     def next_event_number(self, group_chat_id):
+        # Cancelled lobbies are not completed games and must not consume an
+        # event number. Historical cancelled rows are therefore ignored too.
         with self.SessionLocal() as session:
-            value = session.execute(text("select coalesce(max(event_number),0)+1 from public.mafia_games where group_chat_id=:group_chat_id"), {"group_chat_id": int(group_chat_id)}).scalar_one()
+            value = session.execute(
+                text("""
+                    select coalesce(max(event_number),0)+1
+                    from public.mafia_games
+                    where group_chat_id=:group_chat_id
+                      and status <> 'cancelled'
+                      and coalesce(event_number, 0) > 0
+                """),
+                {"group_chat_id": int(group_chat_id)},
+            ).scalar_one()
             return int(value)
 
     def create_game(self, group_chat_id, moderator_id=None, scenario_id=None, event_number=None, state=None):
@@ -228,7 +234,7 @@ class GameRepository(DatabaseRepository):
     def clear_game_players(self, game_id):
         with self.SessionLocal() as session:
             resolved = self._resolve_id(session, game_id)
-            result = session.execute(text("delete from public.mafia_game_players where game_id=:game_id"), {"game_id": resolved})
+            result=session.execute(text("delete from public.mafia_game_players where game_id=:game_id"), {"game_id": resolved})
             session.commit()
         self._invalidate(game_id=game_id)
         return result.rowcount
