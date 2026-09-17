@@ -38,123 +38,102 @@ class FeatureRepository(DatabaseRepository):
             if r["result"]=="win": streak+=1; best=max(best,streak)
             else: streak=0
         return {"games":games,"wins":wins,"challenges":challenges,"clean_games":clean,"delta":delta,"avg_game_score":sum(scores)/games if games else 0,"best_win_streak":best}
-
     def achievement_points(self,uid):
-        with self.SessionLocal() as s: return int(s.execute(text("select coalesce(sum(reward_points),0) from public.mafia_achievement_rewards where player_id=:uid"),{"uid":int(uid)}).scalar_one() or 0)
-
+        with self.SessionLocal() as s:return int(s.execute(text("select coalesce(sum(reward_points),0) from public.mafia_achievement_rewards where player_id=:uid"),{"uid":int(uid)}).scalar_one() or 0)
     def sync_achievements(self,uid):
         stats=self._summary(uid); unlocked=[]
         with self.SessionLocal() as s:
             for a in ACHIEVEMENTS:
-                if stats.get(a["metric"],0)<a["target"] or (a.get("requires_games") and stats["games"]<a["requires_games"]): continue
-                if s.execute(text("select id from public.mafia_player_achievements where player_id=:uid and achievement_id=:aid"),{"uid":int(uid),"aid":a["id"]}).first(): unlocked.append(a); continue
+                if stats.get(a["metric"],0)<a["target"] or (a.get("requires_games") and stats["games"]<a["requires_games"]):continue
+                if s.execute(text("select id from public.mafia_player_achievements where player_id=:uid and achievement_id=:aid"),{"uid":int(uid),"aid":a["id"]}).first():unlocked.append(a);continue
                 s.execute(text("insert into public.mafia_player_achievements(player_id,achievement_id) values(:uid,:aid)"),{"uid":int(uid),"aid":a["id"]})
-                if a.get("reward"): s.execute(text("insert into public.mafia_achievement_rewards(player_id,achievement_id,reward_points) values(:uid,:aid,:reward) on conflict(player_id,achievement_id) do nothing"),{"uid":int(uid),"aid":a["id"],"reward":int(a["reward"])})
-                if a.get("tag_name"): s.execute(text("insert into public.mafia_player_tags(player_id,achievement_id,name,emoji) values(:uid,:aid,:name,:emoji) on conflict(player_id,achievement_id) do nothing"),{"uid":int(uid),"aid":a["id"],"name":a["tag_name"],"emoji":a["tag_emoji"]})
+                if a.get("reward"):s.execute(text("insert into public.mafia_achievement_rewards(player_id,achievement_id,reward_points) values(:uid,:aid,:reward) on conflict(player_id,achievement_id) do nothing"),{"uid":int(uid),"aid":a["id"],"reward":int(a["reward"])})
+                if a.get("tag_name"):s.execute(text("insert into public.mafia_player_tags(player_id,achievement_id,name,emoji) values(:uid,:aid,:name,:emoji) on conflict(player_id,achievement_id) do nothing"),{"uid":int(uid),"aid":a["id"],"name":a["tag_name"],"emoji":a["tag_emoji"]})
                 unlocked.append(a)
             s.commit()
         return unlocked
-
     def achievements(self,uid):
         stats=self._summary(uid)
-        with self.SessionLocal() as s: unlocked={r[0] for r in s.execute(text("select achievement_id from public.mafia_player_achievements where player_id=:uid"),{"uid":int(uid)}).all()}
+        with self.SessionLocal() as s:unlocked={r[0] for r in s.execute(text("select achievement_id from public.mafia_player_achievements where player_id=:uid"),{"uid":int(uid)}).all()}
         out=[]
         for a in ACHIEVEMENTS:
-            current=stats.get(a["metric"],0); pct=min(100,int(float(current)*100/a["target"])) if a["target"] else 100
-            if a.get("requires_games") and stats["games"]<a["requires_games"]: pct=min(pct,int(stats["games"]*100/a["requires_games"]))
+            current=stats.get(a["metric"],0);pct=min(100,int(float(current)*100/a["target"])) if a["target"] else 100
+            if a.get("requires_games") and stats["games"]<a["requires_games"]:pct=min(pct,int(stats["games"]*100/a["requires_games"]))
             out.append({**a,"current":current,"percent":pct,"unlocked":a["id"] in unlocked})
         return out
-
     def tags(self,uid):
-        with self.SessionLocal() as s: return [dict(r) for r in s.execute(text("select id,achievement_id,name,emoji,is_active from public.mafia_player_tags where player_id=:uid order by id"),{"uid":int(uid)}).mappings().all()]
-
+        with self.SessionLocal() as s:return [dict(r) for r in s.execute(text("select id,achievement_id,name,emoji,is_active from public.mafia_player_tags where player_id=:uid order by id"),{"uid":int(uid)}).mappings().all()]
     def toggle_tag(self,uid,tag_id):
         with self.SessionLocal() as s:
             row=s.execute(text("select is_active from public.mafia_player_tags where id=:id and player_id=:uid"),{"id":int(tag_id),"uid":int(uid)}).first()
-            if not row: return False
+            if not row:return False
             active=not bool(row[0])
-            if active: s.execute(text("update public.mafia_player_tags set is_active=false where player_id=:uid"),{"uid":int(uid)})
-            s.execute(text("update public.mafia_player_tags set is_active=:active where id=:id and player_id=:uid"),{"active":active,"id":int(tag_id),"uid":int(uid)}); s.commit(); return active
-
+            if active:s.execute(text("update public.mafia_player_tags set is_active=false where player_id=:uid"),{"uid":int(uid)})
+            s.execute(text("update public.mafia_player_tags set is_active=:active where id=:id and player_id=:uid"),{"active":active,"id":int(tag_id),"uid":int(uid)});s.commit();return active
     def active_tag(self,uid):
         with self.SessionLocal() as s:
-            row=s.execute(text("select emoji,name from public.mafia_player_tags where player_id=:uid and is_active=true order by id limit 1"),{"uid":int(uid)}).mappings().first(); return dict(row) if row else None
-
+            row=s.execute(text("select emoji,name from public.mafia_player_tags where player_id=:uid and is_active=true order by id limit 1"),{"uid":int(uid)}).mappings().first();return dict(row) if row else None
     def event_list(self,active_only=False):
         with self.SessionLocal() as s:
-            q="select * from public.mafia_events"+(" where status='active'" if active_only else "")+" order by starts_at nulls last,created_at desc"; return [dict(r) for r in s.execute(text(q)).mappings().all()]
-
+            q="select * from public.mafia_events"+(" where status='active'" if active_only else "")+" order by starts_at nulls last,created_at desc";return [dict(r) for r in s.execute(text(q)).mappings().all()]
     def event(self,eid):
         with self.SessionLocal() as s:
-            row=s.execute(text("select * from public.mafia_events where id=:id"),{"id":int(eid)}).mappings().first(); return dict(row) if row else None
-
+            row=s.execute(text("select * from public.mafia_events where id=:id"),{"id":int(eid)}).mappings().first();return dict(row) if row else None
     def event_players(self,eid):
-        with self.SessionLocal() as s: return [dict(r) for r in s.execute(text("select ep.*,p.nickname,p.first_name,p.username from public.mafia_event_players ep join public.mafia_players p on p.id=ep.player_id where ep.event_id=:eid order by ep.registered_at"),{"eid":int(eid)}).mappings().all()]
-
+        with self.SessionLocal() as s:return [dict(r) for r in s.execute(text("select ep.*,p.nickname,p.first_name,p.username from public.mafia_event_players ep join public.mafia_players p on p.id=ep.player_id where ep.event_id=:eid order by ep.registered_at"),{"eid":int(eid)}).mappings().all()]
     def event_stages(self,eid):
-        with self.SessionLocal() as s: return [dict(r) for r in s.execute(text("select * from public.mafia_event_stages where event_id=:eid order by stage_order,id"),{"eid":int(eid)}).mappings().all()]
-
+        with self.SessionLocal() as s:return [dict(r) for r in s.execute(text("select * from public.mafia_event_stages where event_id=:eid order by stage_order,id"),{"eid":int(eid)}).mappings().all()]
     def register_event_player(self,eid,uid):
         with self.SessionLocal() as s:
-            if s.execute(text("select status from public.mafia_events where id=:id"),{"id":int(eid)}).scalar_one_or_none()!="active": return False
-            s.execute(text("insert into public.mafia_event_players(event_id,player_id) values(:eid,:uid) on conflict(event_id,player_id) do update set status='registered',updated_at=now()"),{"eid":int(eid),"uid":int(uid)}); s.commit(); return True
-
+            if s.execute(text("select status from public.mafia_events where id=:id"),{"id":int(eid)}).scalar_one_or_none()!="active":return False
+            s.execute(text("insert into public.mafia_event_players(event_id,player_id) values(:eid,:uid) on conflict(event_id,player_id) do update set status='registered',updated_at=now()"),{"eid":int(eid),"uid":int(uid)});s.commit();return True
     def create_event(self,name,starts_at,created_by):
         with self.SessionLocal() as s:
-            row=s.execute(text("insert into public.mafia_events(name,starts_at,status,created_by) values(:name,cast(:starts_at as timestamp),'active',:uid) returning id"),{"name":name.strip(),"starts_at":starts_at,"uid":int(created_by)}).scalar_one(); s.commit(); return int(row)
-
+            row=s.execute(text("insert into public.mafia_events(name,starts_at,status,created_by) values(:name,cast(:starts_at as timestamp),'active',:uid) returning id"),{"name":name.strip(),"starts_at":starts_at,"uid":int(created_by)}).scalar_one();s.commit();return int(row)
     def update_event(self,eid,**values):
-        allowed={"name","starts_at","status","grouping_mode","description"}; values={k:v for k,v in values.items() if k in allowed}
+        allowed={"name","starts_at","status","grouping_mode","description"};values={k:v for k,v in values.items() if k in allowed}
         if not values:return
-        clauses=[]; params={"id":int(eid)}
-        for k,v in values.items(): clauses.append(f"{k}=:{k}"); params[k]=v
-        with self.SessionLocal() as s: s.execute(text(f"update public.mafia_events set {', '.join(clauses)},updated_at=now() where id=:id"),params); s.commit()
-
+        clauses=[];params={"id":int(eid)}
+        for k,v in values.items():clauses.append(f"{k}=:{k}");params[k]=v
+        with self.SessionLocal() as s:s.execute(text(f"update public.mafia_events set {', '.join(clauses)},updated_at=now() where id=:id"),params);s.commit()
     def create_stage(self,eid,name,kind):
         with self.SessionLocal() as s:
-            order=int(s.execute(text("select coalesce(max(stage_order),0)+1 from public.mafia_event_stages where event_id=:eid"),{"eid":int(eid)}).scalar_one()); row=s.execute(text("insert into public.mafia_event_stages(event_id,name,stage_type,stage_order) values(:eid,:name,:type,:ord) returning id"),{"eid":int(eid),"name":name,"type":kind,"ord":order}).scalar_one(); s.commit(); return int(row)
-
+            order=int(s.execute(text("select coalesce(max(stage_order),0)+1 from public.mafia_event_stages where event_id=:eid"),{"eid":int(eid)}).scalar_one());row=s.execute(text("insert into public.mafia_event_stages(event_id,name,stage_type,stage_order) values(:eid,:name,:type,:ord) returning id"),{"eid":int(eid),"name":name,"type":kind,"ord":order}).scalar_one();s.commit();return int(row)
     def stage_players(self,sid):
-        with self.SessionLocal() as s: return [dict(r) for r in s.execute(text("select esp.*,p.nickname,p.first_name,p.username from public.mafia_event_stage_players esp join public.mafia_players p on p.id=esp.player_id where esp.stage_id=:sid order by esp.group_no nulls first,p.id"),{"sid":int(sid)}).mappings().all()]
-
+        with self.SessionLocal() as s:return [dict(r) for r in s.execute(text("select esp.*,p.nickname,p.first_name,p.username from public.mafia_event_stage_players esp join public.mafia_players p on p.id=esp.player_id where esp.stage_id=:sid order by esp.group_no nulls first,p.id"),{"sid":int(sid)}).mappings().all()]
     def assign_group(self,sid,uid,group_no):
-        with self.SessionLocal() as s: s.execute(text("insert into public.mafia_event_stage_players(stage_id,player_id,group_no) values(:sid,:uid,:grp) on conflict(stage_id,player_id) do update set group_no=excluded.group_no,updated_at=now()"),{"sid":int(sid),"uid":int(uid),"grp":int(group_no)}); s.commit()
-
+        with self.SessionLocal() as s:s.execute(text("insert into public.mafia_event_stage_players(stage_id,player_id,group_no) values(:sid,:uid,:grp) on conflict(stage_id,player_id) do update set group_no=excluded.group_no,updated_at=now()"),{"sid":int(sid),"uid":int(uid),"grp":int(group_no)});s.commit()
     def assign_score(self,sid,uid,score):
-        with self.SessionLocal() as s: s.execute(text("insert into public.mafia_event_stage_players(stage_id,player_id,score) values(:sid,:uid,:score) on conflict(stage_id,player_id) do update set score=excluded.score,updated_at=now()"),{"sid":int(sid),"uid":int(uid),"score":int(score)}); s.commit()
-
+        with self.SessionLocal() as s:s.execute(text("insert into public.mafia_event_stage_players(stage_id,player_id,score) values(:sid,:uid,:score) on conflict(stage_id,player_id) do update set score=excluded.score,updated_at=now()"),{"sid":int(sid),"uid":int(uid),"score":int(score)});s.commit()
     def auto_group(self,sid,count):
         with self.SessionLocal() as s:
             rows=s.execute(text("select ep.player_id from public.mafia_event_players ep join public.mafia_event_stages es on es.event_id=ep.event_id where es.id=:sid and ep.status='registered' order by ep.registered_at,ep.player_id"),{"sid":int(sid)}).scalars().all()
-            for i,uid in enumerate(rows): s.execute(text("insert into public.mafia_event_stage_players(stage_id,player_id,group_no) values(:sid,:uid,:grp) on conflict(stage_id,player_id) do update set group_no=excluded.group_no,updated_at=now()"),{"sid":int(sid),"uid":int(uid),"grp":(i%max(1,int(count)))+1})
-            s.execute(text("update public.mafia_events set grouping_mode='auto',updated_at=now() where id=(select event_id from public.mafia_event_stages where id=:sid)"),{"sid":int(sid)}); s.commit()
-
+            for i,uid in enumerate(rows):s.execute(text("insert into public.mafia_event_stage_players(stage_id,player_id,group_no) values(:sid,:uid,:grp) on conflict(stage_id,player_id) do update set group_no=excluded.group_no,updated_at=now()"),{"sid":int(sid),"uid":int(uid),"grp":(i%max(1,int(count)))+1})
+            s.execute(text("update public.mafia_events set grouping_mode='auto',updated_at=now() where id=(select event_id from public.mafia_event_stages where id=:sid)"),{"sid":int(sid)});s.commit()
     def replace_player(self,eid,old_uid,new_uid):
         with self.SessionLocal() as s:
-            s.execute(text("update public.mafia_event_players set status='replaced',updated_at=now() where event_id=:eid and player_id=:old"),{"eid":int(eid),"old":int(old_uid)}); s.execute(text("insert into public.mafia_event_players(event_id,player_id,status,replaced_player_id) values(:eid,:new,'registered',:old) on conflict(event_id,player_id) do update set status='registered',replaced_player_id=:old,updated_at=now()"),{"eid":int(eid),"new":int(new_uid),"old":int(old_uid)}); s.execute(text("update public.mafia_event_stage_players set player_id=:new,status='active',updated_at=now() where player_id=:old and stage_id in (select id from public.mafia_event_stages where event_id=:eid)"),{"eid":int(eid),"old":int(old_uid),"new":int(new_uid)}); s.commit()
-
+            s.execute(text("update public.mafia_event_players set status='replaced',updated_at=now() where event_id=:eid and player_id=:old"),{"eid":int(eid),"old":int(old_uid)});s.execute(text("insert into public.mafia_event_players(event_id,player_id,status,replaced_player_id) values(:eid,:new,'registered',:old) on conflict(event_id,player_id) do update set status='registered',replaced_player_id=:old,updated_at=now()"),{"eid":int(eid),"new":int(new_uid),"old":int(old_uid)});s.execute(text("update public.mafia_event_stage_players set player_id=:new,status='active',updated_at=now() where player_id=:old and stage_id in (select id from public.mafia_event_stages where event_id=:eid)"),{"eid":int(eid),"old":int(old_uid),"new":int(new_uid)});s.commit()
     def incident(self,gid):
         with self.SessionLocal() as s:
-            row=s.execute(text("select * from public.mafia_game_incidents where game_id=:gid"),{"gid":str(gid)}).mappings().first(); return dict(row) if row else None
-
+            row=s.execute(text("select * from public.mafia_game_incidents where game_id=:gid"),{"gid":str(gid)}).mappings().first();return dict(row) if row else None
     def save_incident(self,gid,content,actor,finalized,edit=False):
         with self.SessionLocal() as s:
-            payload=json.dumps(content,ensure_ascii=False); row=s.execute(text("select id,version from public.mafia_game_incidents where game_id=:gid"),{"gid":str(gid)}).mappings().first()
+            payload=json.dumps(content,ensure_ascii=False);row=s.execute(text("select id,version from public.mafia_game_incidents where game_id=:gid"),{"gid":str(gid)}).mappings().first()
             if row:
                 version=int(row["version"])+(1 if edit else 0)
-                if edit: s.execute(text("insert into public.mafia_game_incident_history(incident_id,version,content,action,actor_id) values(:iid,:ver,cast(:content as jsonb),'edit',:actor)"),{"iid":row["id"],"ver":version,"content":payload,"actor":int(actor)})
+                if edit:s.execute(text("insert into public.mafia_game_incident_history(incident_id,version,content,action,actor_id) values(:iid,:ver,cast(:content as jsonb),'edit',:actor)"),{"iid":row["id"],"ver":version,"content":payload,"actor":int(actor)})
                 s.execute(text("update public.mafia_game_incidents set content=cast(:content as jsonb),version=:version,finalized=:finalized,updated_at=now() where id=:id"),{"content":payload,"version":version,"finalized":finalized,"id":row["id"]})
             else:
-                new=s.execute(text("insert into public.mafia_game_incidents(game_id,content,version,finalized,created_by) values(:gid,cast(:content as jsonb),1,:finalized,:actor) returning id"),{"gid":str(gid),"content":payload,"finalized":finalized,"actor":int(actor)}).scalar_one(); s.execute(text("insert into public.mafia_game_incident_history(incident_id,version,content,action,actor_id) values(:iid,1,cast(:content as jsonb),'create',:actor)"),{"iid":new,"content":payload,"actor":int(actor)})
+                new=s.execute(text("insert into public.mafia_game_incidents(game_id,content,version,finalized,created_by) values(:gid,cast(:content as jsonb),1,:finalized,:actor) returning id"),{"gid":str(gid),"content":payload,"finalized":finalized,"actor":int(actor)}).scalar_one();s.execute(text("insert into public.mafia_game_incident_history(incident_id,version,content,action,actor_id) values(:iid,1,cast(:content as jsonb),'create',:actor)"),{"iid":new,"content":payload,"actor":int(actor)})
             s.commit()
 
 class MafiaProgressEvents:
-    def __init__(self,app): self.app=app; self.repo=FeatureRepository(); self.ratings=RatingRepository(); app._achievement_engine=self.repo
-    def _is_private(self,obj): return bool(getattr(getattr(obj,"message",None),"chat",None) and obj.message.chat.type=="private")
+    def __init__(self,app):self.app=app;self.repo=FeatureRepository();self.ratings=RatingRepository();app._achievement_engine=self.repo
+    def _is_private(self,obj):return bool(getattr(getattr(obj,"message",None),"chat",None) and obj.message.chat.type=="private")
     async def _admin(self,callback):
-        if not self._is_private(callback): await callback.answer("⛔ این بخش فقط در گفت‌وگوی خصوصی در دسترس است.",show_alert=True); return False
+        if not self._is_private(callback):await callback.answer("⛔ این بخش فقط در گفت‌وگوی خصوصی در دسترس است.",show_alert=True);return False
         uid=int(callback.from_user.id)
-        if uid==int(getattr(self.app,"moderator_id",0) or 0): return True
+        if uid==int(getattr(self.app,"moderator_id",0) or 0):return True
         gid=getattr(self.app,"group_chat_id",None) or getattr(self.app,"ALLOWED_GROUP_ID",None) or int(os.getenv("ALLOWED_GROUP_ID","0") or 0)
         if not gid:return False
         try:return uid in {int(x.user.id) for x in await self.app.bot.get_chat_administrators(int(gid))}
@@ -220,7 +199,8 @@ class MafiaProgressEvents:
     async def event_remove(self,callback):
         if not await self._admin(callback):return
         parts=str(callback.data).split(":");eid,uid=int(parts[2]),int(parts[3])
-        with self.repo.SessionLocal() as s:s.execute(text("update public.mafia_event_players set status='withdrawn',updated_at=now() where event_id=:eid and player_id=:uid"),{"eid":eid,"uid":uid});s.execute(text("update public.mafia_event_stage_players set status='replaced',updated_at=now() where player_id=:uid and stage_id in (select id from public.mafia_event_stages where event_id=:eid)"),{"eid":eid,"uid":uid});s.commit()
+        with self.repo.SessionLocal() as s:
+            s.execute(text("update public.mafia_event_players set status='withdrawn',updated_at=now() where event_id=:eid and player_id=:uid"),{"eid":eid,"uid":uid});s.execute(text("update public.mafia_event_stage_players set status='replaced',updated_at=now() where player_id=:uid and stage_id in (select id from public.mafia_event_stages where event_id=:eid)"),{"eid":eid,"uid":uid});s.commit()
         await callback.answer("🗑 بازیکن از ثبت‌نام خارج شد.");await self.event_players(types.SimpleNamespace(from_user=callback.from_user,message=callback.message,data=f"mfeature:event_players:{eid}",answer=callback.answer))
     async def event_admin(self,callback):
         if not await self._admin(callback):await callback.answer("⛔ دسترسی ندارید.",show_alert=True);return
@@ -265,7 +245,7 @@ class MafiaProgressEvents:
         eid=int(str(callback.data).split(":")[-1]);self._set_state(callback.from_user.id,"event_edit_name",{"event_id":eid});await callback.message.answer("📝 نام جدید اونت را ارسال کنید.");await callback.answer()
     async def event_edit_time(self,callback):
         if not await self._admin(callback):return
-        eid=int(str(callback.data).split(":")[-1]);self._set_state(callback.from_user.id,"event_edit_time",{"event_id":eid});await callback.message.answer("🗓 زمان جدید را به صورت YYYY-MM-DD HH:MM ارسال کنید یا «بدون زمان". ");await callback.answer()
+        eid=int(str(callback.data).split(":")[-1]);self._set_state(callback.from_user.id,"event_edit_time",{"event_id":eid});await callback.message.answer("🗓 زمان جدید را به صورت YYYY-MM-DD HH:MM ارسال کنید یا «بدون زمان».");await callback.answer()
     async def event_replace(self,callback):
         if not await self._admin(callback):return
         eid=int(str(callback.data).split(":")[-1]);self._set_state(callback.from_user.id,"event_replace_old",{"event_id":eid});await callback.message.answer("🔄 شناسه عددی بازیکن فعلی را ارسال کنید.");await callback.answer()
