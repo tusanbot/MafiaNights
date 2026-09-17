@@ -1,15 +1,14 @@
 """Final production-runtime cutover for the Vercel Telegram entrypoint.
 
 The Vercel webhook uses ``player_runtime_entry`` (main1), while the polling
-entrypoint uses ``main.py``.  Keep the production webhook on the same final
-runtime authorities without duplicating another UI implementation.
+entrypoint uses ``main.py``. Keep the production webhook on the final runtime
+authorities without adding another competing UI implementation.
 """
 from __future__ import annotations
 
 import html
 import logging
 import sys
-from functools import wraps
 from typing import Any, Callable
 
 from aiogram.dispatcher.handler import CancelHandler
@@ -25,7 +24,7 @@ def _production_app() -> Any | None:
 
 
 def _protect_legacy_management_assignment() -> None:
-    """Do not let player_runtime_entry replace the final management panel."""
+    """Do not let a later legacy assignment replace the final management panel."""
     from runtime.game_management import GameManagement
 
     if getattr(GameManagement, "_production_panel_assignment_guard", False):
@@ -46,13 +45,12 @@ def _protect_legacy_management_assignment() -> None:
 
 
 def _install_lobby_attendance_fix(app: Any) -> None:
-    """Make the lobby's ready state render from the just-written state.
+    """Fix the lobby ready marker by rendering from the freshly written state.
 
-    The old handler saved ``ready_players`` and then called ``attendance()``
-    again.  In the persistent production runtime that second game lookup can
-    return a cached game snapshot, so the freshly selected player is rendered
-    as white again even though the database write succeeded.  Render directly
-    from the updated player set instead.
+    The old lobby handler saves ``ready_players`` and then performs another
+    ``active_game`` lookup. In the persistent runtime that lookup can return a
+    stale cached game, so the selected player remains white in the message.
+    This replacement renders directly from the exact set just persisted.
     """
     if getattr(app, "_production_attendance_fix", False):
         return
@@ -101,7 +99,7 @@ def _install_lobby_attendance_fix(app: Any) -> None:
             name = fallback or app.players.get(int(uid)) or str(uid)
         return f'<a href="tg://user?id={int(uid)}"><b>{html.escape(str(name))}</b></a>'
 
-    async def fixed_ready(callback, _original=original):
+    async def fixed_ready(callback):
         gid = int(callback.message.chat.id)
         uid = int(callback.from_user.id)
         g = game(gid)
@@ -113,12 +111,17 @@ def _install_lobby_attendance_fix(app: Any) -> None:
             raise CancelHandler()
 
         current_state = state(g)
-        ready_players = {int(x) for x in (current_state.get("ready_players") or []) if str(x).lstrip("-").isdigit()}
+        ready_players: set[int] = set()
+        for value in current_state.get("ready_players") or []:
+            try:
+                ready_players.add(int(value))
+            except (TypeError, ValueError):
+                continue
         ready_players.add(uid)
-
-        # Keep the in-memory object synchronized before rendering, while also
-        # persisting the exact list used below. This avoids a stale cache read.
         current_state["ready_players"] = sorted(ready_players)
+
+        # Synchronize the current object before editing Telegram, and persist
+        # exactly the same state used for the rendered marker.
         g["state"] = current_state
         app.runtime.state.games.update_game(g["id"], state=current_state)
 
@@ -142,11 +145,7 @@ def _install_lobby_attendance_fix(app: Any) -> None:
         )
 
         try:
-            await callback.message.edit_text(
-                "\n".join(lines),
-                parse_mode="HTML",
-                reply_markup=kb,
-            )
+            await callback.message.edit_text("\n".join(lines), parse_mode="HTML", reply_markup=kb)
         except Exception:
             logging.exception("PRODUCTION ATTENDANCE FIX: message render failed game=%s", g.get("id"))
             await callback.answer("❌ بروزرسانی حاضری انجام نشد.", show_alert=True)
@@ -168,9 +167,7 @@ def _install_lobby_attendance_fix(app: Any) -> None:
 
 def _finalize(app: Any) -> None:
     global _INSTALLED
-    if app is None:
-        return
-    if getattr(app, "_production_cutover_final", False):
+    if app is None or getattr(app, "_production_cutover_final", False):
         return
     app._production_cutover_final = True
 
@@ -211,13 +208,16 @@ def _wrap_final_installer(module_name: str, function_name: str = "install") -> N
 
 
 def install() -> None:
-    """Install hooks early; execute the final cutover after the last UI installer."""
+    """Install production hooks and finalize immediately after runtime assembly."""
     if _production_app() is None:
         return
 
     _protect_legacy_management_assignment()
     _wrap_final_installer("runtime.game_info_security_v2")
 
+    # This function is invoked after game_info_security_v2 has already run in
+    # the current entrypoint. Therefore the wrapper cannot be relied on here;
+    # finalize immediately so the attendance fix is actually installed.
     app = _production_app()
     if app is not None and not getattr(app, "_production_cutover_final", False):
-        logging.info("PRODUCTION CUTOVER FINAL hooks armed")
+        _finalize(app)
