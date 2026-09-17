@@ -61,6 +61,16 @@ install_final_identity_authority(app)
 install_user_stats(app)
 install_player_scoring(app)
 install_mafia_progress_events(app)
+
+# The progress module intentionally registers its private FSM handler first.
+# Keep the group publication command ahead of that private-state fallback.
+for _item in list(getattr(dp.message_handlers, "handlers", [])):
+    _callback = getattr(_item, "callback", None) or getattr(_item, "handler", None)
+    if getattr(_callback, "__name__", "") == "group_incidents":
+        dp.message_handlers.handlers.remove(_item)
+        dp.message_handlers.handlers.insert(0, _item)
+        break
+
 install_end_game_control(app)
 install_production_consistency(app)
 install_dual_winner_support(app)
