@@ -46,6 +46,13 @@ def _finalize(app: Any) -> None:
     install_lobby_seat(app)
     install_command_authority(app)
 
+    # production_consistency_v4 historically replaced management.panel with a
+    # compatibility surface. Re-assert the one canonical panel after every
+    # installer so duplicate/obsolete buttons cannot return.
+    canonical_panel = getattr(app, "_canonical_management_panel", None)
+    if canonical_panel is not None and getattr(app, "game_management", None) is not None:
+        app.game_management.panel = canonical_panel
+
     try:
         from runtime import production_consistency_loader, game_end
         if getattr(app, "_production_consistency_handler_priority", None) is not None:
