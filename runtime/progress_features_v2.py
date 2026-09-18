@@ -90,14 +90,14 @@ class ProgressFeaturesV2:
 
     # ---------- keyboards ----------
 
-    def _back(self, data="progress:home"):
+    def _back(self, data="final:start"):
         return InlineKeyboardButton("⬅️ بازگشت", callback_data=data)
 
     def achievements_kb(self):
         kb = InlineKeyboardMarkup(row_width=1)
         kb.add(InlineKeyboardButton("📖 توضیح دستاوردها", callback_data="progress:achievement_info"))
         kb.add(InlineKeyboardButton("🏷 تگ‌های من", callback_data="progress:tags"))
-        kb.add(self._back("progress:profile"))
+        kb.add(self._back("up:menu"))
         return kb
 
     def events_kb(self, events):
@@ -431,7 +431,7 @@ class ProgressFeaturesV2:
             ))
         kb.add(InlineKeyboardButton("📖 مشاهده اتفاقات", callback_data="progress:incident_view"))
         kb.add(InlineKeyboardButton("📚 تاریخچه اتفاقات", callback_data="progress:incident_history"))
-        kb.add(self._back("progress:management"))
+        kb.add(self._back("manage_game"))
         await c.message.edit_text("📝 <b>اتفاقات بازی</b>\n\nبازی را انتخاب کنید:", parse_mode="HTML", reply_markup=kb)
         await c.answer()
 
