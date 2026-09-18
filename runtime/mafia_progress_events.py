@@ -32,8 +32,8 @@ ACHIEVEMENTS = (
 class FeatureRepository(DatabaseRepository):
     def _summary(self, uid):
         with self.SessionLocal() as s:
-            rows=s.execute(text("select r.score,r.base_score,r.result,r.warning_penalty,r.challenge_bonus from public.mafia_ratings r where r.user_id=:uid order by r.created_at asc"),{"uid":int(uid)}).mappings().all()
-        games=len(rows); wins=sum(r["result"]=="win" for r in rows); challenges=sum(int(r["challenge_bonus"] or 0) for r in rows)//3; clean=sum(int(r["warning_penalty"] or 0)==0 for r in rows); delta=sum(int(r["score"] or 0) for r in rows); scores=[int(r["base_score"] or 50)+int(r["score"] or 0) for r in rows]; streak=best=0
+            rows=s.execute(text("select r.score,r.result,r.warning_penalty,r.challenge_bonus from public.mafia_ratings r where r.user_id=:uid order by r.created_at asc"),{"uid":int(uid)}).mappings().all()
+        games=len(rows); wins=sum(r["result"]=="win" for r in rows); challenges=sum(int(r["challenge_bonus"] or 0) for r in rows)//3; clean=sum(int(r["warning_penalty"] or 0)==0 for r in rows); delta=sum(int(r["score"] or 0) for r in rows); scores=[50+int(r["score"] or 0) for r in rows]; streak=best=0
         for r in rows:
             if r["result"]=="win": streak+=1; best=max(best,streak)
             else: streak=0
