@@ -98,7 +98,7 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
         ]
         for st in stages:
             lines.append(
-                f"📚 {html.escape(str(st['name']))} — {html.escape(str(st['status']))}"
+                f"📚 {html.escape(str(st['name']))} — {html.escape(str(st.get('status') or 'فعال'))}"
             )
             for p in self.repo.stage_players(st["id"]):
                 lines.append(
