@@ -14,17 +14,23 @@ from repositories.base import DatabaseRepository
 
 
 ACHIEVEMENTS = [
-    ("games_1", "اولین بازی", "اولین بازی ثبت‌شده", "games", 1, 25, None, None, 0),
+    ("games_1", "اولین بازی", "اولین بازی ثبت‌شده را انجام بده", "games", 1, 25, None, None, 0),
     ("games_10", "بازیکن فعال", "۱۰ بازی انجام بده", "games", 10, 75, "بازیکن فعال", "🔥", 0),
     ("games_25", "بازیکن باتجربه", "۲۵ بازی انجام بده", "games", 25, 150, None, None, 0),
-    ("games_50", "بازیکن حرفه‌ای", "۵۰ بازی انجام بده", "games", 50, 300, "بازیکن حرفه‌ای", "🎖", 0),
+    ("games_50", "بازیکن حرفه‌ای", "۵۰ بازی انجام بده", "games", 50, 300, "بازیکن حرفه‌ای", "🎖️", 0),
     ("games_100", "افسانه مافیا", "۱۰۰ بازی انجام بده", "games", 100, 700, "افسانه مافیا", "👑", 0),
     ("wins_10", "برنده‌ساز", "۱۰ برد ثبت کن", "wins", 10, 200, "برنده‌ساز", "🏆", 0),
-    ("challenges_10", "چالشگر", "۱۰ چالش ثبت‌شده داشته باش", "challenges", 10, 150, "چالشگر", "⚔️", 0),
-    ("clean_10", "منضبط", "۱۰ بازی بدون دریافت تذکر", "clean_games", 10, 175, "منضبط", "🛡️", 0),
-    ("win_streak_5", "سریال برد", "۵ برد پیاپی", "best_win_streak", 5, 250, "سریال برد", "🔥", 0),
-    ("positive_50", "مثبت پنجاه", "۵۰ امتیاز مثبت از بازی‌ها کسب کن", "delta", 50, 125, None, None, 0),
-    ("avg_70", "ثبات درخشان", "با حداقل ۱۰ بازی میانگین امتیاز بازی ۷۰ یا بیشتر داشته باش", "avg_game_score", 70, 300, "ثبات درخشان", "💎", 10),
+    ("challenges_100", "چالشگر", "در مجموع ۱۰۰ چالش ثبت‌شده داشته باش", "challenges", 100, 500, "چالشگر", "⚔️", 0),
+    ("clean_10", "منضبط", "۱۰ بازی را بدون دریافت تذکر به پایان برسان", "clean_games", 10, 175, "منضبط", "🛡️", 0),
+    ("win_streak_5", "سریال برد", "۵ برد پیاپی ثبت کن", "best_win_streak", 5, 250, "سریال برد", "🔥", 0),
+    ("positive_50", "مثبت پنجاه", "مجموع تغییر امتیاز بازی‌هایت به +۵۰ یا بیشتر برسد", "delta", 50, 125, None, None, 0),
+    ("avg_70", "ثبات درخشان", "با حداقل ۱۰ بازی، میانگین امتیاز بازی‌هایت ۷۰ یا بیشتر باشد", "avg_game_score", 70, 300, "ثبات درخشان", "💎", 10),
+    ("mafia_wins_20", "مافیای کارکشته", "۲۰ برد در ساید مافیا ثبت کن", "mafia_wins", 20, 300, None, None, 0),
+    ("mafia_wins_50", "فرمانده مافیا", "۵۰ برد در ساید مافیا ثبت کن", "mafia_wins", 50, 700, None, None, 0),
+    ("independent_wins_3", "مستقل موفق", "۳ برد در ساید مستقل ثبت کن", "independent_wins", 3, 200, None, None, 0),
+    ("independent_wins_5", "مستقل افسانه‌ای", "۵ برد در ساید مستقل ثبت کن", "independent_wins", 5, 400, None, None, 0),
+    ("citizen_wins_20", "شهروند کارکشته", "۲۰ برد در ساید شهروند ثبت کن", "citizen_wins", 20, 300, None, None, 0),
+    ("citizen_wins_50", "قهرمان شهر", "۵۰ برد در ساید شهروند ثبت کن", "citizen_wins", 50, 700, None, None, 0),
 ]
 
 
@@ -96,6 +102,56 @@ def install(app=None) -> bool:
                 )
             """))
 
+            # Events and their stages use BIGINT IDs in the legacy production DB.
+            s.execute(text("""
+                create table if not exists public.mafia_events (
+                    id bigserial primary key,
+                    name text not null,
+                    description text,
+                    starts_at timestamp,
+                    status text not null default 'active',
+                    grouping_mode text,
+                    created_by bigint,
+                    created_at timestamptz not null default now(),
+                    updated_at timestamptz not null default now()
+                )
+            """))
+            s.execute(text("""
+                create table if not exists public.mafia_event_players (
+                    id bigserial primary key,
+                    event_id bigint not null,
+                    player_id bigint not null,
+                    status text not null default 'registered',
+                    replaced_player_id bigint,
+                    registered_at timestamptz not null default now(),
+                    updated_at timestamptz not null default now(),
+                    unique(event_id, player_id)
+                )
+            """))
+            s.execute(text("""
+                create table if not exists public.mafia_event_stages (
+                    id bigserial primary key,
+                    event_id bigint not null,
+                    name text not null,
+                    stage_type text not null,
+                    stage_order integer not null default 1,
+                    created_at timestamptz not null default now(),
+                    updated_at timestamptz not null default now()
+                )
+            """))
+            s.execute(text("""
+                create table if not exists public.mafia_event_stage_players (
+                    id bigserial primary key,
+                    stage_id bigint not null,
+                    player_id bigint not null,
+                    group_no integer,
+                    score integer,
+                    status text not null default 'active',
+                    updated_at timestamptz not null default now(),
+                    unique(stage_id, player_id)
+                )
+            """))
+
             # Game incidents use BIGINT game IDs for the legacy production DB.
             s.execute(text("""
                 create table if not exists public.mafia_game_incidents (
@@ -146,6 +202,10 @@ def install(app=None) -> bool:
             # These tables are server-owned. Direct runtime connections use the
             # database owner/service role, while public API roles get no access.
             for table in (
+                "mafia_events",
+                "mafia_event_players",
+                "mafia_event_stages",
+                "mafia_event_stage_players",
                 "mafia_profile_settings",
                 "mafia_achievements",
                 "mafia_player_achievements",
@@ -173,9 +233,9 @@ def install(app=None) -> bool:
                 ):
                     s.execute(text(f"revoke all on table public.{table} from anon, authenticated"))
 
-            s.execute(
-                text("alter table public.mafia_ratings add column if not exists base_score integer not null default 0")
-            )
+            # Retire the old 10-challenge catalog entry; the canonical challenge achievement is now 100.
+            s.execute(text("update public.mafia_achievements set is_active=false where id='challenges_10'"))
+            s.execute(text("alter table public.mafia_ratings add column if not exists base_score integer not null default 0"))
 
             s.commit()
 
