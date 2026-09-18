@@ -359,6 +359,20 @@ def install(app: Any) -> bool:
             if str(game.get("status") or "") != "running":
                 await callback.answer("❌ این بازی قبلاً بسته شده است.", show_alert=True); return
             winner = parts[3]
+            # Persist the moderator's human-readable name before rendering the
+            # final result. Older games may only have moderator_id.
+            if not state.get("moderator_name"):
+                try:
+                    gid = int(game.get("group_chat_id") or callback.message.chat.id)
+                    moderator_id = int(game.get("moderator_id") or 0)
+                    if moderator_id:
+                        member = await app.bot.get_chat_member(gid, moderator_id)
+                        user = getattr(member, "user", None)
+                        moderator_name = getattr(user, "full_name", None) or getattr(user, "first_name", None) or getattr(user, "username", None)
+                        if moderator_name:
+                            state["moderator_name"] = str(moderator_name)
+                except Exception:
+                    logging.exception("failed to hydrate moderator name game=%s", game.get("id"))
             state["game_result"] = winner
             state["game_result_label"] = _result_label(winner)
             state["winner_selected_at"] = datetime.now(timezone.utc).isoformat()
