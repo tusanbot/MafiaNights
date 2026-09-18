@@ -105,6 +105,19 @@ async def _dispatch(payload: dict[str, Any]) -> None:
     if getattr(update, "message", None) is not None:
         if await _dispatch_priority_message(update.message, runtime_entry):
             return
+    callback = getattr(update, "callback_query", None)
+    if callback is not None and str(getattr(callback, "data", "") or "") in {"fl_new", "new_game"}:
+        handler = getattr(runtime_entry.main, "_canonical_new_game_handler", None)
+        if handler is not None:
+            await handler(callback)
+            import logging
+            logging.info(
+                "WEBHOOK CANONICAL NEW_GAME CALLBACK ROUTE chat_type=%s user_id=%s data=%s",
+                getattr(getattr(callback, "message", None).chat, "type", None),
+                getattr(getattr(callback, "from_user", None), "id", None),
+                getattr(callback, "data", None),
+            )
+            return
     await runtime_entry.main.dp.process_update(update)
 
 
