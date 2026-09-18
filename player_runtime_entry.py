@@ -72,6 +72,8 @@ profile_enhancements = install_profile_enhancements(main, user_panel)
 main.profile_enhancements = profile_enhancements
 from runtime.profile_db_compat import install as install_profile_db_compat
 install_profile_db_compat(profile_enhancements)
+from runtime.progress_schema_compat import install as install_progress_schema_compat
+install_progress_schema_compat(main)
 from commands import register_commands as register_text_commands
 register_text_commands(main)
 from runtime.command_surface_v2 import install as install_command_surface_v2
