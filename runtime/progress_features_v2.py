@@ -552,6 +552,38 @@ class ProgressFeaturesV2:
         )
         raise CancelHandler()
 
+    async def form_cancel(self, c):
+        """Cancel the active progress form and return to its owning screen."""
+        if not await self._admin(c):
+            return
+        data = str(c.data or "").split(":")
+        self._set_state(c.from_user.id, None, {})
+        target = data[2:] if len(data) > 2 else []
+        if target and target[0] == "event_add":
+            await self.events(c)
+            return
+        if target and target[0] == "event_auto" and len(target) > 1:
+            c.data = f"progress:event_admin:{target[1]}"
+            await self.event_admin(c)
+            return
+        if target and target[0] == "event_manual" and len(target) > 1:
+            c.data = f"progress:event_admin:{target[1]}"
+            await self.event_admin(c)
+            return
+        if target and target[0] == "score" and len(target) > 1:
+            # score:<stage_id> does not carry event id; return to progress root.
+            await self.events(c)
+            return
+        if target and target[0] in {"replace", "add_player"} and len(target) > 1:
+            c.data = f"progress:event_admin:{target[1]}"
+            await self.event_admin(c)
+            return
+        if target and target[0].startswith("edit_") and len(target) > 1:
+            c.data = f"progress:event_admin:{target[1]}"
+            await self.event_admin(c)
+            return
+        await self.events(c)
+
     # ---------- message FSM ----------
 
     async def message_state(self, m):
