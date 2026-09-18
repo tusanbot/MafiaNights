@@ -306,22 +306,90 @@ class GameManagement:
         await callback.message.edit_text(f"✅ {html.escape(self._name(a))} با {html.escape(self._name(b))} جایگزین شد.\n💺 صندلی {seat}", parse_mode="HTML", reply_markup=self.panel(game["id"]))
         await callback.answer()
 
+    async def _render_attendance_message(self, callback, game):
+        """Render readiness in a separate message; never replace the lobby."""
+        rows = [
+            r for r in self._rows(game)
+            if r.get("seat") is not None
+            and str(r.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
+        ]
+        rows.sort(key=lambda r: int(r.get("seat") or 999))
+        state = self._state(game)
+        ready = {int(x) for x in (state.get("ready_players") or [])}
+        lines = ["📢 <b>حاضری بازیکنان</b>", ""]
+        for row in rows:
+            uid = int(row["player_id"])
+            marker = "🟢" if uid in ready else "⚪"
+            lines.append(f"{marker} {int(row['seat']):02d}. {self._mention(row)}")
+        lines.append("")
+        all_ready = bool(rows) and all(int(r["player_id"]) in ready for r in rows)
+        if all_ready:
+            lines.append("✅ <b>همه آماده‌ان؛ نقش‌ها را پخش کن.</b>")
+            button_text = "✖️ بستن پیام"
+            button_data = f"mgmt:{int(game['id'])}:attendance_close"
+        else:
+            lines.append("⏳ بازیکنان حاضر، روی «آماده‌ام» بزنند.")
+            button_text = "🙋‍♂️ آماده‌ام"
+            button_data = f"mgmt:{int(game['id'])}:attendance_ready"
+        kb = InlineKeyboardMarkup(row_width=1).add(
+            InlineKeyboardButton(button_text, callback_data=button_data)
+        )
+        message_id = state.get("attendance_message_id")
+        try:
+            if message_id:
+                await self.app.bot.edit_message_text(
+                    "\n".join(lines), int(game["group_chat_id"]), int(message_id),
+                    parse_mode="HTML", reply_markup=kb
+                )
+                return
+        except Exception:
+            logging.info("attendance message edit failed game=%s", game.get("id"))
+        msg = await self.app.bot.send_message(
+            int(game["group_chat_id"]), "\n".join(lines),
+            parse_mode="HTML", reply_markup=kb
+        )
+        self._save(game, attendance_message_id=int(msg.message_id))
+
     async def attendance(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
-        rows = [] if not game else [r for r in self._rows(game) if r.get("seat") is not None and str(r.get("status") or "") not in {"removed"}]
-        await self._pick(callback, "attendance_pick", "✅ <b>حاضری</b>\n\nبرای تغییر وضعیت روی بازیکن بزنید:", rows)
-
-    async def attendance_pick(self, callback):
-        p = self._parts(callback, "attendance_pick", 4)
-        if not p: return
-        gid = int(callback.message.chat.id); game = self._game(gid); uid = int(p[3])
         if not game or not await self._allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
-        a = dict(self._state(game).get("attendance") or {})
-        a[str(uid)] = not bool(a.get(str(uid), True))
-        self._save(game, attendance=a)
-        await callback.answer("✅ حاضری تغییر کرد.")
-        await self.attendance(callback)
+        await self._render_attendance_message(callback, game)
+        await callback.answer("📢 پیام حاضری ارسال شد.")
+
+    async def attendance_ready(self, callback):
+        p = self._parts(callback, "attendance_ready", 3)
+        if not p:
+            return
+        gid = int(callback.message.chat.id); game = self._game(gid)
+        if not game:
+            await callback.answer("❌ بازی فعال نیست.", show_alert=True); return
+        uid = int(callback.from_user.id)
+        if not any(int(r.get("player_id") or 0) == uid and r.get("seat") is not None for r in self._rows(game)):
+            await callback.answer("⛔ فقط بازیکنان حاضر می‌توانند آماده شوند.", show_alert=True); return
+        state = self._state(game)
+        ready = {int(x) for x in (state.get("ready_players") or [])}
+        ready.add(uid)
+        self._save(game, ready_players=sorted(ready))
+        game = self._game(gid) or game
+        await self._render_attendance_message(callback, game)
+        await callback.answer("✅ آماده‌ام ثبت شد.")
+
+    async def attendance_close(self, callback):
+        p = self._parts(callback, "attendance_close", 3)
+        if not p:
+            return
+        gid = int(callback.message.chat.id); game = self._game(gid)
+        if not game or not await self._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        state = self._state(game)
+        state.pop("attendance_message_id", None)
+        self._save(game, **{"attendance_message_id": None})
+        await callback.answer("✖️ پیام حاضری بسته شد.")
 
     async def birthday(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
@@ -484,7 +552,7 @@ class GameManagement:
             "remove": self.remove, "remove_pick": self.remove_pick,
             "unreserve": self.unreserve, "unreserve_pick": self.unreserve_pick,
             "replace": self.replace, "replace_sub": self.replace_sub, "replace_target": self.replace_target,
-            "attendance": self.attendance, "attendance_pick": self.attendance_pick,
+            "attendance": self.attendance, "attendance_pick": self.attendance_pick, "attendance_ready": self.attendance_ready, "attendance_close": self.attendance_close,
             "birthday": self.birthday, "birthday_pick": self.birthday_pick,
             "challenge": self.challenge, "challenge_toggle": self.challenge_toggle,
             "next": self.next, "next_toggle": self.next_toggle,
