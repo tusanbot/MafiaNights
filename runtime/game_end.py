@@ -184,7 +184,9 @@ def _final_text(game: dict[str, Any], rows: list[dict[str, Any]]) -> str:
     moderator_id = int(game.get("moderator_id") or 0)
     moderator_row = next((r for r in rows if int(r.get("player_id") or 0) == moderator_id), None)
     moderator = str(state.get("moderator_name") or game.get("moderator_name") or (_name(moderator_row) if moderator_row else (game.get("moderator_id") or "---")))
-    number = int(game.get("event_number") or 1)
+    status = str(game.get("status") or "")
+    number = int(game.get("event_number") or 0)
+    number_text = "لغو شده" if status == "cancelled" else (str(number) if number > 0 else "---")
     lines = [
         "༄",
         "<b>Mafia Nights</b>",
@@ -195,7 +197,7 @@ def _final_text(game: dict[str, Any], rows: list[dict[str, Any]]) -> str:
         f"📆 تاریخ: <b>{_jalali_date(start)}</b>",
         f"🗓 Scenario: <b>{html.escape(scenario)}</b>",
         f"👮‍♂ گرداننده: <b>{html.escape(moderator)}</b>",
-        f"📓 شماره بازی: <b>{number}</b>",
+        f"📓 شماره بازی: <b>{html.escape(number_text)}</b>",
         "",
         "◤◢◣◥◤◢◣◥◤◢◣◥",
     ]
@@ -221,7 +223,7 @@ def _summary_text(game: dict[str, Any]) -> str:
         "🏁 <b>اتمام بازی</b>\n\n"
         "بازی به پایان رسید.\n"
         "لطفاً جهت رعایت نظم گروه اصلی، در گروه چت پیام بفرستین تا گرداننده نتیجه و اتفاقات بازی رو ثبت کنه.\n\n"
-        f"📓 شماره بازی: <b>{int(game.get('event_number') or 1)}</b>\n"
+        f"📓 شماره بازی: <b>{'لغو شده' if str(game.get('status') or '') == 'cancelled' else (str(int(game.get('event_number') or 0)) if int(game.get('event_number') or 0) > 0 else '---')}</b>\n"
         f"🗓 سناریو: <b>{html.escape(scenario)}</b>\n"
         f"🏆 برنده: <b>{html.escape(_result_label(winner) if winner else 'تعیین نشده')}</b>"
     )
