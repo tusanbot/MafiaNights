@@ -13,7 +13,10 @@ from aiogram.dispatcher.handler import CancelHandler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import text
 
-from runtime.progress_features_v3 import ProgressFeaturesV3
+from runtime.progress_features_v2 import ProgressFeaturesV2
+
+
+class ProgressFeaturesV4(ProgressFeaturesV2):
 
 
 class ProgressFeaturesV4(ProgressFeaturesV3):
@@ -396,7 +399,7 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
 
         # V2/V3 routes are registered first; V4 now explicitly owns the
         # final handlers for events and incidents and promotes them to the front.
-        super().install()
+        ProgressFeaturesV2.install(self)
 
         self._promote(self.events, lambda c: str(c.data or "") == "progress:events")
         self._promote(self.event_detail, lambda c: str(c.data or "").startswith("progress:event:"))
