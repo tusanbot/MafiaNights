@@ -11,6 +11,7 @@ import os
 from aiogram import types
 from aiogram.dispatcher.handler import CancelHandler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import text
 
 from runtime.progress_features_v3 import ProgressFeaturesV3
 
@@ -38,7 +39,7 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
     def _incident_game_rows(self):
         with self.repo.SessionLocal() as s:
             active = s.execute(
-                self.repo.text(
+                text(
                     "select id,event_number,status from public.mafia_games "
                     "where status in ('lobby','running','paused') "
                     "order by coalesce(started_at,created_at) desc limit 1"
