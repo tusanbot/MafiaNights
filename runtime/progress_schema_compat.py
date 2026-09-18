@@ -155,16 +155,27 @@ def install(app=None) -> bool:
                 "mafia_game_incident_history",
             ):
                 s.execute(text(f"alter table public.{table} enable row level security"))
-                s.execute(text(f"""
-                    do $
-                    begin
-                        if exists (select 1 from pg_roles where rolname='anon')
-                           and exists (select 1 from pg_roles where rolname='authenticated') then
-                            execute 'revoke all on table public.{table} from anon, authenticated';
-                        end if;
-                    end
-                    $;
-                """))
+
+            roles = set(
+                s.execute(
+                    text("select rolname from pg_roles where rolname in ('anon','authenticated')")
+                ).scalars().all()
+            )
+            if {"anon", "authenticated"}.issubset(roles):
+                for table in (
+                    "mafia_profile_settings",
+                    "mafia_achievements",
+                    "mafia_player_achievements",
+                    "mafia_achievement_rewards",
+                    "mafia_player_tags",
+                    "mafia_game_incidents",
+                    "mafia_game_incident_history",
+                ):
+                    s.execute(text(f"revoke all on table public.{table} from anon, authenticated"))
+
+            s.execute(
+                text("alter table public.mafia_ratings add column if not exists base_score integer not null default 0")
+            )
 
             s.commit()
 
