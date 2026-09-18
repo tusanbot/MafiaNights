@@ -147,7 +147,7 @@ def install(main):
         await c.message.edit_text("📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:", parse_mode="HTML", reply_markup=kb)
         await c.answer()
 
-    async def pick(c):
+    # Expose the canonical callback owner to the actual webhook entrypoint.\n    # This prevents legacy text handlers from intercepting «بازی جدید».\n    main._canonical_new_game_handler = new\n\n    async def pick(c):
         try: sid = int(str(c.data).split(":",1)[1]); r = repo.get_by_id(sid)
         except Exception: r = None
         if not r or not r.get("is_active",True): await c.answer("❌ سناریو نامعتبر است.",show_alert=True); return
