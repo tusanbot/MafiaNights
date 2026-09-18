@@ -61,7 +61,7 @@ def app(environ, start_response):
         result["webhook_repair"] = {"checked": False, "error": f"{type(exc).__name__}: {exc}"}
 
     try:
-        import main
+        import player_runtime_entry as main
         from runtime import voting_runtime
 
         gid = int(os.getenv("ALLOWED_GROUP_ID", "-1002356353761"))
