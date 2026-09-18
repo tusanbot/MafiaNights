@@ -150,7 +150,8 @@ async def on_startup(dp):
         progress_runtime = getattr(main, "_progress_features_runtime", None)
         if progress_runtime is not None:
             progress_runtime._patch_ui()
-            logging.info("PROGRESS UI REAPPLIED AFTER PRIVATE UI AUTHORITIES")
+            progress_runtime.rearm()
+            logging.info("PROGRESS UI AND HANDLERS REARMED AFTER PRIVATE UI AUTHORITIES")
     except Exception:
         logging.exception("Failed to re-apply progress UI after private UI authorities")
 
