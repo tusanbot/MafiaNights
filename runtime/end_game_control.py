@@ -145,7 +145,7 @@ def install(app: Any) -> bool:
             "این عملیات قابل بازگشت نیست.\n\nآیا مطمئن هستید؟",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(row_width=2).add(
-                InlineKeyboardButton("🚫 بله، لغو بازی", callback_data=f"mgmt:{int(game['id'])}:cancel_confirm"),
+                InlineKeyboardButton("🚫 بله، لغو بازی", callback_data=f"mgmt:{int(game['id'])}:cancel_execute"),
                 InlineKeyboardButton("⬅️ بازگشت", callback_data=f"mgmt:{int(game['id'])}:open"),
             ),
         )
@@ -153,7 +153,7 @@ def install(app: Any) -> bool:
 
     app._confirm_cancel_game = cancel_confirm
 
-    async def cancel_confirmed(callback: types.CallbackQuery):
+    async def cancel_execute(callback: types.CallbackQuery):
         gid = int(callback.message.chat.id)
         game = app.runtime.state.active_game(gid)
         if not game or not await _allowed(callback, gid, game):
@@ -226,7 +226,7 @@ def install(app: Any) -> bool:
     )
     dp.register_callback_query_handler(
         cancel_confirmed,
-        lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["cancel_confirm"],
+        lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["cancel_execute"],
         state="*",
     )
     dp.register_message_handler(
@@ -239,7 +239,7 @@ def install(app: Any) -> bool:
     _move_front(_message_registry(dp), lambda fn: getattr(getattr(fn, "__self__", None), "__class__", type(None)).__name__ == "TextCommands")
     _move_front(_message_registry(dp), lambda fn: getattr(getattr(fn, "__self__", None), "__class__", type(None)).__name__ == "PlayerDiscipline")
     _move_front(_message_registry(dp), lambda fn: getattr(fn, "__name__", "") == "finish_command")
-    _move_front(_callback_registry(dp), lambda fn: getattr(fn, "__name__", "") in {"cancel_confirm", "cancel_confirmed", "finish_menu"})
+    _move_front(_callback_registry(dp), lambda fn: getattr(fn, "__name__", "") in {"cancel_confirm", "cancel_execute", "finish_menu"})
 
     app._manual_end_game_installed = True
     logging.info("MANUAL_END_GAME installed: final management + confirmed cancellation + finish/archive/history")
