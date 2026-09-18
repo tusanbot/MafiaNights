@@ -7,7 +7,7 @@ from runtime.scenario_runtime import ScenarioRuntime
 
 
 def install(main):
-    if getattr(main, "_final_lobby_installed", False):
+    if getattr(main, "_final_lobby_installed", False) and getattr(main, "_canonical_new_game_handler", None) is not None:
         return False
     main._final_lobby_installed = True
     dp = main.dp
