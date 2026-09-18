@@ -36,9 +36,9 @@ def _active_order(main, selected=None):
     return seats[i:] + seats[:i]
 
 
-def _persist(main, seat, order):
+def _persist(main, seat, order, group_id=None):
     try:
-        gid = int(getattr(main, "group_chat_id", 0) or 0)
+        gid = int(group_id or getattr(main, "group_chat_id", 0) or 0)
         game = main.runtime.state.active_game(gid)
         if not game:
             return
@@ -113,7 +113,11 @@ def _apply_selected(main, callback, seat=None):
     main.current_turn_index = 0
     main._stable_normal_order = list(order)
     main._gm_normal_order = list(order)
-    _persist(main, seat, order)
+    try:
+        callback_gid = int(callback.message.chat.id)
+    except Exception:
+        callback_gid = None
+    _persist(main, seat, order, callback_gid)
 
 
 def install(main):
