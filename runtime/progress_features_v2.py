@@ -95,6 +95,7 @@ class ProgressFeaturesV2:
 
     def achievements_kb(self):
         kb = InlineKeyboardMarkup(row_width=1)
+        kb.add(InlineKeyboardButton("📖 توضیح دستاوردها", callback_data="progress:achievement_info"))
         kb.add(InlineKeyboardButton("🏷 تگ‌های من", callback_data="progress:tags"))
         kb.add(self._back("progress:profile"))
         return kb
@@ -150,6 +151,16 @@ class ProgressFeaturesV2:
         return kb
 
     # ---------- achievements / tags ----------
+
+    async def achievement_info(self, c):
+        rows = self.repo.achievements(c.from_user.id)
+        lines = ["📖 <b>راهنمای دستاوردها</b>", "", "در این بخش معنی و شرط تکمیل هر دستاورد را می‌بینید.", ""]
+        for x in rows:
+            lines.append(f"• <b>{html.escape(x['name'])}</b>: {html.escape(x['description'])}")
+        lines += ["", "💡 <b>مثبت پنجاه</b>: جمع تغییر امتیاز تمام بازی‌ها باید حداقل +۵۰ شود؛ مثلاً +۳۰، +۲۵ و -۵ در مجموع +۵۰ است."]
+        await c.message.edit_text("\n".join(lines), parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("⬅️ دستاوردها", callback_data="progress:achievements")))
+        await c.answer()
 
     async def achievements(self, c):
         uid = int(c.from_user.id)
@@ -703,6 +714,7 @@ class ProgressFeaturesV2:
 
         # Profile/stat routes.
         self._front(self.achievements, lambda c: str(c.data or "") in {"progress:achievements", "profile:advanced:achievements"})
+        self._front(self.achievement_info, lambda c: str(c.data or "") == "progress:achievement_info")
         self._front(self.tags, lambda c: str(c.data or "") in {"progress:tags", "mfeature:tags"})
         self._front(self.tag_toggle, lambda c: str(c.data or "").startswith(("progress:tag:", "mfeature:tag:")))
 
