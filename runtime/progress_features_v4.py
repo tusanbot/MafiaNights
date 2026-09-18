@@ -162,7 +162,7 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
         kb.add(InlineKeyboardButton("🔎 جستجوی بازی", callback_data="progress:incident_search"))
         kb.add(InlineKeyboardButton("📖 مشاهده اتفاقات", callback_data="progress:incident_view"))
         kb.add(InlineKeyboardButton("📚 تاریخچه اتفاقات", callback_data="progress:incident_history"))
-        kb.add(self._back("progress:management"))
+        kb.add(self._back("manage_game"))
 
         body = (
             "📝 <b>اتفاقات بازی</b>\n\n"
