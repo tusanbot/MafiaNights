@@ -183,19 +183,18 @@ def install(main):
 
     async def render(c):
         text, kb = lobby_view(c.message.chat.id)
-        # A real callback can edit the existing lobby message. The text-command
-        # adapter receives a normal Telegram Message, which cannot be edited.
-        # In that case create the canonical lobby message first.
+        # Callback queries edit the current lobby message. Text-command adapters
+        # must reply with the fully rendered canonical lobby instead.
         if getattr(c, "_from_text_command", False):
             sent = await c.message.reply(
-                "📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:",
+                text,
                 parse_mode="HTML",
                 reply_markup=kb,
             )
             main.lobby_message_id = sent.message_id
         else:
             await c.message.edit_text(
-                "📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:",
+                text,
                 parse_mode="HTML",
                 reply_markup=kb,
             )
