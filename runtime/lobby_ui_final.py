@@ -114,6 +114,73 @@ def install(main):
         )
         return "\n".join(lines), kb
 
+    async def start_command(message):
+        if message.chat.type in {"group", "supergroup"}:
+            kb = InlineKeyboardMarkup(row_width=1).add(
+                InlineKeyboardButton("🎮 بازی جدید", callback_data="fl_new")
+            )
+            await message.reply(
+                "🏠 <b>منوی اصلی Mafia Nights</b>",
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+        else:
+            kb = InlineKeyboardMarkup(row_width=1)
+            kb.add(InlineKeyboardButton("⚙️ مدیریت بازی", callback_data="manage_game"))
+            kb.add(InlineKeyboardButton("📜 مدیریت سناریو", callback_data="manage_scenarios"))
+            kb.add(InlineKeyboardButton("⚙ امکانات اضافه", callback_data="addons_menu"))
+            kb.add(InlineKeyboardButton("❓ راهنما", callback_data="help"))
+            await message.reply(
+                "📋 <b>پنل Mafia Nights</b>",
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+
+    async def new(c):
+        gid = int(c.message.chat.id)
+        if getattr(main, "game_running", False) or getattr(main, "round_active", False):
+            await c.answer("⚠️ بازی در حال اجراست.", show_alert=True)
+            return
+        main.group_chat_id = gid
+        main.lobby_active = True
+        main.game_running = False
+        main.round_active = False
+        try:
+            main.runtime.lobby.ensure(gid)
+        except Exception:
+            logging.exception("lobby ensure failed")
+        kb = InlineKeyboardMarkup(row_width=3)
+        rows = repo.list_active()
+        popular = {"پدرخوانده-جک", "پدرخوانده-شرلوک", "پدرخوانده-نوسترا", "کلاسیک 12", "کلاسیک 13", "قمار باز", "زودیاک", "کاپو"}
+        rows.sort(key=lambda x: (
+            0 if x.get("name") in popular else 1,
+            int(x.get("sort_order") or 0),
+            int(x.get("id") or 0),
+        ))
+        for r in rows:
+            kb.insert(
+                InlineKeyboardButton(
+                    f"{str(r.get('name') or '')[:18]} ({len(r.get('roles') or [])})",
+                    callback_data=f"fl_pick:{int(r['id'])}",
+                )
+            )
+        # For the text-command adapter the incoming Telegram Message cannot
+        # be edited, so send the lobby as a reply instead.
+        if getattr(c, "_from_text_command", False):
+            sent = await c.message.reply(
+                "📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:",
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+            main.lobby_message_id = sent.message_id
+        else:
+            await c.message.edit_text(
+                "📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:",
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+        await c.answer()
+
     async def render(c):
         text, kb = lobby_view(c.message.chat.id)
         # A real callback can edit the existing lobby message. The text-command
@@ -318,7 +385,7 @@ def install(main):
     # used by the canonical fl_new/new_game callback, not the legacy main1 route.
     from types import SimpleNamespace
     async def new_game_text(message):
-        callback = SimpleNamespace(message=message, from_user=message.from_user, data="fl_new", answer=message.answer)
+        callback = SimpleNamespace(message=message, from_user=message.from_user, data="fl_new", answer=message.answer, _from_text_command=True)
         await new(callback)
     dp.register_message_handler(new_game_text, lambda m: (m.text or "").strip().replace("‌", " ") == "بازی جدید", state="*")
     move_front(mr,new_game_text)
