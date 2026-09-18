@@ -389,6 +389,44 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
                     handlers.insert(0, handlers.pop(i))
                     break
 
+    def rearm(self):
+        """Restore canonical progress handlers after later UI authorities register."""
+        routes = [
+            (self.achievements, lambda c: str(c.data or "") in {"progress:achievements", "profile:advanced:achievements"}),
+            (self.achievement_info, lambda c: str(c.data or "") == "progress:achievement_info"),
+            (self.tags, lambda c: str(c.data or "") in {"progress:tags", "mfeature:tags"}),
+            (self.tag_toggle, lambda c: str(c.data or "").startswith(("progress:tag:", "mfeature:tag:"))),
+            (self.events, lambda c: str(c.data or "") == "progress:events"),
+            (self.event_detail, lambda c: str(c.data or "").startswith("progress:event:")),
+            (self.event_players, lambda c: str(c.data or "").startswith("progress:event_players:")),
+            (self.incidents, lambda c: str(c.data or "") == "progress:incidents"),
+            (self.incident_noop, lambda c: str(c.data or "") == "progress:incident_noop"),
+            (self.incident_search, lambda c: str(c.data or "") == "progress:incident_search"),
+            (self.incident_game, lambda c: str(c.data or "").startswith("progress:incident_game:")),
+            (self.incident_view, lambda c: str(c.data or "") == "progress:incident_view"),
+            (self.incident_show, lambda c: str(c.data or "").startswith("progress:incident_show:")),
+            (self.incident_edit, lambda c: str(c.data or "").startswith("progress:incident_edit:")),
+            (self.incident_history, lambda c: str(c.data or "") == "progress:incident_history"),
+            (self.incident_finalize, lambda c: str(c.data or "") == "progress:incident_finalize"),
+            (self.incident_preview, lambda c: str(c.data or "") == "progress:incident_preview"),
+            (self.incident_pop, lambda c: str(c.data or "") == "progress:incident_pop"),
+            (self.incident_cancel, lambda c: str(c.data or "") == "progress:incident_cancel"),
+        ]
+        for fn, predicate in routes:
+            self._promote(fn, predicate)
+        mh = getattr(self.app.dp.message_handlers, "handlers", None)
+        if mh is not None:
+            owned = []
+            rest = []
+            for item in list(mh):
+                fn = getattr(item, "handler", None) or getattr(item, "callback", None)
+                if getattr(fn, "__module__", "") == __name__ and getattr(fn, "__name__", "") in {"command", "state_handler"}:
+                    owned.append(item)
+                else:
+                    rest.append(item)
+            mh[:] = owned + rest
+        return True
+
     def install(self):
         if getattr(self.app, "_progress_features_v4_installed", False):
             return False
