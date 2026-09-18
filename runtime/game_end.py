@@ -276,16 +276,8 @@ def _history_markup(games: list[dict[str, Any]]) -> InlineKeyboardMarkup:
 def install(app: Any) -> bool:
     dp = app.dp
 
-    original_panel = getattr(GameManagement, "panel", None)
-    if original_panel and not getattr(GameManagement, "_game_end_panel_wrapped", False):
-        @wraps(original_panel)
-        def panel(self, game_id):
-            kb = original_panel(self, game_id)
-            kb.row(InlineKeyboardButton("🏁 اتمام بازی", callback_data=f"mgmt:{int(game_id)}:finish"))
-            kb.row(InlineKeyboardButton("📚 بازی‌های گذشته", callback_data=f"game_history:list:{int(game_id)}"))
-            return kb
-        GameManagement.panel = panel
-        GameManagement._game_end_panel_wrapped = True
+    # Management UI ownership is final: management_surface_final owns the panel.
+    # The end-game runtime only owns the finish callback and result/history screens.
 
     async def allowed(callback: types.CallbackQuery, game: dict[str, Any]) -> bool:
         uid = int(callback.from_user.id)
