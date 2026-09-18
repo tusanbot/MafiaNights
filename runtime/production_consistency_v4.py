@@ -70,7 +70,7 @@ def _panel(management):
     return panel
 
 
-async def install(app: Any) -> bool:
+def install(app: Any) -> bool:
     if getattr(app, "_production_consistency_v4", False): return False
     app._production_consistency_v4 = True
     dp = app.dp; management = getattr(app, "game_management", None)
