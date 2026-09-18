@@ -558,7 +558,7 @@ class GameManagement:
             "remove": self.remove, "remove_pick": self.remove_pick,
             "unreserve": self.unreserve, "unreserve_pick": self.unreserve_pick,
             "replace": self.replace, "replace_sub": self.replace_sub, "replace_target": self.replace_target,
-            "attendance": self.attendance, "attendance_pick": self.attendance_pick, "attendance_ready": self.attendance_ready, "attendance_close": self.attendance_close,
+            "attendance": self.attendance, "attendance_ready": self.attendance_ready, "attendance_close": self.attendance_close,
             "birthday": self.birthday, "birthday_pick": self.birthday_pick,
             "challenge": self.challenge, "challenge_toggle": self.challenge_toggle,
             "next": self.next, "next_toggle": self.next_toggle,
