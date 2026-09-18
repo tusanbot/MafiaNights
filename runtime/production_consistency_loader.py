@@ -5,6 +5,7 @@ import html
 from typing import Any
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.dispatcher.handler import CancelHandler
 
 from runtime.production_consistency_v4 import install as _install_async
 
