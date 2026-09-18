@@ -183,6 +183,46 @@ class GameRepository(DatabaseRepository):
         self._invalidate(game_id=game_id)
         return result.rowcount > 0
 
+    def get_finished_game(self, game_id):
+        with self.SessionLocal() as session:
+            resolved = self._resolve_id(session, game_id)
+            row = session.execute(
+                text("select * from public.mafia_games where id=:game_id and status='finished' limit 1"),
+                {"game_id": resolved},
+            ).mappings().first()
+            return self._wrap(row)
+
+    def list_finished_games(self, group_chat_id=None, limit=20):
+        with self.SessionLocal() as session:
+            if group_chat_id is None:
+                rows = session.execute(
+                    text("select * from public.mafia_games where status='finished' order by coalesce(finished_at, updated_at, created_at) desc limit :limit"),
+                    {"limit": int(limit)},
+                ).mappings().all()
+            else:
+                rows = session.execute(
+                    text("select * from public.mafia_games where group_chat_id=:group_chat_id and status='finished' order by coalesce(finished_at, updated_at, created_at) desc limit :limit"),
+                    {"group_chat_id": int(group_chat_id), "limit": int(limit)},
+                ).mappings().all()
+            return [self._wrap(row) for row in rows]
+
+    def get_cancelled_game(self, game_id):
+        with self.SessionLocal() as session:
+            resolved = self._resolve_id(session, game_id)
+            row = session.execute(
+                text("select * from public.mafia_games where id=:game_id and status='cancelled' limit 1"),
+                {"game_id": resolved},
+            ).mappings().first()
+            return self._wrap(row)
+
+    def list_cancelled_games(self, group_chat_id, limit=30):
+        with self.SessionLocal() as session:
+            rows = session.execute(
+                text("select * from public.mafia_games where group_chat_id=:group_chat_id and status='cancelled' order by coalesce(finished_at, updated_at, created_at) desc limit :limit"),
+                {"group_chat_id": int(group_chat_id), "limit": int(limit)},
+            ).mappings().all()
+            return [self._wrap(row) for row in rows]
+
     def add_player(self, game_id, player_id, seat=None, role=None, status="active", is_substitute=False):
         uid = int(player_id)
         with self.SessionLocal() as session:
