@@ -35,6 +35,7 @@ def _events(game):
 def _final_markup(game_id: int):
     return InlineKeyboardMarkup(row_width=2).add(
         InlineKeyboardButton("📊 نتیجه بازی", callback_data=f"game_end:{game_id}:result"),
+        InlineKeyboardButton("📝 اتفاقات بازی", callback_data=f"game_end:{game_id}:events"),
         InlineKeyboardButton("📚 بازی‌های گذشته", callback_data=f"game_history:list:{game_id}"),
         InlineKeyboardButton("✖️ بستن", callback_data=f"game_end:{game_id}:close"),
     )
