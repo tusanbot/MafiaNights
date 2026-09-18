@@ -1,7 +1,6 @@
 """Synchronous loader for the production consistency runtime patch."""
 from __future__ import annotations
 
-import asyncio
 import html
 from typing import Any
 
@@ -46,12 +45,10 @@ def _final_markup(game_id: int) -> InlineKeyboardMarkup:
 
 def install(app: Any) -> bool:
     """Install consistency after every production runtime installer."""
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        installed = bool(asyncio.run(_install_async(app)))
-    else:
-        raise RuntimeError("production consistency installer must initialize before the polling event loop")
+    # Webhook dispatch already runs inside an active asyncio loop. The underlying
+    # consistency installer only registers handlers/state, so it must be called
+    # synchronously instead of nesting asyncio.run() inside the webhook loop.
+    installed = bool(_install_async(app))
 
     dp = app.dp
     from runtime import game_end
