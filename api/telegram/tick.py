@@ -8,7 +8,7 @@ import time
 from urllib.request import Request, urlopen
 
 
-_PRODUCTION_WEBHOOK_HOST = os.getenv("VERCEL_PROJECT_PRODUCTION_URL") or "mafia-nights-tusanbots-projects.vercel.app"
+_PRODUCTION_WEBHOOK_HOST = "mafia-nights-tusanbots-projects.vercel.app"
 _WEBHOOK_REPAIR_INTERVAL = 60.0
 _last_webhook_check = 0.0
 
