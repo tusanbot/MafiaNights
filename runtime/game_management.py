@@ -326,7 +326,7 @@ class GameManagement:
         for row in rows:
             uid = int(row["player_id"])
             marker = "🟢" if uid in ready else "⚪"
-            lines.append(f"{marker} {int(row['seat']):02d}. {self._mention(row)}")
+            lines.append(f"{int(row['seat']):02d}. {marker} {self._mention(row)}")
         lines.append("")
         all_ready = bool(rows) and all(int(r["player_id"]) in ready for r in rows)
         if all_ready:
