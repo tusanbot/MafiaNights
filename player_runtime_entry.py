@@ -69,12 +69,12 @@ async def _production_start(message):
     else:
         raise CancelHandler()
     logging.info("PRODUCTION /START handled chat_type=%s user_id=%s", message.chat.type, message.from_user.id)
-    raise CancelHandler()
+    return
 
 
 def _install_production_start():
     _remove_conflicting_start_handlers()
-    main.dp.register_message_handler(_production_start, commands={"start"}, state="*")
+    main.dp.register_message_handler(_production_start, commands=["start"], state="*", content_types=["text"])
     registry = getattr(getattr(main.dp, "message_handlers", None), "handlers", None)
     if registry:
         for i, item in enumerate(registry):
