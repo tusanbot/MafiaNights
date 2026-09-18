@@ -83,7 +83,8 @@ install_addons_menu_v2(main)
 from runtime.private_scenario_crud import install as install_private_scenario_crud
 install_private_scenario_crud(main)
 from runtime.progress_features_v4 import install as install_progress_features
-install_progress_features(main)
+_progress_features_runtime = install_progress_features(main)
+main._progress_features_runtime = _progress_features_runtime
 
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.live_controls_v2 import install as install_live_controls_v2
@@ -141,5 +142,13 @@ async def on_startup(dp):
     await install_private_ui_recovery_v7(main)
     from runtime.private_ui_recovery_v8 import install as install_private_ui_recovery_v8
     await install_private_ui_recovery_v8(main)
+    # Re-apply progress UI after final private-UI authorities replace the start keyboard.
+    try:
+        progress_runtime = getattr(main, "_progress_features_runtime", None)
+        if progress_runtime is not None:
+            progress_runtime._patch_ui()
+            logging.info("PROGRESS UI REAPPLIED AFTER PRIVATE UI AUTHORITIES")
+    except Exception:
+        logging.exception("Failed to re-apply progress UI after private UI authorities")
 
 main.on_startup = on_startup
