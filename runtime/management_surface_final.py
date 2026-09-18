@@ -54,6 +54,7 @@ def install(app: Any) -> bool:
         return kb
 
     management.panel = panel
+    app._canonical_management_panel = panel
 
     async def info(callback):
         gid = int(callback.message.chat.id); game = management._game(gid)
@@ -161,10 +162,13 @@ def install(app: Any) -> bool:
 
     async def cancel(callback):
         gid = int(callback.message.chat.id); game = management._game(gid)
-        if not game or not await management._allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True); return
-        i = int(game["id"]); kb = InlineKeyboardMarkup(row_width=2)
-        kb.row(InlineKeyboardButton("🚫 بله، لغو شود", callback_data=f"mgmt:{i}:cancel_confirm"), InlineKeyboardButton("⬅️ بازگشت", callback_data=f"mgmt:{i}:cancel_back"))
-        await callback.message.edit_text("⚠️ <b>لغو بازی</b>\n\nآیا مطمئن هستید که می‌خواهید این بازی لغو شود؟", parse_mode="HTML", reply_markup=kb); await callback.answer()
+        if not game or not await management._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True); return
+        confirmer = getattr(app, "_confirm_cancel_game", None)
+        if confirmer:
+            await confirmer(callback)
+            return
+        await callback.answer("❌ مسیر تأیید لغو بازی در دسترس نیست.", show_alert=True)
 
     async def cancel_confirm(callback):
         gid = int(callback.message.chat.id); game = management._game(gid)
