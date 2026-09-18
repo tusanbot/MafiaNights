@@ -225,7 +225,7 @@ def install(app: Any) -> bool:
         state="*",
     )
     dp.register_callback_query_handler(
-        cancel_confirmed,
+        cancel_execute,
         lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[2:3] == ["cancel_execute"],
         state="*",
     )
