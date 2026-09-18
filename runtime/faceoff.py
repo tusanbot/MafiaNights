@@ -225,10 +225,8 @@ async def install(app: Any) -> bool:
                 raise RuntimeError("target role update failed")
 
             # Remove the first player from the active game.
-            if not app.runtime.state.games.set_player_seat(game_id, source_id, None):
-                raise RuntimeError("source seat removal failed")
-            if not app.runtime.state.games.set_player_status(game_id, source_id, "removed"):
-                raise RuntimeError("source status update failed")
+            app.runtime.state.games.set_player_seat(game_id, source_id, None)
+            app.runtime.state.games.set_player_status(game_id, source_id, "removed")
 
             state = dict(game.get("state") or {})
             role_map = dict(state.get("last_role_map") or {})
