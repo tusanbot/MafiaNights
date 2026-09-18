@@ -155,7 +155,16 @@ def install(app=None) -> bool:
                 "mafia_game_incident_history",
             ):
                 s.execute(text(f"alter table public.{table} enable row level security"))
-                s.execute(text(f"revoke all on table public.{table} from anon, authenticated"))
+                s.execute(text(f"""
+                    do $
+                    begin
+                        if exists (select 1 from pg_roles where rolname='anon')
+                           and exists (select 1 from pg_roles where rolname='authenticated') then
+                            execute 'revoke all on table public.{table} from anon, authenticated';
+                        end if;
+                    end
+                    $;
+                """))
 
             s.commit()
 
