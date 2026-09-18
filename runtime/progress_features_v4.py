@@ -89,4 +89,7 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
 
 
 def install(app):
-    return ProgressFeaturesV4(app).install()
+    instance = ProgressFeaturesV4(app)
+    app._progress_features_runtime = instance
+    instance.install()
+    return instance
