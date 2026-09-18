@@ -147,6 +147,39 @@ def install(main):
         except Exception:
             item.callback = wrapped
 
+    # The visible "شروع دور" route is currently start_turn_clean/start_turn in
+    # production. Restore the durable selected order immediately before those
+    # handlers execute; otherwise an older start-turn implementation can rebuild
+    # the sequence from seat numbers after the speaker selector has rendered the
+    # correct list.
+    for item in list(reg):
+        fn = _handler(item)
+        name = getattr(fn, "__name__", "")
+        if name not in {"start_turn_clean", "start_turn"} or getattr(fn, "_speaker_turn_wrapped", False):
+            continue
+        original = fn
+
+        async def turn_wrapped(callback, _original=original):
+            try:
+                game = main.runtime.state.active_game(int(callback.message.chat.id))
+                state = dict((game or {}).get("state") or {})
+                persisted = [int(x) for x in state.get("turn_order") or []]
+                if persisted:
+                    main.turn_order = persisted
+                    main.current_turn_index = 0
+                    main._stable_normal_order = list(persisted)
+                    main._gm_normal_order = list(persisted)
+            except Exception:
+                logging.exception("failed to restore persisted speaker order before start_turn")
+            return await _original(callback)
+
+        turn_wrapped.__name__ = name
+        turn_wrapped._speaker_turn_wrapped = True
+        try:
+            item.handler = turn_wrapped
+        except Exception:
+            item.callback = turn_wrapped
+
     # Start-round handlers are wrapped last so every route consumes the durable
     # selected order instead of reconstructing it from seat numbers.
     for item in list(reg):
