@@ -36,11 +36,24 @@ def _finalize(app: Any) -> None:
     install_identity(app)
     install_speaker(app)
     install_consistency(app)
+
+    # Re-assert the single management panel after compatibility installers.
+    canonical_panel = getattr(app, "_canonical_management_panel", None)
+    if canonical_panel is not None and getattr(app, "game_management", None) is not None:
+        app.game_management.panel = canonical_panel
+
     install_dual_winner(app)
     install_lobby_seat(app)
     install_command_authority(app)
 
-    logging.info("PRODUCTION AUTHORITIES active: lobby=single management=single")
+    try:
+        from runtime import production_consistency_loader, game_end
+        if getattr(app, "_production_consistency_handler_priority", None) is not None:
+            game_end._final_markup = production_consistency_loader._final_markup
+    except Exception:
+        logging.exception("failed to reassert final result markup")
+
+    logging.info("PRODUCTION AUTHORITIES active: lobby=single management=single final-panel=single")
     _INSTALLED = True
 
 
