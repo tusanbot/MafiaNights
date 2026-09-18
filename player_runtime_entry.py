@@ -1,5 +1,6 @@
 """Production entry point for the persistent MafiaNights runtime."""
 
+import html
 import logging
 from types import SimpleNamespace
 
