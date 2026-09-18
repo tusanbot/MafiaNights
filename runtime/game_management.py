@@ -53,6 +53,12 @@ class GameManagement:
         return str(row.get("nickname") or row.get("first_name") or row.get("username") or row.get("player_id") or "👤")
 
     @staticmethod
+    def _mention(row):
+        uid = int(row.get("player_id") or row.get("user_id") or 0)
+        name = GameManagement._name(row)
+        return f'<a href="tg://user?id={uid}"><b>{html.escape(name)}</b></a>'
+
+    @staticmethod
     def _parts(callback, action, size):
         p = str(callback.data or "").split(":")
         return p if len(p) == size and p[0] == "mgmt" and p[2] == action else None
