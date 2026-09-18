@@ -394,17 +394,16 @@ class GameManagement:
     async def cancel(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
         if not game or not await self._allowed(callback, gid, game):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True)
+            return
+        confirmer = getattr(self.app, "_confirm_cancel_game", None)
+        if confirmer:
+            await confirmer(callback)
+            return
         state = self._state(game)
-        self.app.runtime.state.games.update_game(game["id"], status="finished", state={})
-        task = getattr(getattr(self.app, "ui", None), "turn_timer_task", None)
-        if task and not task.done(): task.cancel()
-        lid = state.get("lobby_message_id")
-        if lid:
-            try: await self.app.bot.edit_message_text("🚫 <b>این بازی لغو شد.</b>", gid, int(lid), parse_mode="HTML", reply_markup=None)
-            except Exception: pass
-        await callback.message.edit_text("🚫 <b>بازی لغو شد.</b>", parse_mode="HTML")
-        await callback.answer()
+        state.update({"cancelled": True, "cancel_reason": "legacy_management_path"})
+        self.app.runtime.state.games.update_game(game["id"], status="cancelled", event_number=0, state=state)
+        await callback.answer("🚫 بازی لغو شد.")
 
     async def refresh(self, callback):
         gid = int(callback.message.chat.id)
@@ -414,10 +413,14 @@ class GameManagement:
         if str(game.get("status") or "") != "lobby":
             await callback.answer("❌ بازسازی لابی فقط وقتی بازی در لابی است ممکن است.", show_alert=True); return
         # Prefer the canonical renderer if production_lobby exposes it.
-        renderer = getattr(self.app, "_render_production_lobby", None)
+        renderer = getattr(self.app, "_render_final_lobby", None) or getattr(self.app, "_render_production_lobby", None)
         if renderer:
-            ok = await renderer(gid, game)
-            await callback.answer("↩️ لابی بازسازی شد." if ok else "❌ بازسازی لابی انجام نشد.", show_alert=not ok)
+            try:
+                await renderer(callback)
+                await callback.answer("↩️ لابی بازسازی شد.")
+            except Exception:
+                logging.exception("management canonical lobby refresh failed game=%s", game.get("id"))
+                await callback.answer("❌ بازسازی لابی انجام نشد.", show_alert=True)
             return
         # Fallback renderer uses the same durable snapshot and lobby_message_id.
         data = self.app.runtime.lobby_snapshot(gid)
