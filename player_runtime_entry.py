@@ -238,7 +238,9 @@ async def on_startup(dp):
     await install_private_ui_recovery_v7(main)
     from runtime.private_ui_recovery_v8 import install as install_private_ui_recovery_v8
     await install_private_ui_recovery_v8(main)
-    # Private UI recovery layers register their own /start routes. Re-arm the single\n    # production owner after those installers so neither PV nor group /start can be shadowed.\n    _install_production_start()\n    # Re-apply progress UI after final private-UI authorities replace the start keyboard.
+    # Private UI recovery layers register their own /start routes. Re-arm the single\n    # production owner after those installers so neither PV nor group /start can be shadowed.\n    _install_production_start()
+    _rearm_canonical_new_game()
+    # Re-apply progress UI after final private-UI authorities replace the start keyboard.
     try:
         progress_runtime = getattr(main, "_progress_features_runtime", None)
         if progress_runtime is not None:
