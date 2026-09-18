@@ -81,7 +81,8 @@ async def _dispatch_priority_message(message: Any, runtime_entry: Any) -> bool:
                     message=message,
                     from_user=message.from_user,
                     data="fl_new",
-                    answer=message.answer,\n                    _from_text_command=True,
+                    answer=message.answer,
+                    _from_text_command=True,
                 )
                 await handler(callback)
                 import logging
