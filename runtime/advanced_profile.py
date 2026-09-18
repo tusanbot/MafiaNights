@@ -127,7 +127,7 @@ class AdvancedProfile:
         return {"rows": rows,"games": games,"wins": wins,"losses": losses,"draws": draws,"score": score,"delta": delta,
                 "win_bonus": win_bonus,"challenge_bonus": challenge,"warning_penalty": warning,"kick_penalty": kick,
                 "challenges": challenge // 3,"warnings": warning,"kicks": sum(int(r.get("kick_penalty") or 0) > 0 for r in rows),
-                "win_rate": win_rate,"best": best,"worst": worst,"avg": avg,"current_streak": current_streak,
+                "win_rate": win_rate,"best": best,"worst": worst,"avg": avg,"avg_game_score": (50 + avg) if games else 0,"current_streak": current_streak,
                 "current_kind": current_kind,"best_win_streak": best_win_streak,"best_loss_streak": best_loss_streak}
 
     def _xp(self, st):
@@ -197,7 +197,7 @@ class AdvancedProfile:
             f"🎮 بازی‌ها: {st['games']}\n🏆 برد: {st['wins']}\n❌ باخت: {st['losses']}\n🤝 مساوی: {st['draws']}\n"
             f"📈 نرخ برد: {st['win_rate']:.1f}%\n⭐ امتیاز فعلی: {st['score']}\n"
             f"⬆️ بهترین تغییر بازی: {self._signed(st['best'])}\n⬇️ بدترین تغییر بازی: {self._signed(st['worst'])}\n"
-            f"📊 میانگین تغییر هر بازی: {self._signed(round(st['avg']))}\n"
+            f"📊 میانگین امتیاز هر بازی: <b>{st['avg_game_score']:.1f}</b>\n"
             f"🔥 برد پیاپی فعلی: {st['current_streak'] if st['current_kind']=='win' else 0}\n"
             f"💥 باخت پیاپی فعلی: {st['current_streak'] if st['current_kind']=='loss' else 0}\n"
             f"🏆 بهترین برد پیاپی: {st['best_win_streak']}\n💥 بدترین باخت پیاپی: {st['best_loss_streak']}")
@@ -237,6 +237,10 @@ class AdvancedProfile:
         await self._edit(callback, "\n".join(lines), "profile:advanced")
 
     async def achievements(self, callback: types.CallbackQuery):
+        progress_runtime = getattr(self.app, "_progress_features_runtime", None)
+        if progress_runtime is not None:
+            await progress_runtime.achievements(callback)
+            return
         st = self._stats(callback.from_user.id); unlocked = {x[1] for x in self._achievements(st)}
         all_items = ["اولین بازی","۱۰ بازی","۲۵ بازی","۵۰ بازی","۱۰ برد","۱۰ چالش","۱۰ بازی بدون تذکر","درصد برد بالای ۵۰٪","۵ برد پیاپی","۵۰ امتیاز مثبت"]
         lines = ["🏆 <b>دستاوردها و مدال‌ها</b>", ""]
