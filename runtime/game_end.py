@@ -181,7 +181,7 @@ def _final_text(game: dict[str, Any], rows: list[dict[str, Any]]) -> str:
     start = _local_dt(start)
     end = _local_dt(end)
     scenario = str(state.get("scenario_name") or game.get("scenario") or game.get("scenario_id") or "---")
-    moderator = str(state.get("moderator_name") or game.get("moderator_name") or game.get("moderator_id") or "---")
+    moderator_id = int(game.get("moderator_id") or 0)\n    moderator_row = next((r for r in rows if int(r.get("player_id") or 0) == moderator_id), None)\n    moderator = str(state.get("moderator_name") or game.get("moderator_name") or (_name(moderator_row) if moderator_row else (game.get("moderator_id") or "---")))
     number = int(game.get("event_number") or 1)
     lines = [
         "༄",
