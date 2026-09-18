@@ -66,30 +66,52 @@ def install(main):
 
     def lobby_view(gid):
         g = game(gid); r = scenario(g); ps = players(g)
-        active = [p for p in ps if p.get("seat") is not None and str(p.get("status") or "active") not in {"removed", "dead"}]
-        waiting = [p for p in ps if p.get("seat") is None and str(p.get("status") or "waiting") == "waiting"]
+        active = [p for p in ps if p.get("seat") is not None and str(p.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}]
+        waiting = [p for p in ps if p.get("seat") is None and str(p.get("status") or "waiting") in {"waiting", "substitute"}]
         active.sort(key=lambda p: int(p.get("seat") or 999))
         cap = len((r or {}).get("roles") or [])
+        occupied = {int(p["seat"]): p for p in active if p.get("seat") is not None}
         full = cap > 0 and len(active) >= cap
+        moderator_id = int((g or {}).get("moderator_id") or 0)
+        moderator_row = next((p for p in ps if int(p.get("player_id") or 0) == moderator_id), None)
+        moderator_label = pname(moderator_row) if moderator_row else (
+            str((g or {}).get("state", {}).get("moderator_name") or "❓") if g else "❓"
+        )
         lines = [
             "༄", "    <b>Mafia Nights</b>", "",
             f"📝 <b>سناریو:</b> {html.escape(str((r or {}).get('name') or '---'))}",
-            f"🎩 <b>گرداننده:</b> {mention(g.get('moderator_id'))}",
+            f"🎩 <b>گرداننده:</b> {mention(moderator_id, moderator_label) if moderator_id else '❌ انتخاب نشده'}",
             f"👥 <b>بازیکنان:</b> {len(active)}/{cap}", "",
-            "◤◢◣◥◤◢◣◥◤◢◣◥", "        <b>لیست بازیکنان</b>", "◤◢◣◥◤◢◣◥◤◢◣◥", ""
+            "━━━━━━━━━━━━━━━━━━", "🪑 <b>لیست صندلی‌ها</b>"
         ]
-        lines += [f"{int(p['seat']):02d} {mention(int(p['player_id']), pname(p))}" for p in active] or ["— هنوز بازیکنی وارد بازی نشده است."]
+        for seat_no in range(1, cap + 1):
+            row = occupied.get(seat_no)
+            lines.append(f"{seat_no:02d}. {mention(int(row['player_id']), pname(row)) if row else '⬜ آزاد'}")
         if waiting:
-            lines += ["", "🎟 <b>لیست رزرو</b>"] + [f"{i}. {mention(int(p['player_id']), pname(p))}" for i,p in enumerate(waiting,1)]
-        lines += ["", "◤◢◣◥◤◢◣◥◤◢◣◥", "༄"]
-        kb = InlineKeyboardMarkup(row_width=2)
-        kb.row(InlineKeyboardButton("🔄 ورود / خروج", callback_data="fl_toggle"))
+            lines += ["", "🎟 <b>لیست رزرو</b>"] + [
+                f"{i}. {mention(int(p['player_id']), pname(p))}" for i, p in enumerate(waiting, 1)
+            ]
+        lines += ["", "━━━━━━━━━━━━━━━━━━", "༄"]
+
+        kb = InlineKeyboardMarkup(row_width=3)
+        for seat_no in range(1, cap + 1):
+            row = occupied.get(seat_no)
+            label = f"{seat_no:02d} {pname(row)[:10]}" if row else f"{seat_no:02d} ⬜"
+            kb.insert(InlineKeyboardButton(label, callback_data=f"fl_seat:{seat_no}"))
+        kb.row(
+            InlineKeyboardButton("🚪 ورود / خروج", callback_data="fl_toggle"),
+        )
         if full:
-            kb.add(InlineKeyboardButton("🎟 رزرو / لغو رزرو", callback_data="fl_reserve"))
-        kb.row(InlineKeyboardButton("📝 تغییر سناریو", callback_data="fl_scenario"), InlineKeyboardButton("⚙️ مدیریت بازی", callback_data="fl_manage"))
-        kb.row(InlineKeyboardButton("⭐ امکانات ویژه", callback_data="fl_special"), InlineKeyboardButton("🚫 لغو بازی", callback_data="fl_cancel"))
-        if full:
-            kb.add(InlineKeyboardButton("🎭 پخش نقش", callback_data="distribute_roles"))
+            kb.row(InlineKeyboardButton("🎟 رزرو / لغو رزرو", callback_data="fl_reserve"))
+            kb.row(InlineKeyboardButton("🎭 پخش نقش", callback_data="distribute_roles"))
+        kb.row(
+            InlineKeyboardButton("📝 تغییر سناریو", callback_data="fl_scenario"),
+            InlineKeyboardButton("⚙️ مدیریت بازی", callback_data="fl_manage"),
+        )
+        kb.row(
+            InlineKeyboardButton("⭐ امکانات ویژه", callback_data="fl_special"),
+            InlineKeyboardButton("🚫 لغو بازی", callback_data="fl_cancel"),
+        )
         return "\n".join(lines), kb
 
     async def render(c):
@@ -174,6 +196,46 @@ def install(main):
         occupied={int(p["seat"]) for p in active}; seat=next((n for n in range(1,cap+1) if n not in occupied),None)
         main.runtime.state.lobby.join(g["id"],uid,seat); await render(c); await c.answer(f"✅ وارد بازی شدید؛ صندلی {seat}")
 
+    async def seat_select(c):
+        g = game(c.message.chat.id)
+        r = scenario(g)
+        uid = int(c.from_user.id)
+        try:
+            target = int(str(c.data).split(":", 1)[1])
+        except Exception:
+            await c.answer("❌ صندلی نامعتبر است.", show_alert=True); return
+        if not g or not r:
+            await c.answer("❌ لابی معتبر نیست.", show_alert=True); return
+        cap = len(r.get("roles") or [])
+        if target < 1 or target > cap:
+            await c.answer("❌ شماره صندلی نامعتبر است.", show_alert=True); return
+        ps = players(g)
+        current = next((p for p in ps if int(p.get("player_id") or 0) == uid and str(p.get("status") or "") not in {"removed", "finished", "kicked"}), None)
+        occupied = {int(p["seat"]): int(p["player_id"]) for p in ps if p.get("seat") is not None and str(p.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}}
+        owner = occupied.get(target)
+        if owner is not None and owner != uid:
+            await c.answer("❌ این صندلی قبلاً گرفته شده است.", show_alert=True); return
+        if current and current.get("seat") is not None and int(current["seat"]) == target:
+            await c.answer("ℹ️ این صندلی برای شما ثبت شده است."); return
+        if current is None:
+            if len(occupied) >= cap:
+                await c.answer("🎟 ظرفیت اصلی تکمیل است؛ از «رزرو / لغو رزرو» استفاده کنید.", show_alert=True); return
+            try:
+                await main._ensure_player(c.from_user)
+            except Exception:
+                pass
+            try:
+                main.runtime.state.lobby.join(g["id"], uid, target, is_substitute=False)
+            except Exception:
+                await c.answer("❌ ورود به صندلی انجام نشد؛ احتمالاً همزمان گرفته شده است.", show_alert=True); return
+        else:
+            try:
+                main.runtime.state.lobby.assign_seat(g["id"], uid, target)
+            except Exception:
+                await c.answer("❌ تغییر صندلی انجام نشد.", show_alert=True); return
+        await render(c)
+        await c.answer(f"✅ صندلی {target} برای شما ثبت شد.")
+
     async def reserve(c):
         g=game(c.message.chat.id); r=scenario(g); uid=int(c.from_user.id)
         if not g or not r: await c.answer("❌ لابی معتبر نیست.",show_alert=True); return
@@ -250,7 +312,7 @@ def install(main):
         (new,lambda c:c.data in {"fl_new","new_game"}),
         (pick,lambda c:str(c.data).startswith("fl_pick:")),
         (moderator,lambda c:str(c.data).startswith("fl_mod:")),
-        (toggle,lambda c:c.data=="fl_toggle"),(reserve,lambda c:c.data=="fl_reserve"),
+        (toggle,lambda c:c.data=="fl_toggle"),(seat_select,lambda c:str(c.data).startswith("fl_seat:")),(reserve,lambda c:c.data=="fl_reserve"),
         (scenario_menu,lambda c:c.data=="fl_scenario"),(manage,lambda c:c.data=="fl_manage"),
         (cancel,lambda c:c.data=="fl_cancel"),(special,lambda c:c.data=="fl_special"),
         (attendance,lambda c:c.data=="fl_attendance"),(ready,lambda c:c.data=="fl_ready"),(back,lambda c:c.data=="fl_back"),
