@@ -72,6 +72,8 @@ profile_enhancements = install_profile_enhancements(main, user_panel)
 main.profile_enhancements = profile_enhancements
 from runtime.profile_db_compat import install as install_profile_db_compat
 install_profile_db_compat(profile_enhancements)
+from runtime.progress_schema_compat import install as install_progress_schema_compat
+install_progress_schema_compat(main)
 from commands import register_commands as register_text_commands
 register_text_commands(main)
 from runtime.command_surface_v2 import install as install_command_surface_v2
@@ -150,5 +152,8 @@ async def on_startup(dp):
             logging.info("PROGRESS UI REAPPLIED AFTER PRIVATE UI AUTHORITIES")
     except Exception:
         logging.exception("Failed to re-apply progress UI after private UI authorities")
+
+    from runtime.faceoff import install as install_faceoff
+    await install_faceoff(main)
 
 main.on_startup = on_startup

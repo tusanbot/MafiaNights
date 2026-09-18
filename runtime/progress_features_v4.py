@@ -47,7 +47,7 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
                 )
             ).mappings().all()
             finished = s.execute(
-                self.repo.text(
+                text(
                     "select id,event_number,status from public.mafia_games "
                     "where status='finished' "
                     "order by coalesce(finished_at,created_at) desc limit 3"
@@ -213,7 +213,7 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
             return
         with self.repo.SessionLocal() as s:
             rows = s.execute(
-                self.repo.text(
+                text(
                     "select i.game_id,g.event_number "
                     "from public.mafia_game_incidents i "
                     "join public.mafia_games g on g.id=i.game_id "
@@ -270,7 +270,7 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
             return
         with self.repo.SessionLocal() as s:
             rows = s.execute(
-                self.repo.text(
+                text(
                     "select h.version,h.action,h.created_at,g.event_number "
                     "from public.mafia_game_incident_history h "
                     "join public.mafia_game_incidents i on i.id=h.incident_id "
@@ -327,7 +327,7 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
                     return True
                 with self.repo.SessionLocal() as s:
                     row = s.execute(
-                        self.repo.text(
+                        text(
                             "select id,event_number,status from public.mafia_games "
                             "where event_number=:number order by coalesce(finished_at,created_at) desc limit 1"
                         ),
