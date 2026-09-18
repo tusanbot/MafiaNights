@@ -46,7 +46,7 @@ def install(app: Any) -> bool:
             ("🎂 تولد بازیکن", "birthday"), ("⚔ وضعیت چالش", "challenge"), ("⏭ مدیریت نکست", "next"),
             ("🚫 لغو بازی", "cancel"), ("ℹ️ اطلاعات بازی", "info"), ("🦵 کیک از بازی", "kick"),
             ("⚠️ تذکر به بازیکن", "warning"), ("➕ ترن اضافه", "extra"), ("🔇 سکوت بازیکن", "mute"),
-            ("🔊 حذف سکوت", "unmute"), ("⬅️ بازگشت به لابی", "back_lobby"),
+            ("🔊 حذف سکوت", "unmute"), ("🏁 اتمام بازی", "finish"), ("⬅️ بازگشت به لابی", "back_lobby"),
         ]
         kb = InlineKeyboardMarkup(row_width=3)
         for i in range(0, len(items), 3):
