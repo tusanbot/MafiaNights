@@ -37,20 +37,9 @@ class PlayerDiscipline:
         return str(row.get("nickname") or row.get("first_name") or row.get("username") or row.get("player_id") or "👤")
 
     def patch_panel(self):
-        original = GameManagement.panel
-        if getattr(GameManagement, "_discipline_panel_patched", False):
-            return
-
-        def panel(instance, game_id):
-            kb = original(instance, game_id)
-            kb.row(
-                InlineKeyboardButton("⚠️ تذکر بازیکن", callback_data=f"mgmt:{int(game_id)}:warning"),
-                InlineKeyboardButton("🚫 کیک از بازی", callback_data=f"mgmt:{int(game_id)}:kick"),
-            )
-            return kb
-
-        GameManagement.panel = panel
-        GameManagement._discipline_panel_patched = True
+        # management_surface_final is the sole management UI owner. Discipline
+        # actions are registered separately and must never mutate its panel.
+        return
 
     async def pick(self, callback, action: str, title: str):
         gid = int(callback.message.chat.id)
