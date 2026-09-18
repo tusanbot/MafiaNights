@@ -168,14 +168,14 @@ def install(main):
         # be edited, so send the lobby as a reply instead.
         if getattr(c, "_from_text_command", False):
             sent = await c.message.reply(
-                "📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:",
+                text,
                 parse_mode="HTML",
                 reply_markup=kb,
             )
             main.lobby_message_id = sent.message_id
         else:
             await c.message.edit_text(
-                "📝 <b>انتخاب سناریو</b>\n\nسناریوی بازی را انتخاب کنید:",
+                text,
                 parse_mode="HTML",
                 reply_markup=kb,
             )
