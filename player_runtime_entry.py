@@ -82,6 +82,8 @@ from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
 from runtime.private_scenario_crud import install as install_private_scenario_crud
 install_private_scenario_crud(main)
+from runtime.progress_features_v4 import install as install_progress_features
+install_progress_features(main)
 
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.live_controls_v2 import install as install_live_controls_v2
