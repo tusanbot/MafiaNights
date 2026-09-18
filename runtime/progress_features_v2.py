@@ -288,7 +288,7 @@ class ProgressFeaturesV2:
         if not await self._admin(c):
             return
         self._set_state(c.from_user.id, "event_name", {})
-        await c.message.edit_text("➕ <b>افزودن اونت</b>\n\nنام اونت را ارسال کنید.", parse_mode="HTML")
+        await c.message.edit_text("➕ <b>افزودن اونت</b>\n\nنام اونت را ارسال کنید.", parse_mode="HTML", reply_markup=InlineKeyboardMarkup().add(self._back("progress:form_cancel:event_add")))
         await c.answer()
 
     async def event_stage(self, c):
@@ -309,7 +309,7 @@ class ProgressFeaturesV2:
             await c.answer("⚠️ ابتدا مرحله بسازید.", show_alert=True)
             return
         self._set_state(c.from_user.id, "event_auto_count", {"stage_id": int(stages[0]["id"]), "event_id": eid})
-        await c.message.answer("🤖 تعداد گروه‌ها را ارسال کنید.")
+        await c.message.answer("🤖 تعداد گروه‌ها را ارسال کنید.", reply_markup=InlineKeyboardMarkup().add(self._back(f"progress:form_cancel:event_auto:{eid}")))
         await c.answer()
 
     async def event_manual(self, c):
@@ -321,7 +321,7 @@ class ProgressFeaturesV2:
             await c.answer("⚠️ ابتدا مرحله بسازید.", show_alert=True)
             return
         self._set_state(c.from_user.id, "event_manual", {"stage_id": int(stages[0]["id"]), "event_id": eid})
-        await c.message.answer("✋ شناسه بازیکن و شماره گروه را با فاصله ارسال کنید. مثال: 123456 2")
+        await c.message.answer("✋ شناسه بازیکن و شماره گروه را با فاصله ارسال کنید. مثال: 123456 2", reply_markup=InlineKeyboardMarkup().add(self._back(f"progress:form_cancel:event_manual:{eid}")))
         await c.answer()
 
     async def event_scores(self, c):
@@ -356,7 +356,7 @@ class ProgressFeaturesV2:
             return
         _, _, sid, uid = str(c.data).split(":")
         self._set_state(c.from_user.id, "event_score", {"stage_id": int(sid), "player_id": int(uid)})
-        await c.message.answer("⭐ امتیاز جدید را ارسال کنید.")
+        await c.message.answer("⭐ امتیاز جدید را ارسال کنید.", reply_markup=InlineKeyboardMarkup().add(self._back(f"progress:form_cancel:score:{sid}")))
         await c.answer()
 
     async def event_cancel(self, c):
@@ -382,14 +382,14 @@ class ProgressFeaturesV2:
         if not await self._admin(c): return
         eid = int(str(c.data).split(":")[-1])
         self._set_state(c.from_user.id, "event_old", {"event_id": eid})
-        await c.message.answer("🔄 شناسه بازیکن فعلی را ارسال کنید.")
+        await c.message.answer("🔄 شناسه بازیکن فعلی را ارسال کنید.", reply_markup=InlineKeyboardMarkup().add(self._back(f"progress:form_cancel:replace:{eid}")))
         await c.answer()
 
     async def event_add_player(self, c):
         if not await self._admin(c): return
         eid = int(str(c.data).split(":")[-1])
         self._set_state(c.from_user.id, "event_add_player", {"event_id": eid})
-        await c.message.answer("➕ شناسه عددی بازیکن را ارسال کنید.")
+        await c.message.answer("➕ شناسه عددی بازیکن را ارسال کنید.", reply_markup=InlineKeyboardMarkup().add(self._back(f"progress:form_cancel:add_player:{eid}")))
         await c.answer()
 
     async def event_remove_player(self, c):
@@ -735,6 +735,7 @@ class ProgressFeaturesV2:
         self._front(self.event_finish, lambda c: str(c.data or "").startswith("progress:finish:"))
         self._front(lambda c: self.event_edit(c, "name"), lambda c: str(c.data or "").startswith("progress:event_name:"))
         self._front(lambda c: self.event_edit(c, "time"), lambda c: str(c.data or "").startswith("progress:event_time:"))
+        self._front(self.form_cancel, lambda c: str(c.data or "").startswith("progress:form_cancel:"))
         self._front(self.event_replace, lambda c: str(c.data or "").startswith("progress:replace:"))
         self._front(self.event_add_player, lambda c: str(c.data or "").startswith("progress:addplayer:"))
         self._front(self.event_remove_player, lambda c: str(c.data or "").startswith("progress:removeplayer:"))
