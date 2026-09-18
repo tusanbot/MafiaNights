@@ -151,4 +151,7 @@ async def on_startup(dp):
     except Exception:
         logging.exception("Failed to re-apply progress UI after private UI authorities")
 
+    from runtime.faceoff import install as install_faceoff
+    await install_faceoff(main)
+
 main.on_startup = on_startup
