@@ -105,7 +105,7 @@ class TextCommands:
             f"📌 وضعیت: <b>{html.escape(status)}</b>\n\n"
             "پنل مدیریت از دکمه‌های زیر در دسترس است.",
             parse_mode="HTML",
-            reply_markup=GameManagement.panel(self, int(game["id"])),
+            reply_markup=getattr(self.app, "_canonical_management_panel", GameManagement(self.app).panel)(int(game["id"])),
         )
 
     async def _turn(self, message: types.Message):
