@@ -4,6 +4,8 @@ Fixes event edit state handling while inheriting the canonical V2 UI/runtime.
 """
 from __future__ import annotations
 
+from aiogram.types import InlineKeyboardMarkup
+
 from runtime.progress_features_v2 import ProgressFeaturesV2
 
 
