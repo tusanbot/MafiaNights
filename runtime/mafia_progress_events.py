@@ -16,28 +16,55 @@ from repositories.base import DatabaseRepository
 from repositories.rating_repository import RatingRepository
 
 ACHIEVEMENTS = (
-    {"id":"games_1","name":"اولین بازی","description":"اولین بازی ثبت‌شده","metric":"games","target":1,"reward":25},
+    {"id":"games_1","name":"اولین بازی","description":"اولین بازی ثبت‌شده را انجام بده","metric":"games","target":1,"reward":25},
     {"id":"games_10","name":"بازیکن فعال","description":"۱۰ بازی انجام بده","metric":"games","target":10,"reward":75,"tag_name":"بازیکن فعال","tag_emoji":"🔥"},
     {"id":"games_25","name":"بازیکن باتجربه","description":"۲۵ بازی انجام بده","metric":"games","target":25,"reward":150},
-    {"id":"games_50","name":"بازیکن حرفه‌ای","description":"۵۰ بازی انجام بده","metric":"games","target":50,"reward":300,"tag_name":"بازیکن حرفه‌ای","tag_emoji":"🎖"},
+    {"id":"games_50","name":"بازیکن حرفه‌ای","description":"۵۰ بازی انجام بده","metric":"games","target":50,"reward":300,"tag_name":"بازیکن حرفه‌ای","tag_emoji":"🎖️"},
     {"id":"games_100","name":"افسانه مافیا","description":"۱۰۰ بازی انجام بده","metric":"games","target":100,"reward":700,"tag_name":"افسانه مافیا","tag_emoji":"👑"},
     {"id":"wins_10","name":"برنده‌ساز","description":"۱۰ برد ثبت کن","metric":"wins","target":10,"reward":200,"tag_name":"برنده‌ساز","tag_emoji":"🏆"},
-    {"id":"challenges_10","name":"چالشگر","description":"۱۰ چالش ثبت‌شده داشته باش","metric":"challenges","target":10,"reward":150,"tag_name":"چالشگر","tag_emoji":"⚔️"},
-    {"id":"clean_10","name":"منضبط","description":"۱۰ بازی بدون دریافت تذکر","metric":"clean_games","target":10,"reward":175,"tag_name":"منضبط","tag_emoji":"🛡️"},
-    {"id":"win_streak_5","name":"سریال برد","description":"۵ برد پیاپی","metric":"best_win_streak","target":5,"reward":250,"tag_name":"سریال برد","tag_emoji":"🔥"},
-    {"id":"positive_50","name":"مثبت پنجاه","description":"۵۰ امتیاز مثبت از بازی‌ها کسب کن","metric":"delta","target":50,"reward":125},
-    {"id":"avg_70","name":"ثبات درخشان","description":"با حداقل ۱۰ بازی میانگین امتیاز بازی ۷۰ یا بیشتر داشته باش","metric":"avg_game_score","target":70,"reward":300,"requires_games":10,"tag_name":"ثبات درخشان","tag_emoji":"💎"},
+    {"id":"challenges_100","name":"چالشگر","description":"در مجموع ۱۰۰ چالش ثبت‌شده داشته باش","metric":"challenges","target":100,"reward":500,"tag_name":"چالشگر","tag_emoji":"⚔️"},
+    {"id":"clean_10","name":"منضبط","description":"۱۰ بازی را بدون دریافت تذکر به پایان برسان","metric":"clean_games","target":10,"reward":175,"tag_name":"منضبط","tag_emoji":"🛡️"},
+    {"id":"win_streak_5","name":"سریال برد","description":"۵ برد پیاپی ثبت کن","metric":"best_win_streak","target":5,"reward":250,"tag_name":"سریال برد","tag_emoji":"🔥"},
+    {"id":"positive_50","name":"مثبت پنجاه","description":"مجموع تغییر امتیاز بازی‌هایت به +۵۰ یا بیشتر برسد","metric":"delta","target":50,"reward":125},
+    {"id":"avg_70","name":"ثبات درخشان","description":"با حداقل ۱۰ بازی، میانگین امتیاز بازی‌هایت ۷۰ یا بیشتر باشد","metric":"avg_game_score","target":70,"reward":300,"requires_games":10,"tag_name":"ثبات درخشان","tag_emoji":"💎"},
+    {"id":"mafia_wins_20","name":"مافیای کارکشته","description":"۲۰ برد در ساید مافیا ثبت کن","metric":"mafia_wins","target":20,"reward":300},
+    {"id":"mafia_wins_50","name":"فرمانده مافیا","description":"۵۰ برد در ساید مافیا ثبت کن","metric":"mafia_wins","target":50,"reward":700},
+    {"id":"independent_wins_3","name":"مستقل موفق","description":"۳ برد در ساید مستقل ثبت کن","metric":"independent_wins","target":3,"reward":200},
+    {"id":"independent_wins_5","name":"مستقل افسانه‌ای","description":"۵ برد در ساید مستقل ثبت کن","metric":"independent_wins","target":5,"reward":400},
+    {"id":"citizen_wins_20","name":"شهروند کارکشته","description":"۲۰ برد در ساید شهروند ثبت کن","metric":"citizen_wins","target":20,"reward":300},
+    {"id":"citizen_wins_50","name":"قهرمان شهر","description":"۵۰ برد در ساید شهروند ثبت کن","metric":"citizen_wins","target":50,"reward":700},
 )
-
 class FeatureRepository(DatabaseRepository):
     def _summary(self, uid):
         with self.SessionLocal() as s:
-            rows=s.execute(text("select r.score,r.result,r.warning_penalty,r.challenge_bonus from public.mafia_ratings r where r.user_id=:uid order by r.created_at asc"),{"uid":int(uid)}).mappings().all()
+            rows=s.execute(text("select r.score,r.result,r.warning_penalty,r.challenge_bonus,r.role,g.state from public.mafia_ratings r left join public.mafia_games g on g.id=r.game_id where r.user_id=:uid order by r.created_at asc"),{"uid":int(uid)}).mappings().all()
         games=len(rows); wins=sum(r["result"]=="win" for r in rows); challenges=sum(int(r["challenge_bonus"] or 0) for r in rows)//3; clean=sum(int(r["warning_penalty"] or 0)==0 for r in rows); delta=sum(int(r["score"] or 0) for r in rows); scores=[50+int(r["score"] or 0) for r in rows]; streak=best=0
         for r in rows:
             if r["result"]=="win": streak+=1; best=max(best,streak)
             else: streak=0
-        return {"games":games,"wins":wins,"challenges":challenges,"clean_games":clean,"delta":delta,"avg_game_score":sum(scores)/games if games else 0,"best_win_streak":best}
+        mafia_wins=independent_wins=citizen_wins=0
+        for r in rows:
+            if r["result"] != "win": continue
+            state = r.get("state") or {}
+            if isinstance(state, str):
+                try: state = json.loads(state)
+                except Exception: state = {}
+            cfg = state.get("scenario_config") or state.get("scenario") or {}
+            rules = cfg.get("role_rules") or {}
+            role = r.get("role")
+            side = ""
+            if isinstance(rules, dict) and isinstance(rules.get(role), dict):
+                side = str(rules[role].get("side") or "")
+            if not side:
+                sides = cfg.get("sides") or {}
+                if isinstance(sides, dict): side = str(sides.get(role) or "")
+            norm = side.strip().lower().replace("‌"," ")
+            if "مافیا" in side or "mafia" in norm: mafia_wins += 1
+            elif "مستقل" in side or "independent" in norm: independent_wins += 1
+            elif "شهروند" in side or "citizen" in norm: citizen_wins += 1
+        return {"games":games,"wins":wins,"challenges":challenges,"clean_games":clean,"delta":delta,
+                "avg_game_score":sum(scores)/games if games else 0,"best_win_streak":best,
+                "mafia_wins":mafia_wins,"independent_wins":independent_wins,"citizen_wins":citizen_wins}
     def achievement_points(self,uid):
         with self.SessionLocal() as s:return int(s.execute(text("select coalesce(sum(reward_points),0) from public.mafia_achievement_rewards where player_id=:uid"),{"uid":int(uid)}).scalar_one() or 0)
     def sync_achievements(self,uid):
