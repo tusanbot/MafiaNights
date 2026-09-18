@@ -49,6 +49,51 @@ async def _ensure_startup() -> None:
         _startup_complete = True
 
 
+async def _dispatch_priority_message(message: Any, runtime_entry: Any) -> bool:
+    """Handle the two canonical entry commands before aiogram handler dispatch.
+
+    Telegram webhook traffic reaches this module first. Routing these exact
+    entry messages here makes the production owners deterministic even if an
+    older message handler was registered later by another compatibility layer.
+    """
+    text = str(getattr(message, "text", "") or "").strip().replace("\u200c", " ")
+    normalized = " ".join(text.split())
+    if normalized:
+        first = normalized.split(" ", 1)[0].casefold()
+        if first.startswith("/start"):
+            command = first[1:]
+            if command == "start" or command.startswith("start@"):
+                handler = getattr(runtime_entry, "_production_start", None)
+                if handler is not None:
+                    await handler(message)
+                    import logging
+                    logging.info(
+                        "WEBHOOK CANONICAL /START ROUTE chat_type=%s user_id=%s",
+                        getattr(getattr(message, "chat", None), "type", None),
+                        getattr(getattr(message, "from_user", None), "id", None),
+                    )
+                    return True
+        if normalized == "بازی جدید":
+            handler = getattr(runtime_entry.main, "_canonical_new_game_handler", None)
+            if handler is not None:
+                from types import SimpleNamespace
+                callback = SimpleNamespace(
+                    message=message,
+                    from_user=message.from_user,
+                    data="fl_new",
+                    answer=message.answer,
+                )
+                await handler(callback)
+                import logging
+                logging.info(
+                    "WEBHOOK CANONICAL NEW_GAME ROUTE chat_type=%s user_id=%s",
+                    getattr(getattr(message, "chat", None), "type", None),
+                    getattr(getattr(message, "from_user", None), "id", None),
+                )
+                return True
+    return False
+
+
 async def _dispatch(payload: dict[str, Any]) -> None:
     from aiogram import Bot, Dispatcher, types
 
@@ -57,6 +102,9 @@ async def _dispatch(payload: dict[str, Any]) -> None:
     update = types.Update(**payload)
     Bot.set_current(runtime_entry.main.bot)
     Dispatcher.set_current(runtime_entry.main.dp)
+    if getattr(update, "message", None) is not None:
+        if await _dispatch_priority_message(update.message, runtime_entry):
+            return
     await runtime_entry.main.dp.process_update(update)
 
 
