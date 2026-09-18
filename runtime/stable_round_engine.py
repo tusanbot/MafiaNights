@@ -376,6 +376,20 @@ def install(main):
             await callback.answer("⚠️ بازی در حال اجرا نیست.", show_alert=True)
             raise CancelHandler()
         _ensure(main)
+
+        # Always restore the durable order chosen by «سر صحبت» before the
+        # round engine starts. This prevents fallback to numeric seat order.
+        try:
+            game = main.runtime.state.active_game(_gid(main))
+            persisted = [int(x) for x in dict((game or {}).get("state") or {}).get("turn_order") or []]
+            if persisted:
+                main.turn_order = persisted
+                main.current_turn_index = 0
+                main._stable_normal_order = list(persisted)
+                main._gm_normal_order = list(persisted)
+        except Exception:
+            logging.exception("stable round: failed to restore persisted speaker order")
+
         if main._stable_day_active and not main._stable_day_ended:
             await callback.answer("⚠️ این دور قبلاً شروع شده است.", show_alert=True)
             raise CancelHandler()
