@@ -14,9 +14,10 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import text
 
 from runtime.progress_features_v2 import ProgressFeaturesV2
+from runtime.progress_features_v3 import ProgressFeaturesV3
 
 
-class ProgressFeaturesV4(ProgressFeaturesV2):
+class ProgressFeaturesV4(ProgressFeaturesV3):
     async def _is_admin_silent(self, obj):
         uid = int(obj.from_user.id)
         if uid == int(getattr(self.app, "moderator_id", 0) or 0):
