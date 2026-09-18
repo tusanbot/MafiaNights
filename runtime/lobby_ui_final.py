@@ -322,6 +322,16 @@ def install(main):
     ]
     for fn,flt in callbacks: dp.register_callback_query_handler(fn,flt,state="*")
     for fn,_ in callbacks: move_front(cr,fn)
+
+    # Canonical text command: «بازی جدید» must enter the same new() handler
+    # used by the canonical fl_new/new_game callback, not the legacy main1 route.
+    from types import SimpleNamespace
+    async def new_game_text(message):
+        callback = SimpleNamespace(message=message, from_user=message.from_user, data="fl_new", answer=message.answer)
+        await new(callback)
+    dp.register_message_handler(new_game_text, lambda m: (m.text or "").strip().replace("‌", " ") == "بازی جدید", state="*")
+    move_front(mr,new_game_text)
+
     dp.register_message_handler(start_command,commands=["start"],state="*")
     move_front(mr,start_command)
     main._render_final_lobby=render
