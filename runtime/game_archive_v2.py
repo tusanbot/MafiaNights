@@ -56,7 +56,9 @@ def _duration(g):
 
 def _title(g):
     status = str(g.get("status") or "")
-    suffix = " 🚫" if status == "cancelled" else " ✅" if status == "finished" else " 🟢"
+    if status == "cancelled":
+        return "🚫 بازی لغوشده"
+    suffix = " ✅" if status == "finished" else " 🟢"
     return f"📓 بازی {int(g.get('event_number') or 1)}{suffix}"
 
 def _options(gid):
@@ -86,7 +88,8 @@ def _overview(g):
     scenario=state.get("scenario_name") or g.get("scenario") or g.get("scenario_id") or "---"
     status=str(g.get("status") or "---")
     status_label={"finished":"🏁 تمام‌شده","cancelled":"🚫 لغوشده"}.get(status,status)
-    return "\n".join([f"🎮 <b>{_title(g)}</b>","",f"🔢 شماره بازی: <b>{int(g.get('event_number') or 1)}</b>",f"📌 وضعیت: <b>{html.escape(status_label)}</b>",f"🎭 سناریو: <b>{html.escape(str(scenario))}</b>",f"▶️ شروع: <b>{start:%H:%M:%S}</b>" if start else "▶️ شروع: <b>---</b>",f"⏹ پایان: <b>{end:%H:%M:%S}</b>" if end else "⏹ پایان: <b>---</b>",f"⏱ مدت: <b>{_duration(g)}</b>",f"🏆 برنده: <b>{html.escape(_winner_label(_winner(g)))}</b>"])
+    number_line = "" if status == "cancelled" else f"🔢 شماره بازی: <b>{int(g.get('event_number') or 1)}</b>"
+    return "\n".join([f"🎮 <b>{_title(g)}</b>","",number_line,f"📌 وضعیت: <b>{html.escape(status_label)}</b>",f"🎭 سناریو: <b>{html.escape(str(scenario))}</b>",f"▶️ شروع: <b>{start:%H:%M:%S}</b>" if start else "▶️ شروع: <b>---</b>",f"⏹ پایان: <b>{end:%H:%M:%S}</b>" if end else "⏹ پایان: <b>---</b>",f"⏱ مدت: <b>{_duration(g)}</b>",f"🏆 برنده: <b>{html.escape(_winner_label(_winner(g)))}</b>"])
 
 def _players(g,rows):
     state=dict(g.get("state") or {}); win=_winner(g); out=[f"👥 <b>لیست بازی {int(g.get('event_number') or 1)}</b>",""]
