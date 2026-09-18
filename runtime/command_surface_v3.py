@@ -49,7 +49,17 @@ def install(app):
         if c=="start":
             if str(g.get("status")) not in {"running","paused"}: await m.reply("❌ بازی در حال اجرا نیست."); raise CancelHandler()
             if getattr(app,"_stable_day_active",False) and not getattr(app,"_stable_day_ended",False): await m.reply("⚠️ این دور قبلاً شروع شده است."); raise CancelHandler()
-            sre._ensure(app); base=sre._base_order(app)
+            sre._ensure(app)
+            # Restore the persisted «سر صحبت» order before falling back to seat numbers.
+            try:
+                persisted = [int(x) for x in dict(g.get("state") or {}).get("turn_order") or []]
+                if persisted:
+                    app.turn_order = list(persisted)
+                    app._stable_normal_order = list(persisted)
+                    app._gm_normal_order = list(persisted)
+            except Exception:
+                pass
+            base = list(getattr(app, "_stable_normal_order", []) or []) or sre._base_order(app)
             if not base: await m.reply("⚠️ بازیکنی برای شروع دور وجود ندارد."); raise CancelHandler()
             app._stable_day_active=True; app._stable_day_ended=False; app._stable_phase="normal"; app._stable_normal_order=list(base); app._stable_extra_seats=set(); app._stable_extra_used=set(); app._stable_challenge_used=set(); app._stable_challenge_locked=set(); app.turn_order=list(base); app.current_turn_index=0; app.challenge_mode=False
             await sre._advance(app); await m.reply("✅ دور شروع شد."); raise CancelHandler()
