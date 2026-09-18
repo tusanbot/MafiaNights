@@ -1860,6 +1860,13 @@ async def start_cmd(message: types.Message):
 
 @dp.callback_query_handler(lambda c: c.data == "new_game")
 async def start_game(callback: types.CallbackQuery):
+    # Legacy callback kept for compatibility, but it must never execute the old
+    # lobby creation flow. The production entrypoint exposes the canonical
+    # runtime.lobby_ui_final handler under _canonical_new_game_handler.
+    canonical = globals().get("_canonical_new_game_handler")
+    if canonical is not None and canonical is not start_game:
+        await canonical(callback)
+        return
     # محدودیت به گروه خاص
     if callback.message.chat.id != ALLOWED_GROUP_ID:
         await callback.answer("❌ این ربات فقط در گروه اصلی کار می‌کند.", show_alert=True)
