@@ -164,6 +164,17 @@ def install(main):
                     callback_data=f"fl_pick:{int(r['id'])}",
                 )
             )
+        # The new-game entry point is an administrator-only action in groups.
+        try:
+            member = await main.bot.get_chat_member(gid, int(c.from_user.id))
+            if member.status not in {"creator", "administrator"}:
+                await c.answer("⛔ فقط مدیر گروه می‌تواند بازی جدید ایجاد کند.", show_alert=True)
+                return
+        except Exception:
+            await c.answer("⛔ احراز دسترسی مدیر گروه انجام نشد.", show_alert=True)
+            return
+
+        text, _ = lobby_view(gid)
         # For the text-command adapter the incoming Telegram Message cannot
         # be edited, so send the lobby as a reply instead.
         if getattr(c, "_from_text_command", False):
