@@ -98,6 +98,7 @@ def install(app: Any) -> bool:
         rows = app.runtime.state.games.list_players(int(game["id"]))
         await callback.message.edit_text(game_end._final_text(game, rows), parse_mode="HTML", reply_markup=_final_markup(int(game["id"])))
         await callback.answer()
+        raise CancelHandler()
 
     async def final_events(callback):
         p = str(callback.data or "").split(":")
@@ -119,6 +120,7 @@ def install(app: Any) -> bool:
             ),
         )
         await callback.answer()
+        raise CancelHandler()
 
     async def final_history(callback):
         p = str(callback.data or "").split(":")
@@ -141,6 +143,7 @@ def install(app: Any) -> bool:
         kb.add(InlineKeyboardButton("✖️ بستن", callback_data=f"game_end:{int(ref['id'])}:close"))
         await callback.message.edit_text("📚 <b>بازی‌های گذشته</b>\n\nبازی موردنظر را انتخاب کنید:", parse_mode="HTML", reply_markup=kb)
         await callback.answer()
+        raise CancelHandler()
 
     async def final_history_view(callback):
         p = str(callback.data or "").split(":")
@@ -154,6 +157,7 @@ def install(app: Any) -> bool:
         rows = app.runtime.state.games.list_players(int(game["id"]))
         await callback.message.edit_text(game_end._final_text(game, rows), parse_mode="HTML", reply_markup=_final_markup(int(game["id"])))
         await callback.answer()
+        raise CancelHandler()
 
     async def final_close(callback):
         p = str(callback.data or "").split(":")
@@ -164,6 +168,7 @@ def install(app: Any) -> bool:
         except Exception:
             pass
         await callback.answer()
+        raise CancelHandler()
 
     dp.register_callback_query_handler(final_history_view, lambda c: str(c.data or "").startswith("game_history:view:"), state="*")
     dp.register_callback_query_handler(final_history, lambda c: str(c.data or "").startswith("game_history:list:"), state="*")
