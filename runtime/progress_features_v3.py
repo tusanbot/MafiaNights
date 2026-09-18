@@ -16,7 +16,8 @@ class ProgressFeaturesV3(ProgressFeaturesV2):
         self._set_state(c.from_user.id, state, {"event_id": eid})
         await c.message.answer(
             "📝 نام جدید را ارسال کنید." if field == "name"
-            else "🗓 زمان را به صورت YYYY-MM-DD HH:MM ارسال کنید یا «بدون زمان»."
+            else "🗓 زمان را به صورت YYYY-MM-DD HH:MM ارسال کنید یا «بدون زمان».",
+            reply_markup=InlineKeyboardMarkup().add(self._back(f"progress:form_cancel:edit_{field}:{eid}"))
         )
         await c.answer()
 
