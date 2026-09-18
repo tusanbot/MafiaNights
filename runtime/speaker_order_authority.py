@@ -61,7 +61,7 @@ def _candidate(name: str) -> bool:
     # The exact selected-seat callback may have a legacy function name, so do
     # not depend on one historical function name only.
     return (
-        name in {"speaker_auto", "speaker_manual", "head_set_handler", "set_head", "head_pick", "speaker_select", "select_speaker"}
+        name in {"speaker_auto", "head_set_handler", "set_head", "head_pick", "speaker_select", "select_speaker"}
         or "speaker" in name
         or "head_pick" in name
     )
@@ -89,9 +89,10 @@ def _selected_from_callback(callback):
 
 
 def _apply_selected(main, callback, seat=None):
-    if seat is None:
-        seat = getattr(main, "current_speaker", None)
-    if seat is None:
+    callback_seat = _selected_from_callback(callback)
+    if callback_seat is not None:
+        seat = callback_seat
+    elif seat is None:
         seat = getattr(main, "_canonical_speaker_seat", None)
     if seat is None:
         try:
@@ -100,7 +101,7 @@ def _apply_selected(main, callback, seat=None):
         except Exception:
             seat = None
     if seat is None:
-        seat = _selected_from_callback(callback)
+        seat = getattr(main, "current_speaker", None)
     if seat is None:
         return
     seat = int(seat)
