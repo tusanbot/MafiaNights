@@ -88,13 +88,6 @@ def install(app):
         import logging
         logging.exception("failed to install speaker order authority")
 
-    try:
-        from runtime.production_consistency_loader import install as install_production_consistency
-        install_production_consistency(app)
-    except Exception:
-        import logging
-        logging.exception("failed to install final production consistency runtime")
-
     # This installer is reached after command_surface_v2 in player_runtime_entry.
     # It therefore becomes the final command precedence boundary and prevents
     # the compatibility v2 handler from masking the final v3/manual-end handlers.
