@@ -53,6 +53,19 @@ class TextCommands:
             return False
 
     async def _new_game(self, message: types.Message):
+        # «بازی جدید» is owned by the canonical lobby runtime. Do not enter
+        # the legacy text-command game creation path.
+        canonical = getattr(self.app, "_canonical_new_game_handler", None)
+        if canonical is not None:
+            from types import SimpleNamespace
+            callback = SimpleNamespace(
+                message=message,
+                from_user=message.from_user,
+                data="fl_new",
+                answer=message.answer,
+            )
+            await canonical(callback)
+            return
         if message.chat.type not in {"group", "supergroup"}:
             await message.reply("ℹ️ ایجاد بازی جدید فقط داخل گروه قابل استفاده است.")
             return
