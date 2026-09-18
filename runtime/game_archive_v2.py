@@ -105,12 +105,8 @@ def _events_text(g):
 
 def install(app: Any) -> bool:
     dp=app.dp
-    original=getattr(GameManagement,"panel",None)
-    if original and not getattr(GameManagement,"_archive_v2_wrapped",False):
-        @wraps(original)
-        def panel(self,game_id):
-            kb=original(self,game_id); kb.row(InlineKeyboardButton("🎮 اطلاعات بازی",callback_data=f"game_archive:menu:{int(game_id)}"),InlineKeyboardButton("📝 ثبت اتفاقات",callback_data=f"game_archive:events_menu:{int(game_id)}")); return kb
-        GameManagement.panel=panel; GameManagement._archive_v2_wrapped=True
+    # The canonical management UI owns its button set. Archive/history is
+    # available from the finished-game result surface, not from management.
     def get_game(gid): return app.runtime.state.games.get_game(int(gid))
     def group_games(gid,finished=False):
         gs=app.runtime.state.games.list_games(int(gid),limit=100)
