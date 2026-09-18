@@ -170,6 +170,41 @@ install_game_info_security_v2(main)
 from runtime import production_cutover_final
 production_cutover_final.install()
 
+
+def _rearm_canonical_new_game():
+    """Make the final lobby the sole owner of both new-game entry routes."""
+    callbacks = getattr(getattr(main.dp, "callback_query_handlers", None), "handlers", [])
+    messages = getattr(getattr(main.dp, "message_handlers", None), "handlers", [])
+
+    # Even if a compatibility installer re-registered the legacy main1 callback,
+    # it must delegate to the canonical lobby instead of creating its own UI.
+    callbacks[:] = [
+        item for item in callbacks
+        if getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__name__", "") != "start_game"
+    ]
+
+    canonical = getattr(main, "_canonical_new_game_handler", None)
+    if canonical is not None:
+        for i, item in enumerate(callbacks):
+            fn = getattr(item, "handler", None) or getattr(item, "callback", None)
+            if fn is canonical:
+                callbacks.insert(0, callbacks.pop(i))
+                break
+
+    # «بازی جدید» text is allowed to be handled by TextCommands, but that
+    # handler now delegates to the same canonical callback. Prefer the final
+    # lobby's direct text adapter when present.
+    for i, item in enumerate(messages):
+        fn = getattr(item, "handler", None) or getattr(item, "callback", None)
+        if getattr(fn, "__name__", "") == "new_game_text":
+            messages.insert(0, messages.pop(i))
+            break
+    logging.info("CANONICAL NEW_GAME rearmed: legacy_start_removed final_owner=%s",
+                 bool(canonical))
+
+
+_rearm_canonical_new_game()
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
