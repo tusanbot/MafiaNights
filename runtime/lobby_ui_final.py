@@ -6,6 +6,7 @@ from runtime.ui_theme import button as ui_button
 InlineKeyboardButton = ui_button
 from repositories.scenario_repository import ScenarioRepository
 from runtime.scenario_runtime import ScenarioRuntime
+from runtime.tag_display import tagged_name_html
 
 
 def install(main):
@@ -55,9 +56,18 @@ def install(main):
         return str(p.get("nickname") or p.get("first_name") or p.get("username") or p.get("player_id") or "👤")
 
     def mention(uid, fallback=None):
-        try: n = main.display_name(int(uid), fallback or main.players.get(int(uid)))
-        except Exception: n = fallback or main.players.get(int(uid)) or str(uid)
-        return f'<a href="tg://user?id={int(uid)}"><b>{html.escape(str(n))}</b></a>'
+        try:
+            n = main.display_name(int(uid), fallback or main.players.get(int(uid)))
+        except Exception:
+            n = fallback or main.players.get(int(uid)) or str(uid)
+        tag = None
+        try:
+            engine = getattr(main, "_achievement_engine", None)
+            if engine is not None:
+                tag = engine.active_tag(int(uid))
+        except Exception:
+            tag = None
+        return f'<a href="tg://user?id={int(uid)}"><b>{tagged_name_html(str(n), tag)}</b></a>'
 
     async def allowed(c, g):
         if int(c.from_user.id) == int((g or {}).get("moderator_id") or 0): return True
