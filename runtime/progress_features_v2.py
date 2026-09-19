@@ -19,6 +19,7 @@ from sqlalchemy import text
 
 from repositories.rating_repository import RatingRepository
 from runtime.mafia_progress_events import FeatureRepository, ACHIEVEMENTS
+from runtime.tag_display import tagged_name_html
 
 
 class ProgressFeaturesV2:
@@ -237,8 +238,13 @@ class ProgressFeaturesV2:
         for st in stages:
             lines.append(f"📚 {html.escape(str(st['name']))} — {st['status']}")
             for p in self.repo.stage_players(st["id"]):
+                tag = None
+                try:
+                    tag = self.repo.active_tag(int(p.get("player_id") or 0))
+                except Exception:
+                    pass
                 lines.append(
-                    f"  └ {html.escape(self._name(p))} | گروه {p.get('group_no') or '—'} | "
+                    f"  └ {tagged_name_html(self._name(p), tag)} | گروه {p.get('group_no') or '—'} | "
                     f"امتیاز {p.get('score') if p.get('score') is not None else '—'}"
                 )
         admin = await self._admin(c)
@@ -258,7 +264,12 @@ class ProgressFeaturesV2:
         players = self.repo.event_players(eid)
         lines = ["👥 <b>بازیکنان اونت</b>", ""]
         for i, p in enumerate(players, 1):
-            lines.append(f"{i}. {html.escape(self._name(p))} — {p.get('status')}")
+            tag = None
+            try:
+                tag = self.repo.active_tag(int(p.get("player_id") or 0))
+            except Exception:
+                pass
+            lines.append(f"{i}. {tagged_name_html(self._name(p), tag)} — {p.get('status')}")
         kb = InlineKeyboardMarkup(row_width=1)
         if await self._admin(c):
             kb.add(InlineKeyboardButton("➕ افزودن بازیکن", callback_data=f"progress:addplayer:{eid}"))
