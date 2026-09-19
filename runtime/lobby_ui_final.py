@@ -6,7 +6,7 @@ from runtime.ui_theme import button as ui_button
 InlineKeyboardButton = ui_button
 from repositories.scenario_repository import ScenarioRepository
 from runtime.scenario_runtime import ScenarioRuntime
-from runtime.tag_display import tagged_name_html
+from runtime.tag_display import custom_emoji_enabled_for_app, tagged_name_html
 
 
 def install(main):
