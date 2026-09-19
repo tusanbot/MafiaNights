@@ -143,6 +143,8 @@ from runtime.addons_persistence_patch import install as install_addons_persisten
 install_addons_persistence_patch(main)
 from runtime.addons_menu_v2 import install as install_addons_menu_v2
 install_addons_menu_v2(main)
+from runtime.chat_locks import install as install_chat_locks
+install_chat_locks(main)
 from runtime.private_scenario_crud import install as install_private_scenario_crud
 install_private_scenario_crud(main)
 from runtime.progress_features_v4 import install as install_progress_features
