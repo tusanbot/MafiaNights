@@ -98,7 +98,8 @@ async def _dispatch_priority_message(message: Any, runtime_entry: Any) -> bool:
 async def _dispatch(payload: dict[str, Any]) -> None:
     from aiogram import Bot, Dispatcher, types
 
-    runtime_entry = _get_runtime()\n    await _ensure_startup()
+    runtime_entry = _get_runtime()
+    await _ensure_startup()
     update = types.Update(**payload)
     Bot.set_current(runtime_entry.main.bot)
     Dispatcher.set_current(runtime_entry.main.dp)
