@@ -40,6 +40,9 @@ class MafiaAddons:
             self._all_settings = {}
 
     def _save_to_file(self):
+        # Production persistence is DB-backed; Vercel filesystem is read-only.
+        if getattr(self, "_db_persistence_installed", False):
+            return
         try:
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
                 json.dump(self._all_settings, f, ensure_ascii=False, indent=2)
