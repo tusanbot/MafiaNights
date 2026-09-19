@@ -135,6 +135,8 @@ from runtime.progress_schema_compat import install as install_progress_schema_co
 install_progress_schema_compat(main)
 from commands import register_commands as register_text_commands
 register_text_commands(main)
+from runtime.telegram_commands import install as install_telegram_commands
+install_telegram_commands(main)
 from runtime.command_surface_v2 import install as install_command_surface_v2
 install_command_surface_v2(main)
 from runtime.addons_persistence_patch import install as install_addons_persistence_patch
@@ -240,6 +242,12 @@ async def on_startup(dp):
     await install_private_ui_recovery_v8(main)
     # Private UI recovery layers register their own /start routes. Re-arm the single\n    # production owner after those installers so neither PV nor group /start can be shadowed.\n    _install_production_start()
     _rearm_canonical_new_game()
+    try:
+        register_menu = getattr(main, "_register_telegram_commands", None)
+        if register_menu is not None:
+            await register_menu()
+    except Exception:
+        logging.exception("Failed to register Telegram command menu")
     # Re-apply progress UI after final private-UI authorities replace the start keyboard.
     try:
         progress_runtime = getattr(main, "_progress_features_runtime", None)
