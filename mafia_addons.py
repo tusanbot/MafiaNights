@@ -9,10 +9,11 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 SETTINGS_FILE = "addons_settings.json"
 LOG_TAG = "MafiaAddons"
 DEFAULT_GROUP_SETTINGS = {
-    "security": {"control_speech": True, "delete_out_of_turn": True},
+    "security": {"control_speech": True, "delete_out_of_turn": True, "chat_lock": False, "night_lock": False, "turn_lock": False},
     "next": {"anti_spam": True, "allow_players_next": True, "allow_moderator_next": True},
     "auto_start": {"enabled": False},
-    "color": {"primary": True, "challenge": True, "timer_prefix": ""}
+    "color": {"primary": True, "challenge": True, "timer_prefix": ""},
+    "visual": {"achievement_custom_emoji": True}
 }
 
 class MafiaAddons:
@@ -39,6 +40,9 @@ class MafiaAddons:
             self._all_settings = {}
 
     def _save_to_file(self):
+        # Production persistence is DB-backed; Vercel filesystem is read-only.
+        if getattr(self, "_db_persistence_installed", False):
+            return
         try:
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
                 json.dump(self._all_settings, f, ensure_ascii=False, indent=2)
@@ -76,9 +80,14 @@ class MafiaAddons:
             self.settings.setdefault("security", {})
             self.settings["security"].setdefault("control_speech", True)
             self.settings["security"].setdefault("delete_out_of_turn", True)
+            self.settings["security"].setdefault("chat_lock", False)
+            self.settings["security"].setdefault("night_lock", False)
+            self.settings["security"].setdefault("turn_lock", False)
             self.settings.setdefault("auto_start", {})
             self.settings["auto_start"].setdefault("enabled", False)
             self.settings.setdefault("color", {})
+            self.settings.setdefault("visual", {})
+            self.settings["visual"].setdefault("achievement_custom_emoji", True)
             self.settings["color"].setdefault("primary", True)
             self.settings["color"].setdefault("challenge", True)
             self.settings["color"].setdefault("timer_prefix", "")
@@ -258,6 +267,7 @@ class MafiaAddons:
     def is_moderator_next_allowed(self): return self.settings.get("next", {}).get("allow_moderator_next", True)
     def is_auto_start_enabled(self): return self.settings.get("auto_start", {}).get("enabled", False)
     def is_color_primary(self): return self.settings.get("color", {}).get("primary", True)
+    def is_achievement_custom_emoji_enabled(self): return self.settings.get("visual", {}).get("achievement_custom_emoji", True)
     def is_color_challenge(self): return self.settings.get("color", {}).get("challenge", True)
     def get_timer_prefix(self): return self.settings.get("color", {}).get("timer_prefix", "")
     def ensure_defaults_for_group(self, group_id):
