@@ -62,7 +62,7 @@ class AddonsMenuV2:
             InlineKeyboardButton("♻️ بازگردانی تنظیمات پیش‌فرض", callback_data="adm2:add:reset"),
             InlineKeyboardButton("⬅️ بازگشت", callback_data="addons:back"),
         )
-        await callback.message.edit_text("⚙️ <b>امکانات اضافه</b>\n\n" f"🛡 کنترل نوبت: {'فعال' if s.get('security', {}).get('control_speech', True) else 'غیرفعال'}\n" f"🔒 قفل چت: {'فعال' if s.get('security', {}).get('chat_lock', False) else 'غیرفعال'}\n" f"🌙 قفل شب: {'فعال' if s.get('security', {}).get('night_lock', False) else 'غیرفعال'}\n" f"🎙 قفل نوبت: {'فعال' if s.get('security', {}).get('turn_lock', False) else 'غیرفعال'}\n" f"⏭ ضداسپم: {'فعال' if s.get('next', {}).get('anti_spam', True) else 'غیرفعال'}\n" f"▶️ شروع خودکار: {'فعال' if s.get('auto_start', {}).get('enabled', False) else 'غیرفعال'}", reply_markup=kb, parse_mode="HTML")
+        await callback.message.edit_text("⚙️ <b>امکانات اضافه</b>\n\n" "" f"🔒 قفل چت: {'فعال' if s.get('security', {}).get('chat_lock', False) else 'غیرفعال'}\n" f"🌙 قفل شب: {'فعال' if s.get('security', {}).get('night_lock', False) else 'غیرفعال'}\n" f"🎙 قفل نوبت: {'فعال' if s.get('security', {}).get('turn_lock', False) else 'غیرفعال'}\n" f"⏭ ضداسپم: {'فعال' if s.get('next', {}).get('anti_spam', True) else 'غیرفعال'}\n" f"▶️ شروع خودکار: {'فعال' if s.get('auto_start', {}).get('enabled', False) else 'غیرفعال'}", reply_markup=kb, parse_mode="HTML")
         await callback.answer(); raise CancelHandler()
 
     async def back_main(self, callback):
