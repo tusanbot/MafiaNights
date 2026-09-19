@@ -19,7 +19,7 @@ from sqlalchemy import text
 
 from repositories.rating_repository import RatingRepository
 from runtime.mafia_progress_events import FeatureRepository, ACHIEVEMENTS
-from runtime.tag_display import tagged_name_html
+from runtime.tag_display import custom_emoji_enabled_for_app, tagged_name_html
 
 
 class ProgressFeaturesV2:
@@ -244,7 +244,7 @@ class ProgressFeaturesV2:
                 except Exception:
                     pass
                 lines.append(
-                    f"  └ {tagged_name_html(self._name(p), tag)} | گروه {p.get('group_no') or '—'} | "
+                    f"  └ {tagged_name_html(self._name(p), tag, custom_emoji_enabled=custom_emoji_enabled_for_app(self.app))} | گروه {p.get('group_no') or '—'} | "
                     f"امتیاز {p.get('score') if p.get('score') is not None else '—'}"
                 )
         admin = await self._admin(c)
@@ -731,7 +731,7 @@ class ProgressFeaturesV2:
                     tag = self.repo.active_tag(int(user_id))
                     emoji = str((tag or {}).get("emoji") or "").strip()
                     if emoji and not str(base).startswith(emoji):
-                        return f"{emoji} {base}"
+                        return f"{emoji} {base}" if not custom_emoji_enabled_for_app(self.app) else tagged_name_html(str(base), tag, custom_emoji_enabled=True)
                 except Exception:
                     logging.exception("tag display failed")
                 return base
