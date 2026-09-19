@@ -20,17 +20,41 @@ TAG_CUSTOM_EMOJI_IDS = {
 }
 
 
-def tag_prefix_html(tag: Mapping[str, Any] | None) -> str:
+def tag_prefix_html(tag: Mapping[str, Any] | None, *, custom_emoji_enabled: bool = True) -> str:
     if not tag:
         return ""
     emoji = str(tag.get("emoji") or "").strip()
     if not emoji:
         return ""
+    if not custom_emoji_enabled:
+        return f"{html.escape(emoji)} "
     custom_id = TAG_CUSTOM_EMOJI_IDS.get(emoji)
     if custom_id:
         return f'<tg-emoji emoji-id="{custom_id}">{html.escape(emoji)}</tg-emoji> '
     return f"{html.escape(emoji)} "
 
 
-def tagged_name_html(name: str, tag: Mapping[str, Any] | None) -> str:
-    return f"{tag_prefix_html(tag)}{html.escape(str(name))}"
+def tagged_name_html(
+    name: str,
+    tag: Mapping[str, Any] | None,
+    *,
+    custom_emoji_enabled: bool = True,
+) -> str:
+    return f"{tag_prefix_html(tag, custom_emoji_enabled=custom_emoji_enabled)}{html.escape(str(name))}"
+
+
+def custom_emoji_enabled_for_app(app: Any) -> bool:
+    """Read the persistent add-ons flag without creating a new dependency."""
+    try:
+        addons = getattr(app, "addons", None)
+        gid = (
+            getattr(addons, "group_id", None)
+            or getattr(app, "group_chat_id", None)
+            or getattr(app, "ALLOWED_GROUP_ID", None)
+        )
+        if addons is not None and gid:
+            settings = addons.get_group_settings(int(gid)) or {}
+            return bool(settings.get("visual", {}).get("achievement_custom_emoji", True))
+    except Exception:
+        return True
+    return True
