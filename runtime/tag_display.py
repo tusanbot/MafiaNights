@@ -30,7 +30,7 @@ def render_custom_emoji_text(text: str, *, enabled: bool = True) -> str:
         return text
 
     # Never touch an already-rendered custom emoji block.
-    parts = re.split(r"(<tg-emoji\\b[^>]*>.*?</tg-emoji>)", text, flags=re.DOTALL)
+    parts = re.split(r"(<tg-emoji\b[^>]*>.*?</tg-emoji>)", text, flags=re.DOTALL)
     for i in range(0, len(parts), 2):
         parts[i] = _CUSTOM_EMOJI_PATTERN.sub(
             lambda m: f'<tg-emoji emoji-id="{CUSTOM_EMOJI_IDS[m.group(0)]}">{html.escape(m.group(0))}</tg-emoji>',
