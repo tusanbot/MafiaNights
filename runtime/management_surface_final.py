@@ -4,7 +4,9 @@ import html
 import logging
 from typing import Any
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
+from runtime.ui_theme import button as ui_button
+InlineKeyboardButton = ui_button
 
 
 def _handler(item: Any) -> Any:
