@@ -58,6 +58,7 @@ class AddonsMenuV2:
             InlineKeyboardButton("⏭ مدیریت نکست", callback_data="adm2:add:next"),
             InlineKeyboardButton("▶️ شروع خودکار", callback_data="adm2:add:auto"),
             InlineKeyboardButton("🎨 نمایش و رنگ‌بندی", callback_data="adm2:add:visual"),
+            InlineKeyboardButton("✨ اموجی تگ دستاورد", callback_data="adm2:add:emoji"),
             InlineKeyboardButton("♻️ بازگردانی تنظیمات پیش‌فرض", callback_data="adm2:add:reset"),
             InlineKeyboardButton("⬅️ بازگشت", callback_data="addons:back"),
         )
@@ -99,6 +100,29 @@ class AddonsMenuV2:
         kb = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton(f"▶️ شروع خودکار دور جدید: {'فعال' if s.get('enabled', False) else 'غیرفعال'}", callback_data="adm2:add:toggle:auto"), InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="adm2:add:menu"))
         await callback.message.edit_text("▶️ <b>شروع خودکار</b>\n\nاین گزینه در صورت پشتیبانی جریان بازی، آغاز خودکار دور بعدی را کنترل می‌کند.", reply_markup=kb, parse_mode="HTML"); await callback.answer(); raise CancelHandler()
 
+    async def emoji(self, callback):
+        if not await self.allowed(callback.from_user.id):
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); raise CancelHandler()
+        s = self.settings().get("visual", {})
+        enabled = bool(s.get("achievement_custom_emoji", True))
+        kb = InlineKeyboardMarkup(row_width=1).add(
+            InlineKeyboardButton(
+                f"✨ نمایش اموجی متحرک تگ‌ها: {'فعال' if enabled else 'غیرفعال'}",
+                callback_data="adm2:add:toggle:emoji",
+            ),
+            InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="adm2:add:menu"),
+        )
+        text = (
+            "✨ <b>اموجی تگ دستاوردها</b>\n\n"
+            "با فعال بودن این گزینه، در صورت وجود Custom Emoji معتبر، "
+            "اموجی تگ فعال کنار نام بازیکن نمایش داده می‌شود.\n\n"
+            "⚠️ استفاده از Custom Emoji مستلزم فعال بودن حساب Premium مالک ربات است.\n"
+            "اگر Custom Emoji قابل استفاده نباشد، اموجی معمولی به‌عنوان جایگزین نمایش داده می‌شود."
+        )
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        await callback.answer()
+        raise CancelHandler()
+
     async def visual(self, callback):
         if not await self.allowed(callback.from_user.id): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); raise CancelHandler()
         s = self.settings().get("color", {})
@@ -107,13 +131,14 @@ class AddonsMenuV2:
 
     async def toggle(self, callback):
         if not await self.allowed(callback.from_user.id): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); raise CancelHandler()
-        s = self.settings(); mapping = {"speech": ("security", "control_speech", True), "delete": ("security", "delete_out_of_turn", True), "anti": ("next", "anti_spam", True), "players": ("next", "allow_players_next", True), "moderator": ("next", "allow_moderator_next", True), "auto": ("auto_start", "enabled", False), "primary": ("color", "primary", True), "challenge": ("color", "challenge", True)}
+        s = self.settings(); mapping = {"speech": ("security", "control_speech", True), "delete": ("security", "delete_out_of_turn", True), "anti": ("next", "anti_spam", True), "players": ("next", "allow_players_next", True), "moderator": ("next", "allow_moderator_next", True), "auto": ("auto_start", "enabled", False), "primary": ("color", "primary", True), "challenge": ("color", "challenge", True), "emoji": ("visual", "achievement_custom_emoji", True)}
         key = callback.data.rsplit(":", 1)[1]
         if key not in mapping: await callback.answer("تنظیم نامعتبر است.", show_alert=True); raise CancelHandler()
         section, option, default = mapping[key]; s.setdefault(section, {}); s[section][option] = not s[section].get(option, default); self.save(s)
         if key in {"speech", "delete"}: await self.security(callback)
         elif key in {"anti", "players", "moderator"}: await self.next_menu(callback)
         elif key == "auto": await self.auto(callback)
+        elif key == "emoji": await self.emoji(callback)
         else: await self.visual(callback)
 
     async def reset(self, callback):
@@ -128,10 +153,11 @@ class AddonsMenuV2:
         d.register_callback_query_handler(self.next_menu, lambda c: c.data == "adm2:add:next", state="*")
         d.register_callback_query_handler(self.auto, lambda c: c.data == "adm2:add:auto", state="*")
         d.register_callback_query_handler(self.visual, lambda c: c.data == "adm2:add:visual", state="*")
+        d.register_callback_query_handler(self.emoji, lambda c: c.data == "adm2:add:emoji", state="*")
         d.register_callback_query_handler(self.toggle, lambda c: c.data.startswith("adm2:add:toggle:"), state="*")
         d.register_callback_query_handler(self.reset, lambda c: c.data == "adm2:add:reset", state="*")
         handlers = getattr(d.callback_query_handlers, "handlers", [])
-        names = {"menu", "back_main", "security", "next_menu", "auto", "visual", "toggle", "reset"}
+        names = {"menu", "back_main", "security", "next_menu", "auto", "visual", "emoji", "toggle", "reset"}
         for i in range(len(handlers)-1, -1, -1):
             if getattr(getattr(handlers[i], "handler", None), "__name__", "") in names: handlers.insert(0, handlers.pop(i))
         return self
