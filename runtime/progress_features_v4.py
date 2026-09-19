@@ -102,8 +102,15 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
                 f"📚 {html.escape(str(st['name']))} — {html.escape(str(st.get('status') or 'فعال'))}"
             )
             for p in self.repo.stage_players(st["id"]):
+                player_id = int(p.get("player_id") or 0)
+                tag = self.repo.active_tag(player_id)
+                display = tagged_name_html(
+                    self._name(p),
+                    tag,
+                    custom_emoji_enabled=custom_emoji_enabled_for_app(self.app),
+                )
                 lines.append(
-                    f"  └ {tagged_name_html(self._name(p), self.repo.active_tag(int(p.get("player_id") or 0)), custom_emoji_enabled=custom_emoji_enabled_for_app(self.app))} | گروه "
+                    f"  └ {display} | گروه "
                     f"{p.get('group_no') or '—'} | امتیاز "
                     f"{p.get('score') if p.get('score') is not None else '—'}"
                 )
@@ -120,8 +127,15 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
         players = self.repo.event_players(eid)
         lines = ["👥 <b>بازیکنان اونت</b>", ""]
         for i, p in enumerate(players, 1):
+            player_id = int(p.get("player_id") or 0)
+            tag = self.repo.active_tag(player_id)
+            display = tagged_name_html(
+                self._name(p),
+                tag,
+                custom_emoji_enabled=custom_emoji_enabled_for_app(self.app),
+            )
             lines.append(
-                f"{i}. {tagged_name_html(self._name(p), self.repo.active_tag(int(p.get("player_id") or 0)), custom_emoji_enabled=custom_emoji_enabled_for_app(self.app))} — {html.escape(str(p.get('status') or '—'))}"
+                f"{i}. {display} — {html.escape(str(p.get('status') or '—'))}"
             )
         admin = await self._is_admin_silent(c)
         kb = InlineKeyboardMarkup(row_width=1)
