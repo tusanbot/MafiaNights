@@ -58,7 +58,7 @@ class AddonsMenuV2:
             InlineKeyboardButton("⏭ مدیریت نکست", callback_data="adm2:add:next"),
             InlineKeyboardButton("▶️ شروع خودکار", callback_data="adm2:add:auto"),
             InlineKeyboardButton("🎨 نمایش و رنگ‌بندی", callback_data="adm2:add:visual"),
-            InlineKeyboardButton("✨ اموجی تگ دستاورد", callback_data="adm2:add:emoji"),
+            InlineKeyboardButton("✨ اموجی سفارشی ربات", callback_data="adm2:add:emoji"),
             InlineKeyboardButton("♻️ بازگردانی تنظیمات پیش‌فرض", callback_data="adm2:add:reset"),
             InlineKeyboardButton("⬅️ بازگشت", callback_data="addons:back"),
         )
@@ -113,7 +113,7 @@ class AddonsMenuV2:
             InlineKeyboardButton("⬅️ امکانات اضافه", callback_data="adm2:add:menu"),
         )
         text = (
-            "✨ <b>اموجی تگ دستاوردها</b>\n\n"
+            "✨ <b>اموجی سفارشی ربات</b>\n\n"
             "با فعال بودن این گزینه، در صورت وجود Custom Emoji معتبر، "
             "اموجی تگ فعال کنار نام بازیکن نمایش داده می‌شود.\n\n"
             "⚠️ استفاده از Custom Emoji مستلزم فعال بودن حساب Premium مالک ربات است.\n"
