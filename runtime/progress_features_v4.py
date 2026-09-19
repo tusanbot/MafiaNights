@@ -15,6 +15,7 @@ from sqlalchemy import text
 
 from runtime.progress_features_v2 import ProgressFeaturesV2
 from runtime.progress_features_v3 import ProgressFeaturesV3
+from runtime.tag_display import custom_emoji_enabled_for_app, tagged_name_html
 
 
 class ProgressFeaturesV4(ProgressFeaturesV3):
@@ -102,7 +103,7 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
             )
             for p in self.repo.stage_players(st["id"]):
                 lines.append(
-                    f"  └ {html.escape(self._name(p))} | گروه "
+                    f"  └ {tagged_name_html(self._name(p), self.repo.active_tag(int(p.get("player_id") or 0)), custom_emoji_enabled=custom_emoji_enabled_for_app(self.app))} | گروه "
                     f"{p.get('group_no') or '—'} | امتیاز "
                     f"{p.get('score') if p.get('score') is not None else '—'}"
                 )
@@ -120,7 +121,7 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
         lines = ["👥 <b>بازیکنان اونت</b>", ""]
         for i, p in enumerate(players, 1):
             lines.append(
-                f"{i}. {html.escape(self._name(p))} — {html.escape(str(p.get('status') or '—'))}"
+                f"{i}. {tagged_name_html(self._name(p), self.repo.active_tag(int(p.get("player_id") or 0)), custom_emoji_enabled=custom_emoji_enabled_for_app(self.app))} — {html.escape(str(p.get('status') or '—'))}"
             )
         admin = await self._is_admin_silent(c)
         kb = InlineKeyboardMarkup(row_width=1)
