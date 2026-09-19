@@ -1,7 +1,9 @@
 from __future__ import annotations
 import html
 import logging
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
+from runtime.ui_theme import button as ui_button
+InlineKeyboardButton = ui_button
 from repositories.scenario_repository import ScenarioRepository
 from runtime.scenario_runtime import ScenarioRuntime
 
