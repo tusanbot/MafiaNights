@@ -9,7 +9,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 SETTINGS_FILE = "addons_settings.json"
 LOG_TAG = "MafiaAddons"
 DEFAULT_GROUP_SETTINGS = {
-    "security": {"control_speech": True, "delete_out_of_turn": True},
+    "security": {"control_speech": True, "delete_out_of_turn": True, "chat_lock": False, "night_lock": False, "turn_lock": False},
     "next": {"anti_spam": True, "allow_players_next": True, "allow_moderator_next": True},
     "auto_start": {"enabled": False},
     "color": {"primary": True, "challenge": True, "timer_prefix": ""},
@@ -77,6 +77,9 @@ class MafiaAddons:
             self.settings.setdefault("security", {})
             self.settings["security"].setdefault("control_speech", True)
             self.settings["security"].setdefault("delete_out_of_turn", True)
+            self.settings["security"].setdefault("chat_lock", False)
+            self.settings["security"].setdefault("night_lock", False)
+            self.settings["security"].setdefault("turn_lock", False)
             self.settings.setdefault("auto_start", {})
             self.settings["auto_start"].setdefault("enabled", False)
             self.settings.setdefault("color", {})
