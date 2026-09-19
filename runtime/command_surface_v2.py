@@ -8,17 +8,17 @@ from sqlalchemy import text
 from player_repository import PlayerRepository
 
 ALIASES = {
-    "stats": {"آمار","امار","آمار من","امار من"},
-    "nickname_set": {"تنظیم مستعار","تنظیم نام مستعار"},
-    "nickname_del": {"حذف مستعار","حذف نام مستعار"},
-    "nickname_get": {"نام مستعار","دیدن نام مستعار"},
-    "nickname_list": {"لیست مستعار","لیست نامهای مستعار","لیست نام‌های مستعار"},
-    "mute": {"سکوت"}, "unmute": {"حذف سکوت"}, "extra": {"ترن اضافه","ترن اضافهم"},
-    "sub": {"جایگزین","/sub"}, "sub_list": {"لیست جایگزین","لیست جایگزین‌ها"}, "sub_del": {"حذف جایگزین"},
-    "vote": {"رای گیری","رأی گیری","رای‌گیری","رأی‌گیری"}, "end": {"پایان بازی","اتمام بازی"},
-    "night": {"فاز شب","شروع فاز شب"}, "day": {"شروع روز","شروع فاز روز"}, "chief": {"سردست","تغییر سردست"},
-    "challenge_settings": {"تنظیم چالش"}, "next_settings": {"تنظیم نکست"}, "remove": {"حذف بازیکن"},
-    "next": {"نکست"}, "start_round": {"شروع دور"},
+    "stats": {"آمار","امار","آمار من","امار من","/stats"},
+    "nickname_set": {"تنظیم مستعار","تنظیم نام مستعار","/nickname_set"},
+    "nickname_del": {"حذف مستعار","حذف نام مستعار","/nickname_del"},
+    "nickname_get": {"نام مستعار","دیدن نام مستعار","/nickname_get"},
+    "nickname_list": {"لیست مستعار","لیست نامهای مستعار","لیست نام‌های مستعار","/nickname_list"},
+    "mute": {"سکوت","/mute"}, "unmute": {"حذف سکوت","/unmute"}, "extra": {"ترن اضافه","ترن اضافهم","/extra"},
+    "sub": {"جایگزین","/sub"}, "sub_list": {"لیست جایگزین","لیست جایگزین‌ها","/sub_list"}, "sub_del": {"حذف جایگزین","/sub_del"},
+    "vote": {"رای گیری","رأی گیری","رای‌گیری","رأی‌گیری","/vote"}, "end": {"پایان بازی","اتمام بازی","/end"},
+    "night": {"فاز شب","شروع فاز شب","/night"}, "day": {"شروع روز","شروع فاز روز","/day"}, "chief": {"سردست","تغییر سردست","/chief"},
+    "challenge_settings": {"تنظیم چالش","/challenge_settings"}, "next_settings": {"تنظیم نکست","/next_settings"}, "remove": {"حذف بازیکن","/remove"},
+    "next": {"نکست","/next"}, "start_round": {"شروع دور","/start_round"},
 }
 
 def norm(s): return " ".join((s or "").strip().replace("‌"," ").split()).casefold()
