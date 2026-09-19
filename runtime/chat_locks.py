@@ -304,6 +304,30 @@ def install(main) -> bool:
         handlers.insert(0, handlers.pop())
         item.handler.__name__ = "chat_lock_message_guard"
 
+    # A seated player must be released immediately after the canonical lobby
+    # seat handler succeeds while chat-lock is active.
+    registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", [])
+    for item in list(registry):
+        fn = getattr(item, "handler", None) or getattr(item, "callback", None)
+        if getattr(fn, "__name__", "") != "seat_select":
+            continue
+        if getattr(fn, "_chat_lock_wrapped", False):
+            break
+        original = fn
+
+        async def seat_select_with_lock(callback, __original=original):
+            result = await __original(callback)
+            try:
+                await unlock_player_if_needed(main, int(callback.message.chat.id), int(callback.from_user.id))
+            except Exception:
+                logging.exception("chat locks: failed to unlock newly seated player")
+            return result
+
+        seat_select_with_lock.__name__ = "seat_select"
+        seat_select_with_lock._chat_lock_wrapped = True
+        item.handler = seat_select_with_lock
+        break
+
     main._chat_locks_installed = True
     logging.info("CHAT LOCKS installed")
     return True
