@@ -77,8 +77,6 @@ class AddonsMenuV2:
         if not await self.allowed(callback.from_user.id): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); raise CancelHandler()
         s = self.settings().get("security", {})
         kb = InlineKeyboardMarkup(row_width=1).add(
-            InlineKeyboardButton(f"🗣 کنترل نوبت صحبت: {'فعال' if s.get('control_speech', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:speech"),
-            InlineKeyboardButton(f"🗑 حذف پیام خارج نوبت: {'فعال' if s.get('delete_out_of_turn', True) else 'غیرفعال'}", callback_data="adm2:add:toggle:delete"),
             InlineKeyboardButton(f"🔒 قفل چت: {'فعال' if s.get('chat_lock', False) else 'غیرفعال'}", callback_data="adm2:add:toggle:chatlock"),
             InlineKeyboardButton(f"🌙 قفل شب: {'فعال' if s.get('night_lock', False) else 'غیرفعال'}", callback_data="adm2:add:toggle:nightlock"),
             InlineKeyboardButton(f"🎙 قفل نوبت: {'فعال' if s.get('turn_lock', False) else 'غیرفعال'}", callback_data="adm2:add:toggle:turnlock"),
@@ -134,11 +132,11 @@ class AddonsMenuV2:
 
     async def toggle(self, callback):
         if not await self.allowed(callback.from_user.id): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); raise CancelHandler()
-        s = self.settings(); mapping = {"speech": ("security", "control_speech", True), "delete": ("security", "delete_out_of_turn", True), "chatlock": ("security", "chat_lock", False), "nightlock": ("security", "night_lock", False), "turnlock": ("security", "turn_lock", False), "anti": ("next", "anti_spam", True), "players": ("next", "allow_players_next", True), "moderator": ("next", "allow_moderator_next", True), "auto": ("auto_start", "enabled", False), "primary": ("color", "primary", True), "challenge": ("color", "challenge", True), "emoji": ("visual", "achievement_custom_emoji", True)}
+        s = self.settings(); mapping = {"chatlock": ("security", "chat_lock", False), "nightlock": ("security", "night_lock", False), "turnlock": ("security", "turn_lock", False), "anti": ("next", "anti_spam", True), "players": ("next", "allow_players_next", True), "moderator": ("next", "allow_moderator_next", True), "auto": ("auto_start", "enabled", False), "primary": ("color", "primary", True), "challenge": ("color", "challenge", True), "emoji": ("visual", "achievement_custom_emoji", True)}
         key = callback.data.rsplit(":", 1)[1]
         if key not in mapping: await callback.answer("تنظیم نامعتبر است.", show_alert=True); raise CancelHandler()
         section, option, default = mapping[key]; s.setdefault(section, {}); s[section][option] = not s[section].get(option, default); self.save(s)
-        if key in {"speech", "delete", "chatlock", "nightlock", "turnlock"}:
+        if key in {"chatlock", "nightlock", "turnlock"}:
             if key in {"chatlock", "nightlock"}:
                 try:
                     from runtime.chat_locks import sync_group_permissions
