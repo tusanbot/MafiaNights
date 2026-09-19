@@ -9,7 +9,9 @@ import html
 import logging
 
 from aiogram.dispatcher.handler import CancelHandler
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
+from runtime.ui_theme import button as ui_button
+InlineKeyboardButton = ui_button
 
 
 def _private(callback):
