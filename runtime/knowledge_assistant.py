@@ -80,45 +80,33 @@ def _web_search(query: str, limit: int = 4) -> list[dict[str, str]]:
     return results
 
 
-def _ai_config(app: Any, message: Any) -> tuple[bool, str | None, str, str | None]:
-    """Load one group-owned AI credential for both group and private requests."""
+def _ai_config(app: Any, message: Any, resolved_gid: int | None = None) -> tuple[bool, str | None, str, str | None]:
+    """Load the AI credential owned by the current group."""
     try:
         is_private = getattr(message.chat, "type", None) == "private"
-        primary_raw = os.getenv("AI_PRIMARY_GROUP_ID") or os.getenv("ALLOWED_GROUP_ID") or ""
-        primary_gid = int(primary_raw) if str(primary_raw).strip().lstrip("-").isdigit() else None
-        gid = primary_gid if is_private else int(message.chat.id)
+        gid = resolved_gid if is_private else int(message.chat.id)
         if gid is None:
             return False, None, "gemini", None
         with KnowledgeRepository().SessionLocal() as session:
             from sqlalchemy import text
-            if is_private:
-                row = session.execute(
-                    text("""select enabled, private_enabled, provider, model,
-                                   case when api_key_ciphertext is null then null
-                                        else pgp_sym_decrypt(api_key_ciphertext, :secret)
-                                   end as api_key
-                            from public.mafia_ai_settings where group_id=:gid limit 1"""),
-                    {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
-                ).mappings().first()
-                if not row or not row["private_enabled"] or not row["api_key"]:
-                    return False, None, "gemini", None
-            else:
-                row = session.execute(
-                    text("""select enabled, provider, model,
-                                   case when api_key_ciphertext is null then null
-                                        else pgp_sym_decrypt(api_key_ciphertext, :secret)
-                                   end as api_key
-                            from public.mafia_ai_settings where group_id=:gid limit 1"""),
-                    {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
-                ).mappings().first()
-        if not row:
+            row = session.execute(
+                text("""select enabled, private_enabled, provider, model,
+                               case when api_key_ciphertext is null then null
+                                    else pgp_sym_decrypt(api_key_ciphertext, :secret)
+                               end as api_key
+                        from public.mafia_ai_settings where group_id=:gid limit 1"""),
+                {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
+            ).mappings().first()
+        if not row or (is_private and not row["private_enabled"]):
             return False, None, "gemini", None
         key = str(row["api_key"]) if row["api_key"] else None
+        if not key:
+            return False, None, "gemini", None
         provider = str(row["provider"] or "").lower()
-        if key and key.startswith("AIza"):
+        if key.startswith("AIza"):
             provider = "gemini"
         if provider not in {"gemini", "openai"}:
-            provider = "gemini" if key and key.startswith("AIza") else "openai"
+            provider = "gemini" if key.startswith("AIza") else "openai"
         model = str(row["model"]) if row["model"] else None
         if provider == "gemini" and (not model or model.startswith(("gpt-", "o1", "o3", "o4"))):
             model = "gemini-2.5-flash"
@@ -127,7 +115,6 @@ def _ai_config(app: Any, message: Any) -> tuple[bool, str | None, str, str | Non
     except Exception:
         logging.exception("knowledge assistant: AI config lookup failed")
         return False, None, "gemini", None
-
 def _call_ai(
     prompt: str,
     context: list[dict[str, Any]],
@@ -327,6 +314,13 @@ def _ensure_ai_settings_table() -> None:
               add column if not exists private_web_search_enabled boolean not null default true,
               add column if not exists private_updated_at timestamptz
         """))
+        session.execute(text("""
+            create table if not exists public.mafia_ai_user_preferences (
+                user_id bigint primary key,
+                group_id bigint not null,
+                updated_at timestamptz not null default now()
+            )
+        """))
         session.commit()
 
 
@@ -378,22 +372,80 @@ async def _edit_assistant_message(bot: Any, sent_message: Any, text: str) -> boo
         return False
 
 
-async def _private_group_member_allowed(message: Any, app: Any) -> bool:
-    if getattr(message.chat, "type", None) != "private":
-        return True
-    raw = os.getenv("AI_PRIMARY_GROUP_ID") or os.getenv("ALLOWED_GROUP_ID") or ""
-    try:
-        gid = int(raw)
-        member = await app.bot.get_chat_member(gid, int(message.from_user.id))
-        return str(getattr(member, "status", "")) not in {"left", "kicked"}
-    except Exception:
-        logging.exception("knowledge assistant: private group membership check failed")
-        return False
+def _ai_private_candidate_groups() -> list[int]:
+    _ensure_ai_settings_table()
+    with KnowledgeRepository().SessionLocal() as session:
+        from sqlalchemy import text
+        rows = session.execute(text("""
+            select group_id from public.mafia_ai_settings
+            where private_enabled=true and api_key_ciphertext is not null
+            order by group_id
+        """)).mappings().all()
+    return [int(r["group_id"]) for r in rows]
 
+
+def _get_ai_user_preference(user_id: int) -> int | None:
+    _ensure_ai_settings_table()
+    with KnowledgeRepository().SessionLocal() as session:
+        from sqlalchemy import text
+        row = session.execute(
+            text("select group_id from public.mafia_ai_user_preferences where user_id=:uid limit 1"),
+            {"uid": int(user_id)},
+        ).mappings().first()
+    return int(row["group_id"]) if row else None
+
+
+def _set_ai_user_preference(user_id: int, group_id: int) -> None:
+    _ensure_ai_settings_table()
+    with KnowledgeRepository().SessionLocal() as session:
+        from sqlalchemy import text
+        session.execute(text("""
+            insert into public.mafia_ai_user_preferences(user_id,group_id,updated_at)
+            values(:uid,:gid,now())
+            on conflict(user_id) do update set group_id=:gid,updated_at=now()
+        """), {"uid": int(user_id), "gid": int(group_id)})
+        session.commit()
+
+
+async def _resolve_private_group(message: Any, app: Any) -> tuple[int | None, str]:
+    if getattr(message.chat, "type", None) != "private":
+        return None, ""
+    candidates = await _thread_call("AI private group candidates", _ai_private_candidate_groups, timeout=5.0)
+    candidates = [int(x) for x in (candidates or [])]
+    if not candidates:
+        return None, "none"
+    preferred = await _thread_call("AI private group preference", _get_ai_user_preference, int(message.from_user.id), timeout=4.0)
+    if preferred is not None and int(preferred) in candidates:
+        try:
+            member = await app.bot.get_chat_member(int(preferred), int(message.from_user.id))
+            if str(getattr(member, "status", "")) not in {"left", "kicked"}:
+                return int(preferred), "selected"
+        except Exception:
+            logging.exception("knowledge assistant: preferred private group membership check failed")
+    eligible: list[int] = []
+    for gid in candidates:
+        try:
+            member = await app.bot.get_chat_member(gid, int(message.from_user.id))
+            if str(getattr(member, "status", "")) not in {"left", "kicked"}:
+                eligible.append(gid)
+        except Exception:
+            logging.exception("knowledge assistant: private group membership check failed for %s", gid)
+    if len(eligible) == 1:
+        await _thread_call("save AI private group preference", _set_ai_user_preference, int(message.from_user.id), eligible[0], timeout=4.0)
+        return eligible[0], "selected"
+    if len(eligible) > 1:
+        return None, "multiple"
+    return None, "none"
 async def answer(message: Any, app: Any, question: str) -> None:
-    if not await _private_group_member_allowed(message, app):
-        await _send_plain_reply(message, "⛔ دستیار پیوی فقط برای اعضای گروه فعال است.")
-        return
+    resolved_private_gid = None
+    if getattr(message.chat, "type", None) == "private":
+        resolved_private_gid, resolution = await _resolve_private_group(message, app)
+        if resolution == "multiple":
+            await _send_plain_reply(message, "ℹ️ شما عضو چند گروه فعال برای دستیار هستید. ابتدا از «🤖 پنل دستیار» گروه موردنظر را انتخاب کنید و سپس سؤال را ارسال کنید.")
+            return
+        if resolution != "selected":
+            await _send_plain_reply(message, "⛔ شما در هیچ گروه فعالِ دستیار عضو نیستید.")
+            return
 
     question = (question or "").strip()
     if not question:
@@ -467,7 +519,7 @@ async def answer(message: Any, app: Any, question: str) -> None:
             web = result
 
     config = await _thread_call(
-        "AI settings lookup", _ai_config, app, message, timeout=8.0
+        "AI settings lookup", _ai_config, app, message, resolved_private_gid, timeout=8.0
     )
     if isinstance(config, tuple) and len(config) == 4:
         ai_enabled, api_key, provider, model = config
@@ -577,7 +629,7 @@ def install(app: Any) -> bool:
         if not _looks_like_question(text):
             return
         enabled, _api_key, _provider, _model = await _thread_call(
-            "AI auto-route settings", _ai_config, app, message, timeout=5.0
+            "AI auto-route settings", _ai_config, app, message, None, timeout=5.0
         )
         if not enabled:
             return
