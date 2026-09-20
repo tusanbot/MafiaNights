@@ -335,12 +335,13 @@ async def _ai_key(message: types.Message, app: Any) -> None:
     )
     with KnowledgeRepository().SessionLocal() as session:
         session.execute(text("""
-            insert into public.mafia_ai_settings(group_id,provider,model,enabled,web_search_enabled,api_key_ciphertext,updated_at)
-            values(:gid,:provider,:model,true,true,pgp_sym_encrypt(:key,:secret),now())
+            insert into public.mafia_ai_settings(group_id,provider,model,enabled,private_enabled,web_search_enabled,api_key_ciphertext,updated_at)
+            values(:gid,:provider,:model,true,true,true,pgp_sym_encrypt(:key,:secret),now())
             on conflict(group_id) do update set
                 provider=:provider,
                 model=:model,
                 enabled=true,
+                private_enabled=true,
                 api_key_ciphertext=pgp_sym_encrypt(:key,:secret),
                 updated_at=now()
         """), {
