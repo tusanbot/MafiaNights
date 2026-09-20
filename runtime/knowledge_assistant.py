@@ -131,121 +131,120 @@ def _call_ai(
         return None
 
     # Gemini is the only supported provider.
-    provider = "gemini"
-    if True:
-        model = model or os.getenv("MAFIA_AI_MODEL") or "gemini-2.5-flash"
-        system = (
-            "تو دستیار رسمی Mafia Nights هستی. "
-            "پاسخ را فارسی، دقیق و کوتاه بده. "
-            "قوانین داخلی تاییدشده ربات بر هر منبع وب اولویت دارند. "
-            "اطلاعات مخفی نقش، نقش سایر بازیکنان، هدف شبانه، رای یا استراتژی خصوصی بازیکنان را افشا نکن. "
-            "اگر منبع داخلی کافی نیست، صریحاً بگو که پاسخ بر پایه منبع بیرونی است. "
-            "برای سوال نامرتبط هم پاسخ مفید و عمومی بده."
-        )
-        payload = {
-            "system_instruction": {"parts": [{"text": system}]},
-            "contents": [{
-                "role": "user",
-                "parts": [{
-                    "text": json.dumps(
-                        {"question": prompt, "knowledge": context, "web_sources": web},
-                        ensure_ascii=False,
-                    )
-                }]
-            }],
-            "generationConfig": {"temperature": 0.2},
-        }
-        url = (
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            + urllib.parse.quote(model, safe="")
-            + ":generateContent"
-        )
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=25) as response:
-                obj = json.loads(response.read().decode("utf-8"))
-            parts = obj.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-            text_parts = [str(p.get("text", "")) for p in parts if p.get("text")]
-            return "".join(text_parts).strip() or None
-        except urllib.error.HTTPError as exc:
-            # Gemini availability can vary by API key/project. A newly issued
-            # key may return 404 for an older model such as 2.5 Flash even though
-            # the model exists globally. Discover models allowed for this key and
-            # retry once with a currently available text-generation model.
-            if exc.code == 404:
-                try:
-                    list_req = urllib.request.Request(
-                        "https://generativelanguage.googleapis.com/v1beta/models",
-                        headers={"x-goog-api-key": api_key},
-                        method="GET",
-                    )
-                    with urllib.request.urlopen(list_req, timeout=10) as list_response:
-                        models_obj = json.loads(list_response.read().decode("utf-8"))
-                    available = []
-                    for item in models_obj.get("models", []):
-                        name = str(item.get("name") or "")
-                        methods = item.get("supportedGenerationMethods") or []
-                        if "generateContent" in methods and name.startswith("models/"):
-                            available.append(name.split("/", 1)[1])
-                    preferred = [
-                        "gemini-3.8-flash",
-                        "gemini-3.7-flash",
-                        "gemini-3.6-flash",
-                        "gemini-3.5-flash",
-                        "gemini-3.5-flash-lite",
-                        "gemini-3.1-flash-lite",
-                        "gemini-2.5-flash",
-                        "gemini-2.5-flash-lite",
-                        "gemini-2.0-flash",
-                    ]
-                    candidates = [m for m in preferred if m in available]
-                    candidates += [m for m in available if m not in candidates and "flash" in m.lower()]
-                    for fallback_model in candidates:
-                        if fallback_model == model:
-                            continue
-                        try:
-                            logging.warning(
-                                "knowledge assistant: Gemini model %s unavailable; trying %s",
-                                model, fallback_model,
-                            )
-                            retry_url = (
-                                "https://generativelanguage.googleapis.com/v1beta/models/"
-                                + urllib.parse.quote(fallback_model, safe="")
-                                + ":generateContent"
-                            )
-                            retry_req = urllib.request.Request(
-                                retry_url,
-                                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                                headers={
-                                    "Content-Type": "application/json",
-                                    "x-goog-api-key": api_key,
-                                },
-                                method="POST",
-                            )
-                            with urllib.request.urlopen(retry_req, timeout=20) as retry_response:
-                                retry_obj = json.loads(retry_response.read().decode("utf-8"))
-                            retry_parts = retry_obj.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-                            retry_text = [str(p.get("text", "")) for p in retry_parts if p.get("text")]
-                            generated = "".join(retry_text).strip()
-                            if generated:
-                                logging.info("knowledge assistant: Gemini fallback succeeded with %s", fallback_model)
-                                return generated
-                        except urllib.error.HTTPError as retry_exc:
-                            logging.warning("knowledge assistant: Gemini fallback %s returned HTTP %s", fallback_model, retry_exc.code)
-                        except Exception:
-                            logging.exception("knowledge assistant: Gemini fallback %s failed")
-                except Exception:
-                    logging.exception("knowledge assistant: Gemini model discovery/retry failed")
-            logging.error("knowledge assistant: Gemini HTTP %s", exc.code)
-            return None
-        except Exception:
-            logging.exception("knowledge assistant: Gemini request failed")
-            return None
+provider = "gemini"
+    model = model or os.getenv("MAFIA_AI_MODEL") or "gemini-2.5-flash"
+    system = (
+        "تو دستیار رسمی Mafia Nights هستی. "
+        "پاسخ را فارسی، دقیق و کوتاه بده. "
+        "قوانین داخلی تاییدشده ربات بر هر منبع وب اولویت دارند. "
+        "اطلاعات مخفی نقش، نقش سایر بازیکنان، هدف شبانه، رای یا استراتژی خصوصی بازیکنان را افشا نکن. "
+        "اگر منبع داخلی کافی نیست، صریحاً بگو که پاسخ بر پایه منبع بیرونی است. "
+        "برای سوال نامرتبط هم پاسخ مفید و عمومی بده."
+    )
+    payload = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": [{
+            "role": "user",
+            "parts": [{
+                "text": json.dumps(
+                    {"question": prompt, "knowledge": context, "web_sources": web},
+                    ensure_ascii=False,
+                )
+            }]
+        }],
+        "generationConfig": {"temperature": 0.2},
+    }
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        + urllib.parse.quote(model, safe="")
+        + ":generateContent"
+    )
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=25) as response:
+            obj = json.loads(response.read().decode("utf-8"))
+        parts = obj.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+        text_parts = [str(p.get("text", "")) for p in parts if p.get("text")]
+        return "".join(text_parts).strip() or None
+    except urllib.error.HTTPError as exc:
+        # Gemini availability can vary by API key/project. A newly issued
+        # key may return 404 for an older model such as 2.5 Flash even though
+        # the model exists globally. Discover models allowed for this key and
+        # retry once with a currently available text-generation model.
+        if exc.code == 404:
+            try:
+                list_req = urllib.request.Request(
+                    "https://generativelanguage.googleapis.com/v1beta/models",
+                    headers={"x-goog-api-key": api_key},
+                    method="GET",
+                )
+                with urllib.request.urlopen(list_req, timeout=10) as list_response:
+                    models_obj = json.loads(list_response.read().decode("utf-8"))
+                available = []
+                for item in models_obj.get("models", []):
+                    name = str(item.get("name") or "")
+                    methods = item.get("supportedGenerationMethods") or []
+                    if "generateContent" in methods and name.startswith("models/"):
+                        available.append(name.split("/", 1)[1])
+                preferred = [
+                    "gemini-3.8-flash",
+                    "gemini-3.7-flash",
+                    "gemini-3.6-flash",
+                    "gemini-3.5-flash",
+                    "gemini-3.5-flash-lite",
+                    "gemini-3.1-flash-lite",
+                    "gemini-2.5-flash",
+                    "gemini-2.5-flash-lite",
+                    "gemini-2.0-flash",
+                ]
+                candidates = [m for m in preferred if m in available]
+                candidates += [m for m in available if m not in candidates and "flash" in m.lower()]
+                for fallback_model in candidates:
+                    if fallback_model == model:
+                        continue
+                    try:
+                        logging.warning(
+                            "knowledge assistant: Gemini model %s unavailable; trying %s",
+                            model, fallback_model,
+                        )
+                        retry_url = (
+                            "https://generativelanguage.googleapis.com/v1beta/models/"
+                            + urllib.parse.quote(fallback_model, safe="")
+                            + ":generateContent"
+                        )
+                        retry_req = urllib.request.Request(
+                            retry_url,
+                            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                            headers={
+                                "Content-Type": "application/json",
+                                "x-goog-api-key": api_key,
+                            },
+                            method="POST",
+                        )
+                        with urllib.request.urlopen(retry_req, timeout=20) as retry_response:
+                            retry_obj = json.loads(retry_response.read().decode("utf-8"))
+                        retry_parts = retry_obj.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                        retry_text = [str(p.get("text", "")) for p in retry_parts if p.get("text")]
+                        generated = "".join(retry_text).strip()
+                        if generated:
+                            logging.info("knowledge assistant: Gemini fallback succeeded with %s", fallback_model)
+                            return generated
+                    except urllib.error.HTTPError as retry_exc:
+                        logging.warning("knowledge assistant: Gemini fallback %s returned HTTP %s", fallback_model, retry_exc.code)
+                    except Exception:
+                        logging.exception("knowledge assistant: Gemini fallback %s failed")
+            except Exception:
+                logging.exception("knowledge assistant: Gemini model discovery/retry failed")
+        logging.error("knowledge assistant: Gemini HTTP %s", exc.code)
+        return None
+    except Exception:
+        logging.exception("knowledge assistant: Gemini request failed")
+        return None
 
 
 def _ensure_ai_settings_table() -> None:
