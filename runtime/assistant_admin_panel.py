@@ -409,23 +409,113 @@ class AssistantAdminPanel:
     async def save_group_key(self, message: types.Message, state: FSMContext):
         if message.chat.type != "private" or not await self._authorized(message.from_user.id):
             await state.finish(); return
-        key=(message.text or "").strip(); gid=self._selected_group_id(message.from_user.id); secret=os.getenv("DATABASE_URL") or ""
+
+        key = (message.text or "").strip()
+        gid = self._selected_group_id(message.from_user.id)
+        # DATABASE_URL is kept as the backwards-compatible fallback, but a
+        # dedicated secret is preferable because DB credentials and ciphertext
+        # encryption should not be coupled.
+        secret = os.getenv("MAFIA_AI_ENCRYPTION_SECRET") or os.getenv("DATABASE_URL") or ""
         if not key or not gid or not secret:
-            await message.answer("❌ کلید، گروه اصلی یا تنظیمات رمزنگاری ناقص است."); return
-        provider="gemini" if key.startswith("AIza") else "openai"
-        model="gemini-2.5-flash" if provider=="gemini" else (os.getenv("MAFIA_AI_MODEL") or "gpt-5.6-mini")
+            await state.finish()
+            await message.answer("❌ کلید، گروه انتخاب‌شده یا تنظیمات رمزنگاری ناقص است.", reply_markup=self._menu())
+            return
+
+        provider = "gemini" if key.startswith("AIza") else "openai"
+        model = "gemini-2.5-flash" if provider == "gemini" else (os.getenv("MAFIA_AI_MODEL") or "gpt-5.6-mini")
+
         try:
-            try: await message.delete()
-            except Exception: pass
-            with self._repo().SessionLocal() as session:
-                session.execute(text("insert into public.mafia_ai_settings (group_id,provider,model,enabled,web_search_enabled,api_key_ciphertext,private_enabled,private_web_search_enabled,updated_at,private_updated_at) values(:gid,:provider,:model,true,true,pgp_sym_encrypt(:key,:secret),true,true,now(),now()) on conflict(group_id) do update set provider=:provider,model=:model,enabled=true,api_key_ciphertext=pgp_sym_encrypt(:key,:secret),private_enabled=true,updated_at=now(),private_updated_at=now()"), {"gid":gid,"provider":provider,"model":model,"key":key,"secret":secret})
+            try:
+                await message.delete()
+            except Exception:
+                pass
+
+            repo = self._repo()
+            with repo.SessionLocal() as session:
+                # Keep this migration-safe: older production databases may have
+                # the table but not the encryption extension/columns yet.
+                session.execute(text("create extension if not exists pgcrypto"))
+                session.execute(text("""
+                    create table if not exists public.mafia_ai_settings (
+                        group_id bigint primary key,
+                        provider text not null default 'openai',
+                        model text,
+                        api_key_ciphertext bytea,
+                        web_search_enabled boolean not null default true,
+                        enabled boolean not null default false,
+                        updated_at timestamptz not null default now(),
+                        private_enabled boolean not null default false,
+                        private_provider text not null default 'gemini',
+                        private_model text,
+                        private_api_key_ciphertext bytea,
+                        private_web_search_enabled boolean not null default true,
+                        private_updated_at timestamptz
+                    )
+                """))
+                session.execute(text("""
+                    alter table public.mafia_ai_settings
+                      add column if not exists api_key_ciphertext bytea,
+                      add column if not exists private_enabled boolean not null default false,
+                      add column if not exists private_provider text not null default 'gemini',
+                      add column if not exists private_model text,
+                      add column if not exists private_api_key_ciphertext bytea,
+                      add column if not exists private_web_search_enabled boolean not null default true,
+                      add column if not exists private_updated_at timestamptz
+                """))
+
+                # Explicit text casts avoid PostgreSQL choosing an unexpected
+                # pgcrypto overload with SQLAlchemy's inferred bind types.
+                encrypted = session.execute(text("""
+                    select pgp_sym_encrypt(
+                        cast(:key as text),
+                        cast(:secret as text)
+                    )
+                """), {"key": key, "secret": secret}).scalar_one()
+
+                session.execute(text("""
+                    insert into public.mafia_ai_settings
+                      (group_id,provider,model,enabled,web_search_enabled,
+                       api_key_ciphertext,private_enabled,private_provider,
+                       private_model,private_web_search_enabled,updated_at,private_updated_at)
+                    values
+                      (:gid,:provider,:model,true,true,:cipher,true,:provider,
+                       :model,true,now(),now())
+                    on conflict(group_id) do update set
+                      provider=excluded.provider,
+                      model=excluded.model,
+                      enabled=true,
+                      web_search_enabled=true,
+                      api_key_ciphertext=excluded.api_key_ciphertext,
+                      private_enabled=true,
+                      private_provider=excluded.private_provider,
+                      private_model=excluded.private_model,
+                      private_web_search_enabled=true,
+                      updated_at=now(),
+                      private_updated_at=now()
+                """), {
+                    "gid": gid,
+                    "provider": provider,
+                    "model": model,
+                    "cipher": encrypted,
+                })
                 session.commit()
+
             await state.finish()
-            await message.answer("✅ کلید مشترک AI گروه ثبت شد؛ دستیار گروه و پیوی اعضای گروه فعال شدند.", reply_markup=self._menu())
-        except Exception:
-            logging.exception("assistant admin: group key save failed")
+            await message.answer(
+                "✅ کلید مشترک AI گروه ثبت شد؛ دستیار گروه و پیوی اعضای گروه فعال شدند.",
+                reply_markup=self._menu(),
+            )
+        except Exception as exc:
+            logging.exception("assistant admin: group key save failed for group %s", gid)
             await state.finish()
-            await message.answer("❌ ثبت کلید انجام نشد.", reply_markup=self._menu())
+            # Do not expose the secret/key. Give a useful operational category
+            # so the next failure is diagnosable without leaking credentials.
+            detail = type(exc).__name__
+            await message.answer(
+                f"❌ ثبت کلید انجام نشد. خطای پایگاه‌داده: <code>{html.escape(detail)}</code>",
+                reply_markup=self._menu(),
+                parse_mode="HTML",
+            )
 
     async def pv(self, callback):
         if not await self._guard(callback):
