@@ -222,6 +222,14 @@ async def cmd_commands(message: types.Message, app: Any) -> None:
     await message.reply("\n".join(lines).rstrip(), parse_mode="HTML")
 
 
+async def _ai_panel_text(message: types.Message, app: Any) -> None:
+    if message.chat.type != "private":
+        await message.reply("ℹ️ پنل دستیار فقط در پیوی قابل استفاده است.")
+        return
+    from runtime.assistant_admin_panel import AssistantAdminPanel
+    await AssistantAdminPanel(app).open(message)
+
+
 async def _ai_control(message: types.Message, app: Any, action: str) -> None:
     if message.chat.type not in {"group", "supergroup"}:
         await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
@@ -906,7 +914,7 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
         "ask": lambda m,a: __import__("runtime.knowledge_assistant", fromlist=["answer"]).answer(m,a,(m.text or "").split(" ",1)[1] if " " in (m.text or "") else ""),
         "ai_on": lambda m,a: _ai_control(m,a,"on"), "ai_off": lambda m,a: _ai_control(m,a,"off"),
         "ai_status": lambda m,a: _ai_control(m,a,"status"), "ai_key": _ai_key,
-        "ai_panel": lambda m,a: a.assistant_admin_panel.open(m),
+        "ai_panel": _ai_panel_text,
         "kb_list": lambda m,a: _kb_control(m,a,"list"), "kb_add": lambda m,a: _kb_control(m,a,"add"),
         "kb_publish": lambda m,a: _kb_control(m,a,"publish"),
         "tag_all": cmd_tag_all, "tag_admins": cmd_tag_admins, "tag_list": cmd_tag_players,
