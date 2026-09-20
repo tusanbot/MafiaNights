@@ -290,9 +290,12 @@ async def answer(message: Any, app: Any, question: str) -> None:
         elif web:
             suffix += "\n\n<i>پاسخ با کمک منابع بیرونی تهیه شده است.</i>"
 
+    # Assistant answers may contain arbitrary model/KB text. Sending them as
+    # HTML is fragile: one stray '<' or '&' can make Telegram reject the whole
+    # message, leaving the user with only the typing indicator. Send the final
+    # answer as plain text so the response path cannot fail on formatting.
     await message.reply(
-        response + suffix,
-        parse_mode="HTML",
+        response + suffix.replace("<i>", "").replace("</i>", ""),
         disable_web_page_preview=True,
     )
 
