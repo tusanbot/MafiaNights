@@ -175,7 +175,7 @@ def _ai_config(app: Any, message: Any) -> tuple[bool, str | None, str, str | Non
             provider = "gemini" if str(key or "").startswith("AIza") else "openai"
         model = str(row["model"]) if row["model"] else None
         if provider == "gemini" and (not model or model.startswith(("gpt-", "o1", "o3", "o4"))):
-            model = "gemini-2.5-flash"
+            model = "gemini-3.5-flash"
         return bool(row["enabled"]), key, provider, model
     except Exception:
         logging.exception("knowledge assistant: AI config lookup failed")
@@ -238,6 +238,62 @@ def _call_ai(
             parts = obj.get("candidates", [{}])[0].get("content", {}).get("parts", [])
             text_parts = [str(p.get("text", "")) for p in parts if p.get("text")]
             return "".join(text_parts).strip() or None
+        except urllib.error.HTTPError as exc:
+            # Gemini availability can vary by API key/project. A newly issued
+            # key may return 404 for an older model such as 2.5 Flash even though
+            # the model exists globally. Discover models allowed for this key and
+            # retry once with a currently available text-generation model.
+            if exc.code == 404:
+                try:
+                    list_req = urllib.request.Request(
+                        "https://generativelanguage.googleapis.com/v1beta/models",
+                        headers={"x-goog-api-key": api_key},
+                        method="GET",
+                    )
+                    with urllib.request.urlopen(list_req, timeout=10) as list_response:
+                        models_obj = json.loads(list_response.read().decode("utf-8"))
+                    available = []
+                    for item in models_obj.get("models", []):
+                        name = str(item.get("name") or "")
+                        methods = item.get("supportedGenerationMethods") or []
+                        if "generateContent" in methods and name.startswith("models/"):
+                            available.append(name.split("/", 1)[1])
+                    preferred = [
+                        "gemini-3.8-flash",
+                        "gemini-3.5-flash",
+                        "gemini-3.1-flash-lite",
+                        "gemini-2.5-flash-lite",
+                        "gemini-2.5-flash",
+                    ]
+                    fallback_model = next((m for m in preferred if m in available), None)
+                    if fallback_model and fallback_model != model:
+                        logging.warning(
+                            "knowledge assistant: Gemini model %s unavailable; retrying with %s",
+                            model, fallback_model,
+                        )
+                        retry_url = (
+                            "https://generativelanguage.googleapis.com/v1beta/models/"
+                            + urllib.parse.quote(fallback_model, safe="")
+                            + ":generateContent"
+                        )
+                        retry_req = urllib.request.Request(
+                            retry_url,
+                            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                            headers={
+                                "Content-Type": "application/json",
+                                "x-goog-api-key": api_key,
+                            },
+                            method="POST",
+                        )
+                        with urllib.request.urlopen(retry_req, timeout=25) as retry_response:
+                            retry_obj = json.loads(retry_response.read().decode("utf-8"))
+                        retry_parts = retry_obj.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                        retry_text = [str(p.get("text", "")) for p in retry_parts if p.get("text")]
+                        return "".join(retry_text).strip() or None
+                except Exception:
+                    logging.exception("knowledge assistant: Gemini model discovery/retry failed")
+            logging.error("knowledge assistant: Gemini HTTP %s", exc.code)
+            return None
         except Exception:
             logging.exception("knowledge assistant: Gemini request failed")
             return None
