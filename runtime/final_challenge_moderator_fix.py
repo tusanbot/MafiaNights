@@ -39,7 +39,22 @@ def _gid(main):
 
 def _seat_uid(main, seat):
     try:
-        return (getattr(main, "player_slots", {}) or {}).get(int(seat))
+        seat = int(seat)
+    except (TypeError, ValueError):
+        return None
+    # Runtime/database is authoritative; player_slots can be stale after
+    # lobby replacement/reservation promotion.
+    try:
+        gid = _gid(main)
+        game = main.runtime.state.active_game(gid) if gid else None
+        if game:
+            for row in main.runtime.state.games.list_players(game["id"]):
+                if int(row.get("seat") or 0) == seat and str(row.get("status") or "active") not in {"removed","dead","finished","kicked","waiting"}:
+                    return int(row["player_id"])
+    except Exception:
+        pass
+    try:
+        return (getattr(main, "player_slots", {}) or {}).get(seat)
     except Exception:
         return None
 
@@ -150,7 +165,13 @@ def _eligible_requester(main, requester_id, target_seat):
     except (TypeError, ValueError):
         return False, "⚠️ بازیکن نامعتبر است."
 
-    if not getattr(main, "game_running", False):
+    try:
+        gid = _gid(main)
+        active_game = main.runtime.state.active_game(gid) if gid else None
+        running = bool(active_game and str(active_game.get("status") or "") in {"running","paused"})
+    except Exception:
+        running = bool(getattr(main, "game_running", False))
+    if not running:
         return False, "⚠️ بازی در حال اجرا نیست."
     target_id = _seat_uid(main, target_seat)
     if not target_id:
