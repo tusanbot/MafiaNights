@@ -820,25 +820,52 @@ async def _seat_text(message, app):
 
 
 async def _reserve_text(message, app, cancel=False):
-    game=_game(app,message)
-    if not game or str(game.get("status") or "")!="lobby":
+    if message.chat.type not in {"group", "supergroup"}:
+        await message.reply("ℹ️ این دستور فقط داخل گروه بازی است."); return
+    game = _game(app, message)
+    if not game or str(game.get("status") or "") != "lobby":
         await message.reply("❌ لابی فعالی وجود ندارد."); return
-    uid=int(message.from_user.id); rows=app.runtime.state.games.list_players(game["id"])
-    current=next((r for r in rows if int(r.get("player_id") or 0)==uid and str(r.get("status") or "") not in {"removed","finished"}),None)
+    uid = int(message.from_user.id)
+    rows = app.runtime.state.games.list_players(game["id"])
+    current = next(
+        (r for r in rows if int(r.get("player_id") or 0) == uid
+         and str(r.get("status") or "") not in {"removed", "finished", "kicked"}),
+        None,
+    )
     if cancel:
-        if current and current.get("seat") is None:
-            app.runtime.state.lobby.leave(game["id"],uid); await message.reply("✅ رزرو شما لغو شد."); return
-        await message.reply("ℹ️ رزرو فعالی برای شما ثبت نشده است."); return
+        if current and current.get("seat") is None and str(current.get("status") or "") in {"waiting", "substitute"}:
+            app.runtime.state.lobby.leave(game["id"], uid)
+            await message.reply("✅ رزرو شما لغو شد.")
+        else:
+            await message.reply("ℹ️ رزرو فعالی برای شما ثبت نشده است.")
+        return
+
     from repositories.scenario_repository import ScenarioRepository
-    scenario=ScenarioRepository().get_by_id(int(game.get("scenario_id") or 0)); cap=len((scenario or {}).get("roles") or [])
-    active=[r for r in rows if r.get("seat") is not None and str(r.get("status") or "") not in {"removed","dead","finished","kicked"}]
-    if len(active)<cap:
+    scenario = ScenarioRepository().get_by_id(int(game.get("scenario_id") or 0))
+    cap = len((scenario or {}).get("roles") or [])
+    active = [
+        r for r in rows
+        if r.get("seat") is not None
+        and str(r.get("status") or "") not in {"removed", "dead", "finished", "kicked"}
+    ]
+    if current and current.get("seat") is not None:
+        await message.reply("ℹ️ شما داخل بازی هستید."); return
+    if current and current.get("seat") is None and str(current.get("status") or "") in {"waiting", "substitute"}:
+        await message.reply("ℹ️ شما از قبل در لیست رزرو هستید."); return
+    if len(active) < cap:
         await message.reply("ℹ️ رزرو پس از تکمیل ظرفیت فعال می‌شود."); return
-    if current:
-        await message.reply("ℹ️ شما قبلاً در بازی یا لیست رزرو هستید."); return
-    await app._ensure_player(message.from_user)
-    app.runtime.state.lobby.join(game["id"],uid,None,is_substitute=True)
-    await message.reply("🎟 رزرو شما ثبت شد.")
+
+    try:
+        await app._ensure_player(message.from_user)
+    except Exception:
+        pass
+    try:
+        app.runtime.state.lobby.join(game["id"], uid, None, is_substitute=True)
+    except Exception:
+        logging.exception("text reserve failed")
+        await message.reply("❌ ثبت رزرو انجام نشد. احتمالاً رزرو شما از قبل ثبت شده یا اطلاعات بازیکن تکراری است.")
+        return
+    await message.reply("🎟 رزرو شما با موفقیت ثبت شد.")
 
 
 async def _sub_text(message, app):
