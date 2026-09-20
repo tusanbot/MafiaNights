@@ -58,7 +58,10 @@ def normalize_text(value: str | None) -> str:
 def resolve_command(value: str | None) -> str | None:
     normalized = normalize_text(value)
     for command, aliases in COMMANDS.items():
-        if normalized in {normalize_text(alias) for alias in aliases}:
+        normalized_aliases = {normalize_text(alias) for alias in aliases}
+        if normalized in normalized_aliases:
+            return command
+        if any(normalized.startswith(alias + " ") for alias in normalized_aliases):
             return command
     return None
 
@@ -190,6 +193,20 @@ async def _ai_control(message: types.Message, app: Any, action: str) -> None:
     from sqlalchemy import text
     import os
     enabled = action == "on"
+    with KnowledgeRepository().SessionLocal() as session:
+        session.execute(text("create extension if not exists pgcrypto"))
+        session.execute(text("""
+            create table if not exists public.mafia_ai_settings (
+                group_id bigint primary key,
+                provider text not null default 'openai',
+                model text,
+                api_key_ciphertext bytea,
+                web_search_enabled boolean not null default true,
+                enabled boolean not null default false,
+                updated_at timestamptz not null default now()
+            )
+        """))
+        session.commit()
     if action != "status":
         with KnowledgeRepository().SessionLocal() as session:
             session.execute(text("""
@@ -236,6 +253,20 @@ async def _ai_key(message: types.Message, app: Any) -> None:
     from repositories.knowledge_repository import KnowledgeRepository
     from sqlalchemy import text
     secret = os.getenv("DATABASE_URL") or ""
+    with KnowledgeRepository().SessionLocal() as session:
+        session.execute(text("create extension if not exists pgcrypto"))
+        session.execute(text("""
+            create table if not exists public.mafia_ai_settings (
+                group_id bigint primary key,
+                provider text not null default 'openai',
+                model text,
+                api_key_ciphertext bytea,
+                web_search_enabled boolean not null default true,
+                enabled boolean not null default false,
+                updated_at timestamptz not null default now()
+            )
+        """))
+        session.commit()
     if not secret:
         await message.reply("❌ اتصال امن پایگاه‌داده برای رمزنگاری در دسترس نیست.")
         return
