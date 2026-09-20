@@ -211,21 +211,25 @@ async def _ai_control(message: types.Message, app: Any, action: str) -> None:
         with KnowledgeRepository().SessionLocal() as session:
             session.execute(text("""
                 insert into public.mafia_ai_settings(group_id,provider,model,enabled,web_search_enabled,updated_at)
-                values(:gid,'openai',:model,:enabled,true,now())
+                values(0,'openai',:model,:enabled,true,now())
                 on conflict(group_id) do update set enabled=:enabled, updated_at=now()
             """), {"gid": gid, "model": os.getenv("MAFIA_AI_MODEL") or None, "enabled": enabled})
             session.commit()
     if action == "status":
         with KnowledgeRepository().SessionLocal() as session:
-            row=session.execute(text("select provider,model,enabled,web_search_enabled from public.mafia_ai_settings where group_id=:gid"),{"gid":gid}).mappings().first()
-        key = bool(os.getenv("MAFIA_AI_API_KEY"))
+            row=session.execute(text("""select provider,model,enabled,web_search_enabled,
+                                      (api_key_ciphertext is not null) as has_db_key
+                               from public.mafia_ai_settings
+                               where group_id=0
+                               limit 1""")).mappings().first()
+        key = bool(os.getenv("MAFIA_AI_API_KEY")) or bool(row and row["has_db_key"])
         if not row:
             await message.reply(f"🤖 وضعیت: <b>غیرفعال</b>\n🔑 API Key: <b>{'ثبت شده در محیط اجرا' if key else 'ثبت نشده'}</b>",parse_mode="HTML")
             return
         await message.reply(
             f"🤖 وضعیت: <b>{'فعال' if row['enabled'] else 'غیرفعال'}</b>\n"
             f"🧠 مدل: <code>{html.escape(str(row['model'] or os.getenv('MAFIA_AI_MODEL') or 'پیش‌فرض'))}</code>\n"
-            f"🔑 API Key: <b>{'ثبت شده در محیط اجرا' if key else 'ثبت نشده'}</b>\n"
+            f"🔑 API Key: <b>{'ثبت شده و رمزنگاری‌شده' if row and row.get('has_db_key') else ('ثبت شده در محیط اجرا' if key else 'ثبت نشده')}</b>\n"
             f"🌐 جست‌وجوی وب: <b>{'فعال' if row['web_search_enabled'] else 'غیرفعال'}</b>",
             parse_mode="HTML"
         )
@@ -279,7 +283,7 @@ async def _ai_key(message: types.Message, app: Any) -> None:
     with KnowledgeRepository().SessionLocal() as session:
         session.execute(text("""
             insert into public.mafia_ai_settings(group_id,provider,model,enabled,web_search_enabled,api_key_ciphertext,updated_at)
-            values(:gid,:provider,:model,false,true,pgp_sym_encrypt(:key,:secret),now())
+            values(0,:provider,:model,true,true,pgp_sym_encrypt(:key,:secret),now())
             on conflict(group_id) do update set
                 provider=:provider,
                 model=:model,
@@ -294,7 +298,7 @@ async def _ai_key(message: types.Message, app: Any) -> None:
         await message.delete()
     except Exception:
         pass
-    await message.answer("✅ API Key با موفقیت و به‌صورت رمزنگاری‌شده ثبت شد. برای فعال‌سازی از /ai_on استفاده کنید.")
+    await message.answer("✅ API Key با موفقیت و به‌صورت رمزنگاری‌شده ثبت شد و دستیار به‌صورت سراسری فعال شد.")
 
 async def _kb_control(message: types.Message, app: Any, action: str) -> None:
     if message.chat.type not in {"group", "supergroup"}:
