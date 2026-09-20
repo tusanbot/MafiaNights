@@ -360,7 +360,23 @@ async def _ai_key(message: types.Message, app: Any) -> None:
     if not secret:
         await message.reply("❌ اتصال امن پایگاه‌داده برای رمزنگاری در دسترس نیست.")
         return
-    provider = "gemini" if key.startswith("AIza") else "openai"
+    # /ai_key is kept for compatibility, but provider selection must not be
+    # guessed from the key prefix. The shared assistant in this deployment uses
+    # an explicit provider, with Gemini as the safe legacy default.
+    with KnowledgeRepository().SessionLocal() as settings_session:
+        existing = settings_session.execute(text("""
+            select provider, private_provider
+            from public.mafia_ai_settings
+            where group_id=:gid
+            limit 1
+        """), {"gid": gid}).mappings().first()
+    provider = str(
+        (existing or {}).get("private_provider")
+        or (existing or {}).get("provider")
+        or "gemini"
+    ).lower()
+    if provider not in {"gemini", "openai"}:
+        provider = "gemini"
     default_model = (
         os.getenv("MAFIA_AI_MODEL")
         if provider == "openai"
