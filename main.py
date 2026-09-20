@@ -28,6 +28,7 @@ from runtime.production_consistency_loader import install as install_production_
 from runtime.dual_winner_support import install as install_dual_winner_support
 from runtime.assistant_admin_panel import install as install_assistant_admin_panel
 from runtime.chat_locks import install as install_chat_locks
+from runtime.pv_menu_callbacks import install as install_pv_menu_callbacks
 from commands import register_commands as register_canonical_commands
 
 TOKEN=os.getenv("API_TOKEN")
@@ -49,6 +50,7 @@ for _item in list(getattr(dp.message_handlers,"handlers",[])):
 
 install_end_game_control(app);install_production_consistency(app);install_dual_winner_support(app);app.assistant_admin_panel=install_assistant_admin_panel(app)
 install_chat_locks(app)
+install_pv_menu_callbacks(app)
 
 # Canonical text-command authority:
 # all game/user text commands are registered exactly once from commands.py.
@@ -94,7 +96,7 @@ try:
 except Exception:
     logging.exception("Failed to prioritize canonical text command handler")
 
-logging.info("PRODUCTION_RUNTIME_ACTIVE canonical_text_commands=commands.py locks=runtime.chat_locks")
+logging.info("PRODUCTION_RUNTIME_ACTIVE canonical_text_commands=commands.py locks=runtime.chat_locks pv_menu_callbacks=runtime.pv_menu_callbacks")
 
 async def on_startup(dp):
     logging.info("MafiaNights production startup");await app.startup()
