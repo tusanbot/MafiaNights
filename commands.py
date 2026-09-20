@@ -693,11 +693,31 @@ async def _player_state_action(message, app, action: str):
         if alive: alive(game["id"], uid, False)
         text = f"🦵 <b>{html.escape(name)}</b> از بازی حذف شد."
     elif action == "birthday":
+        return_seats = dict(state.get("birthday_return_seats") or {})
+        target_seat = row.get("seat")
+        if target_seat is None:
+            target_seat = return_seats.get(str(uid))
+        occupied = {
+            int(r.get("seat")) for r in rows
+            if r.get("seat") is not None and int(r.get("player_id") or 0) != uid
+            and str(r.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
+        }
+        if target_seat is None or int(target_seat) in occupied:
+            await message.reply("⚠️ صندلی قبلی بازیکن برای بازگشت آزاد نیست.")
+            return
+        app.runtime.state.games.set_player_seat(game["id"], uid, int(target_seat))
         app.runtime.state.games.set_player_status(game["id"], uid, "active")
         alive = getattr(app.runtime.state.games, "set_player_alive", None)
         if alive: alive(game["id"], uid, True)
-        text = f"🎂 <b>{html.escape(name)}</b> بازگردانده شد."
+        return_seats.pop(str(uid), None)
+        state["birthday_return_seats"] = return_seats
+        text = f"🎂 <b>{html.escape(name)}</b> بازگردانده شد — صندلی <b>{int(target_seat):02d}</b>."
     elif action == "remove":
+        seat = row.get("seat")
+        return_seats = dict(state.get("birthday_return_seats") or {})
+        if seat is not None:
+            return_seats[str(uid)] = int(seat)
+        state["birthday_return_seats"] = return_seats
         app.runtime.state.games.set_player_seat(game["id"], uid, None)
         app.runtime.state.games.set_player_status(game["id"], uid, "removed")
         text = f"🗑 <b>{html.escape(name)}</b> از بازی حذف شد."
