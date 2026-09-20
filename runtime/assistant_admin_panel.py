@@ -409,7 +409,27 @@ class AssistantAdminPanel:
 
     def register(self):
         dp = self.app.dp
-        dp.register_message_handler(self.open, commands=["ai_panel"], state="*")
+
+        # Register the entry-point before generic text-command surfaces. The
+        # production bot has several command routers and some consume messages
+        # with CancelHandler; the assistant panel must own /ai_panel deterministically.
+        dp.register_message_handler(
+            self.open,
+            lambda m: str(getattr(m, "text", "") or "").strip().split("@", 1)[0].casefold() in {"/ai_panel", "/پنل_دستیار"},
+            state="*",
+            content_types=types.ContentTypes.TEXT,
+        )
+        try:
+            handlers = getattr(dp.message_handlers, "handlers", [])
+            for item in list(handlers):
+                callback = getattr(item, "callback", None) or getattr(item, "handler", None)
+                if callback is self.open:
+                    handlers.remove(item)
+                    handlers.insert(0, item)
+                    break
+        except Exception:
+            logging.exception("assistant admin: failed to prioritize panel handler")
+
         dp.register_message_handler(self.title, state=AssistantAdminStates.waiting_title)
         dp.register_message_handler(self.content, state=AssistantAdminStates.waiting_content)
         dp.register_message_handler(self.scenario, state=AssistantAdminStates.waiting_scenario)
