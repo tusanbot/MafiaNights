@@ -286,7 +286,7 @@ async def _end_target(main):
     await main.bot.send_message(
         _gid(main),
         f"📊 <b>نتیجه رای‌گیری برای {html.escape(target_name)}</b>\n\n"
-        f"🗳 تعداد رای: <b>{len(voted)}\n"
+        f"🗳 تعداد رای: <b>{len(voted)}</b>\n"
         f"👥 <b>رای‌دهندگان:</b>\n{voter_text}",
         parse_mode="HTML",
     )
