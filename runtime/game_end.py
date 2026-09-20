@@ -473,7 +473,7 @@ def install(app: Any) -> bool:
             winner = str(state.get("game_result") or "")
             if winner not in dict(RESULTS):
                 await callback.answer("⚠️ ابتدا برنده را ثبت کنید.", show_alert=True); return
-            rows = _final_player_rows(app.runtime.state.games.list_players(game_id))
+            rows = _final_player_rows(app.runtime.state.games.list_players(game_id), state)
             now = datetime.now(timezone.utc)
             if not game.get("started_at"):
                 started = _parse_dt(game.get("created_at")) or now
