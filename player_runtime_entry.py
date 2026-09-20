@@ -337,6 +337,39 @@ async def on_startup(dp):
     except Exception:
         logging.exception("assistant admin: final FSM message prioritization failed")
 
+    # Final assistant message authority. Startup-time UI recovery and command
+    # installers above can register generic text handlers after the module-level
+    # rearm, so do this one last time after every startup installer has completed.
+    try:
+        _handlers = getattr(main.dp.message_handlers, "handlers", [])
+        _assistant_handler = getattr(main, "_knowledge_assistant_handler", None)
+        _assistant_auto = getattr(main, "_knowledge_assistant_auto_handler", None)
+        _panel = getattr(main, "assistant_admin_panel", None)
+        _assistant_names = {
+            "title", "content", "scenario", "role", "source", "save_group_key", "open",
+        }
+        _fsm, _explicit, _auto, _rest = [], [], [], []
+        for _item in list(_handlers):
+            _cb = getattr(_item, "callback", None) or getattr(_item, "handler", None)
+            _owner = getattr(_cb, "__self__", None)
+            _name = getattr(_cb, "__name__", "")
+            if _panel is not None and _owner is _panel and _name in _assistant_names:
+                _fsm.append(_item)
+            elif _assistant_handler is not None and _cb is _assistant_handler:
+                _explicit.append(_item)
+            elif _assistant_auto is not None and _cb is _assistant_auto:
+                _auto.append(_item)
+            else:
+                _rest.append(_item)
+        if _fsm or _explicit or _auto:
+            _handlers[:] = _fsm + _explicit + _auto + _rest
+        logging.info(
+            "ASSISTANT FINAL MESSAGE AUTHORITY REARMED fsm=%s explicit=%s auto=%s total=%s",
+            len(_fsm), len(_explicit), len(_auto), len(_handlers),
+        )
+    except Exception:
+        logging.exception("assistant admin: final message authority rearm failed")
+
     logging.info("ASSISTANT ADMIN PANEL + CALLBACK ROUTER ACTIVE in player_runtime_entry")
 
 main.on_startup = on_startup
