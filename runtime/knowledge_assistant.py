@@ -238,6 +238,14 @@ async def answer(message: Any, app: Any, question: str) -> None:
     except Exception:
         pass
 
+    # Give the user an immediate acknowledgement. Gemini/web/database work can
+    # take several seconds; Telegram's typing indicator alone is not sufficient
+    # feedback and can hide where a failure occurs.
+    try:
+        await message.reply("⏳ در حال بررسی پایگاه دانش و آماده‌سازی پاسخ...")
+    except Exception:
+        logging.exception("knowledge assistant: acknowledgement send failed")
+
     scenario_name, role_name = _game_context(app, message)
     repo = KnowledgeRepository()
     # Repository/network operations are synchronous; never block aiogram's event loop.
@@ -294,10 +302,20 @@ async def answer(message: Any, app: Any, question: str) -> None:
     # HTML is fragile: one stray '<' or '&' can make Telegram reject the whole
     # message, leaving the user with only the typing indicator. Send the final
     # answer as plain text so the response path cannot fail on formatting.
-    await message.reply(
-        response + suffix.replace("<i>", "").replace("</i>", ""),
-        disable_web_page_preview=True,
-    )
+    final_text = response + suffix.replace("<i>", "").replace("</i>", "")
+    # Telegram rejects messages over its size limit. Split long KB/AI output
+    # into safe plain-text chunks so one oversized answer cannot disappear.
+    chunks = [final_text[i:i + 3800] for i in range(0, len(final_text), 3800)] or ["پاسخی تولید نشد."]
+    for chunk in chunks:
+        try:
+            await message.reply(chunk, disable_web_page_preview=True)
+        except Exception:
+            logging.exception("knowledge assistant: final reply send failed")
+            # Last-resort plain text path without optional Telegram parameters.
+            try:
+                await message.reply(chunk)
+            except Exception:
+                logging.exception("knowledge assistant: last-resort reply failed")
 
 
 def install(app: Any) -> bool:
