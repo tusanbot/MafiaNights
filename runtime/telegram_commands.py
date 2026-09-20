@@ -18,6 +18,7 @@ GROUP_COMMANDS = [
     types.BotCommand("ai_on", "فعال‌سازی هوش مصنوعی"),
     types.BotCommand("ai_off", "غیرفعال‌سازی هوش مصنوعی"),
     types.BotCommand("ai_status", "وضعیت هوش مصنوعی"),
+    types.BotCommand("ai_key", "ثبت امن API Key"),
     types.BotCommand("ask", "پرسش از دستیار مافیا"),
     types.BotCommand("mafia", "پرسش از دستیار مافیا"),
     types.BotCommand("commands", "فهرست دستورات متنی"),
