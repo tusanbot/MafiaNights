@@ -27,6 +27,7 @@ from runtime.end_game_control import install as install_end_game_control
 from runtime.production_consistency_loader import install as install_production_consistency
 from runtime.dual_winner_support import install as install_dual_winner_support
 from runtime.assistant_admin_panel import install as install_assistant_admin_panel
+from runtime.knowledge_assistant import install as install_knowledge_assistant
 from runtime.chat_locks import install as install_chat_locks
 from runtime.pv_menu_callbacks import install as install_pv_menu_callbacks
 from commands import register_commands as register_canonical_commands
@@ -49,6 +50,7 @@ for _item in list(getattr(dp.message_handlers,"handlers",[])):
         dp.message_handlers.handlers.remove(_item);dp.message_handlers.handlers.insert(0,_item);break
 
 install_end_game_control(app);install_production_consistency(app);install_dual_winner_support(app);app.assistant_admin_panel=install_assistant_admin_panel(app)
+install_knowledge_assistant(app)
 install_chat_locks(app)
 install_pv_menu_callbacks(app)
 
