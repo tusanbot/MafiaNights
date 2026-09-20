@@ -1,6 +1,7 @@
 """Serverless-safe voting transitions with scenario-driven two-round rules."""
 from __future__ import annotations
 
+import asyncio
 import html
 import math
 import time
@@ -163,29 +164,29 @@ async def _durable_start_wait(main):
     v = voting_runtime._v(main)
     voters = _current_voters(main, v)
     now = time.time()
-    v.update(
-        phase="waiting",
-        started_at=now,
-        deadline=now + int(v["wait_seconds"]),
-        target_index=0,
-        votes={},
-        eligible_voters=sorted(voters),
-    )
+    if v.get("mode") == voting_runtime.MANUAL:
+        v.update(phase="manual_ready", started_at=None, deadline=None, target_index=0, votes={}, eligible_voters=sorted(voters))
+        voting_runtime._put(main, v)
+        await main.bot.send_message(
+            voting_runtime._gid(main),
+            "🗳 <b>شروع رای‌گیری</b>\n\nرای‌گیری دستی آماده است. با زدن دکمه زیر توسط گرداننده، رای‌گیری نفر اول شروع می‌شود.",
+            parse_mode="HTML", reply_markup=voting_runtime._manual_start_kb(),
+        )
+        main._voting_task = None
+        return
+    v.update(phase="waiting", started_at=now, deadline=now + int(v["wait_seconds"]), target_index=0, votes={}, eligible_voters=sorted(voters))
     voting_runtime._put(main, v)
     rows = _row_map(main)
     names = [await _resolve_name(main, uid, rows.get(uid, {}).get("seat")) for uid in sorted(voters)]
-    blocked = voting_runtime._active_rights(v)
+    blocked = _active_rights(v)
     blocked_names = [await _resolve_name(main, uid, rows.get(uid, {}).get("seat")) for uid in sorted(blocked)]
     blocked_text = "\n".join(f"• {html.escape(x)}" for x in blocked_names) if blocked_names else "• هیچ‌کس"
     await main.bot.send_message(
         voting_runtime._gid(main),
-        f"🗳 <b>رأی‌گیری دور {int(v.get('round') or 1)} پس از {int(v['wait_seconds'])} ثانیه شروع می‌شود.</b>\n"
-        f"برای هر هدف {int(v['vote_seconds'])} ثانیه فرصت دارید.\n\n"
-        f"👥 <b>افراد دارای حق رأی:</b> {len(names)} نفر\n"
-        f"🚫 <b>حق رأی گرفته‌شده:</b>\n{blocked_text}",
+        f"🗳 <b>رأی‌گیری دور {int(v.get('round') or 1)} پس از {int(v['wait_seconds'])} ثانیه شروع می‌شود.</b>\nبرای هر هدف {int(v['vote_seconds'])} ثانیه فرصت دارید.\n\n👥 <b>افراد دارای حق رأی:</b> {len(names)} نفر\n🚫 <b>حق رأی گرفته‌شده:</b>\n{blocked_text}",
         parse_mode="HTML",
     )
-    main._voting_task = None
+    main._voting_task = asyncio.create_task(voting_runtime._timer(main, float(v["deadline"]), "waiting"))
 
 
 async def _start_target(main):
@@ -198,13 +199,26 @@ async def _start_target(main):
     rows = _row_map(main)
     name = await _resolve_name(main, target, rows.get(target, {}).get("seat"))
     now = time.time()
-    v["phase"], v["started_at"], v["deadline"] = "voting", now, now + int(v["vote_seconds"])
+    deadline = None if v.get("mode") == voting_runtime.MANUAL else now + int(v["vote_seconds"])
+    v["phase"], v["started_at"], v["deadline"] = "voting", now, deadline
     v.setdefault("votes", {}).setdefault(str(target), [])
     v["eligible_voters"] = sorted(_current_voters(main, v))
     voting_runtime._put(main, v)
-    markup = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رأی می‌دهم", callback_data="vote:cast")) if v.get("mode") == voting_runtime.AUTO else None
-    await main.bot.send_message(voting_runtime._gid(main), f"🗳 <b>رأی برای {html.escape(name)}</b>\n\n⏱ {int(v['vote_seconds'])} ثانیه فرصت دارید.", parse_mode="HTML", reply_markup=markup)
-    main._voting_task = None
+    markup = (
+        InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رأی می‌دهم", callback_data="vote:cast"))
+        if v.get("mode") == voting_runtime.AUTO
+        else voting_runtime._manual_next_kb(idx >= len(targets) - 1)
+    )
+    sent = await main.bot.send_message(
+        voting_runtime._gid(main), voting_runtime._vote_message_text(main, v, target),
+        parse_mode="HTML", reply_markup=markup,
+    )
+    v["vote_message_id"] = int(sent.message_id)
+    voting_runtime._put(main, v)
+    if v.get("mode") == voting_runtime.AUTO:
+        main._voting_task = asyncio.create_task(voting_runtime._timer(main, float(deadline), "voting"))
+    else:
+        main._voting_task = None
 
 
 async def _finish_round(main):
@@ -257,30 +271,73 @@ async def _finish_round(main):
 async def _cast(main, callback):
     v = voting_runtime._v(main)
     if v.get("phase") != "voting":
-        await callback.answer("⏳ زمان رأی‌گیری این هدف تمام شده است.", show_alert=True)
-        raise CancelHandler()
+        await callback.answer("⏳ زمان رأی‌گیری این هدف تمام شده است.", show_alert=True); raise CancelHandler()
     uid = int(callback.from_user.id)
     eligible = {int(x) for x in (v.get("eligible_voters") or _current_voters(main, v))}
     if uid not in eligible:
-        await callback.answer("🚫 شما در این دور حق رأی ندارید.", show_alert=True)
-        raise CancelHandler()
+        await callback.answer("🚫 شما در این دور حق رأی ندارید.", show_alert=True); raise CancelHandler()
     targets = [int(x) for x in (v.get("targets") or [])]
     idx = int(v.get("target_index") or 0)
     if idx >= len(targets):
-        await callback.answer("⏳ این رأی‌گیری تمام شده است.", show_alert=True)
-        raise CancelHandler()
+        await callback.answer("⏳ این رأی‌گیری تمام شده است.", show_alert=True); raise CancelHandler()
     target = targets[idx]
     if uid == target and not _rules(main).get("self_vote", False):
-        await callback.answer("🚫 نمی‌توانید به خودتان رأی بدهید.", show_alert=True)
-        raise CancelHandler()
+        await callback.answer("🚫 نمی‌توانید به خودتان رأی بدهید.", show_alert=True); raise CancelHandler()
+    records = voting_runtime._vote_records(v, target)
+    if uid in {int(x["user_id"]) for x in records}:
+        await callback.answer("⚠️ رأی شما قبلاً ثبت شده است.", show_alert=True); raise CancelHandler()
     bucket = list(v.setdefault("votes", {}).setdefault(str(target), []))
-    if uid in {int(x) for x in bucket}:
-        await callback.answer("⚠️ رأی شما قبلاً ثبت شده است.", show_alert=True)
-        raise CancelHandler()
-    bucket.append(uid)
+    bucket.append({"user_id": uid, "voted_at": voting_runtime._vote_timestamp()})
     v["votes"][str(target)] = bucket
     voting_runtime._put(main, v)
+    message_id = v.get("vote_message_id")
+    if message_id:
+        try:
+            await main.bot.edit_message_text(
+                voting_runtime._gid(main), int(message_id),
+                voting_runtime._vote_message_text(main, v, target), parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast"))
+            )
+        except Exception: pass
     await callback.answer("✅ رأی شما ثبت شد.")
+
+
+async def _manual_start(main, callback):
+    if int(callback.from_user.id) != int(getattr(main, "moderator_id", -1) or -1):
+        await callback.answer("⛔ فقط گرداننده دسترسی دارد.", show_alert=True); raise CancelHandler()
+    v=voting_runtime._v(main)
+    if v.get("mode") != voting_runtime.MANUAL or v.get("phase") != "manual_ready":
+        await callback.answer("⛔ رأی‌گیری دستی آماده نیست.", show_alert=True); raise CancelHandler()
+    await callback.answer("▶️ رأی‌گیری نفر اول شروع شد."); await _start_target(main); raise CancelHandler()
+
+async def _manual_next(main, callback):
+    if int(callback.from_user.id) != int(getattr(main, "moderator_id", -1) or -1):
+        await callback.answer("⛔ فقط گرداننده دسترسی دارد.", show_alert=True); raise CancelHandler()
+    v=voting_runtime._v(main)
+    if v.get("mode") != voting_runtime.MANUAL or v.get("phase") != "voting":
+        await callback.answer("⛔ رأی‌گیری دستی فعال نیست.", show_alert=True); raise CancelHandler()
+    mid=v.get("vote_message_id")
+    if mid:
+        try: await main.bot.edit_message_reply_markup(voting_runtime._gid(main),int(mid),voting_runtime._disabled_vote_kb())
+        except Exception: pass
+    v["target_index"]=int(v.get("target_index") or 0)+1; v["started_at"]=None; v["deadline"]=None; voting_runtime._put(main,v)
+    await callback.answer("➡️ نفر بعدی"); await _start_target(main); raise CancelHandler()
+
+async def _manual_end(main, callback):
+    if int(callback.from_user.id) != int(getattr(main, "moderator_id", -1) or -1):
+        await callback.answer("⛔ فقط گرداننده دسترسی دارد.", show_alert=True); raise CancelHandler()
+    v=voting_runtime._v(main)
+    if v.get("mode") != voting_runtime.MANUAL or v.get("phase") != "voting":
+        await callback.answer("⛔ رأی‌گیری دستی فعال نیست.", show_alert=True); raise CancelHandler()
+    mid=v.get("vote_message_id")
+    if mid:
+        try: await main.bot.edit_message_reply_markup(voting_runtime._gid(main),int(mid),voting_runtime._disabled_vote_kb())
+        except Exception: pass
+    v["target_index"]=len(list(v.get("targets") or [])); v["started_at"]=None; v["deadline"]=None; voting_runtime._put(main,v)
+    await callback.answer("🏁 رأی‌گیری این دور به پایان رسید."); await voting_runtime._finish_round(main); raise CancelHandler()
+
+async def _vote_noop(callback):
+    await callback.answer("این پیام مربوط به مرحله قبلی رأی‌گیری است.")
 
 
 async def _round2(main, callback):
@@ -513,6 +570,10 @@ def install(main):
         (lambda c: c.data == "vote:mode", mode_handler),
         (lambda c: c.data.startswith("vote:mode:"), mode_set),
         (lambda c: c.data == "vote:start", start),
+        (lambda c: c.data == "vote:manual_start", lambda c: _manual_start(main, c)),
+        (lambda c: c.data == "vote:manual_next", lambda c: _manual_next(main, c)),
+        (lambda c: c.data == "vote:manual_end", lambda c: _manual_end(main, c)),
+        (lambda c: c.data == "vote:noop", _vote_noop),
         (lambda c: c.data == "vote:cast", cast),
         (lambda c: c.data == "vote:round2", r2),
         (lambda c: c.data.startswith("vote:r2pick:"), r2pick),
