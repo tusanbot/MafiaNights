@@ -21,6 +21,7 @@ CommandHandler = Callable[[types.Message], Awaitable[None]]
 # shared command reference.
 COMMANDS = {
     "commands": {"commands", "دستورات", "دستورها"},
+    "ask": {"ask", "mafia", "سوال", "سؤال"},
     "newgame": {"newgame", "بازی جدید"},
     "join": {"join", "ورود"},
     "leave": {"leave", "خروج"},
@@ -136,6 +137,10 @@ COMMAND_REFERENCE = (
         ("/tagall", "تگ همه بازیکنان"),
         ("/tagadmins", "تگ مدیران"),
         ("/taglist", "تگ لیست"),
+    )),
+    ("🤖 دستیار", (
+        ("/ask", "پرسش از دستیار مافیا"),
+        ("/mafia", "پرسش از دستیار مافیا"),
     )),
     ("ℹ️ عمومی", (
         ("/start", "نمایش منوی اصلی"),
@@ -292,6 +297,7 @@ async def _set_lock(message: types.Message, app: Any, key: str, enabled: bool, l
 async def run_command(name: str, message: types.Message, app: Any) -> None:
     handlers = {
         "commands": cmd_commands,
+        "ask": lambda m, a: __import__("runtime.knowledge_assistant", fromlist=["answer"]).answer(m, a, (m.text or "").split(" ", 1)[1] if " " in (m.text or "") else ""),
         "newgame": _newgame,
         "join": _join,
         "leave": _leave,
