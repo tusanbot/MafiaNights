@@ -25,6 +25,7 @@ COMMANDS = {
     "ai_on": {"ai_on", "فعال کردن هوش مصنوعی"},
     "ai_off": {"ai_off", "غیرفعال کردن هوش مصنوعی"},
     "ai_status": {"ai_status", "وضعیت هوش مصنوعی"},
+    "ai_key": {"ai_key", "ثبت کلید هوش مصنوعی"},
     "newgame": {"newgame", "بازی جدید"},
     "join": {"join", "ورود"},
     "leave": {"leave", "خروج"},
@@ -147,6 +148,7 @@ COMMAND_REFERENCE = (
         ("/ai_on", "فعال‌سازی هوش مصنوعی"),
         ("/ai_off", "غیرفعال‌سازی هوش مصنوعی"),
         ("/ai_status", "وضعیت هوش مصنوعی"),
+        ("/ai_key", "ثبت امن API Key"),
         ("/ask", "پرسش از دستیار مافیا"),
         ("/mafia", "پرسش از دستیار مافیا"),
     )),
@@ -206,6 +208,43 @@ async def _ai_control(message: types.Message, app: Any, action: str) -> None:
         )
         return
     await message.reply(f"✅ دستیار هوش مصنوعی {'فعال' if enabled else 'غیرفعال'} شد.")
+
+async def _ai_key(message: types.Message, app: Any) -> None:
+    if message.chat.type not in {"group", "supergroup"}:
+        await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
+        return
+    gid = int(message.chat.id)
+    try:
+        status = (await app.bot.get_chat_member(gid, int(message.from_user.id))).status
+    except Exception:
+        status = "left"
+    if status not in {"creator", "administrator"} and int(message.from_user.id) != int(getattr(app, "moderator_id", 0) or 0):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه.")
+        return
+    parts = (message.text or "").split(None, 1)
+    key = parts[1].strip() if len(parts) > 1 else ""
+    if not key:
+        await message.reply("❗ فرمت: <code>/ai_key YOUR_API_KEY</code>\nکلید در پایگاه‌داده به‌صورت رمزنگاری‌شده نگهداری می‌شود.", parse_mode="HTML")
+        return
+    import os
+    from repositories.knowledge_repository import KnowledgeRepository
+    from sqlalchemy import text
+    secret = os.getenv("DATABASE_URL") or ""
+    if not secret:
+        await message.reply("❌ اتصال امن پایگاه‌داده برای رمزنگاری در دسترس نیست.")
+        return
+    with KnowledgeRepository().SessionLocal() as session:
+        session.execute(text("""
+            insert into public.mafia_ai_settings(group_id,provider,model,enabled,web_search_enabled,api_key_ciphertext,updated_at)
+            values(:gid,'openai',:model,false,true,pgp_sym_encrypt(:key,:secret),now())
+            on conflict(group_id) do update set api_key_ciphertext=pgp_sym_encrypt(:key,:secret), updated_at=now()
+        """), {"gid": gid, "model": os.getenv("MAFIA_AI_MODEL") or None, "key": key, "secret": secret})
+        session.commit()
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    await message.answer("✅ API Key با موفقیت و به‌صورت رمزنگاری‌شده ثبت شد. برای فعال‌سازی از /ai_on استفاده کنید.")
 
 async def cmd_tag_all(message: types.Message, app: Any) -> None:
     if message.chat.type not in {"group", "supergroup"}:
@@ -350,6 +389,7 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
         "ai_on": lambda m, a: _ai_control(m, a, "on"),
         "ai_off": lambda m, a: _ai_control(m, a, "off"),
         "ai_status": lambda m, a: _ai_control(m, a, "status"),
+        "ai_key": _ai_key,
         "newgame": _newgame,
         "join": _join,
         "leave": _leave,
