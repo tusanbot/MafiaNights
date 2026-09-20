@@ -27,6 +27,8 @@ from runtime.end_game_control import install as install_end_game_control
 from runtime.production_consistency_loader import install as install_production_consistency
 from runtime.dual_winner_support import install as install_dual_winner_support
 from runtime.assistant_admin_panel import install as install_assistant_admin_panel
+from runtime.chat_locks import install as install_chat_locks
+from commands import register_commands as register_canonical_commands
 
 TOKEN=os.getenv("API_TOKEN")
 if not TOKEN:raise ValueError("API_TOKEN environment variable is not set!")
@@ -46,10 +48,52 @@ for _item in list(getattr(dp.message_handlers,"handlers",[])):
         dp.message_handlers.handlers.remove(_item);dp.message_handlers.handlers.insert(0,_item);break
 
 install_end_game_control(app);install_production_consistency(app);install_dual_winner_support(app);app.assistant_admin_panel=install_assistant_admin_panel(app)
-logging.info("PRODUCTION_RUNTIME_ACTIVE lobby=runtime.lobby_ui_final management=game_management+management_surface_final progress=achievements+tags+events+incidents")
+install_chat_locks(app)
+
+# Canonical text-command authority:
+# all game/user text commands are registered exactly once from commands.py.
+# Legacy command handlers remain available in source for compatibility, but
+# their message registrations are removed here so they cannot shadow or
+# duplicate the canonical registry.
+register_canonical_commands(app)
+_legacy_command_modules = {
+    "runtime.text_commands",
+    "runtime.command_surface_v2",
+    "runtime.command_surface_v3",
+    "runtime.command_authority_final",
+    "runtime.telegram_commands",
+    "runtime.end_game_control",
+    "runtime.user_stats",
+    "runtime.lobby_ui_final",
+    "runtime.player_kick",
+}
+for _item in list(getattr(dp.message_handlers, "handlers", [])):
+    _fn = getattr(_item, "callback", None) or getattr(_item, "handler", None)
+    if getattr(_fn, "__module__", "") in _legacy_command_modules:
+        try:
+            dp.message_handlers.handlers.remove(_item)
+        except ValueError:
+            pass
+# Re-register the single canonical handler after legacy registrations have been
+# removed, then keep it at the front of the message chain.
+register_canonical_commands(app)
+try:
+    _handlers = getattr(dp.message_handlers, "handlers", [])
+    _canonical = [x for x in _handlers if getattr(getattr(x, "handler", None) or getattr(x, "callback", None), "__module__", "") == "commands"]
+    for _x in reversed(_canonical):
+        _handlers.remove(_x); _handlers.insert(0, _x)
+except Exception:
+    logging.exception("Failed to prioritize canonical text command handler")
+
+logging.info("PRODUCTION_RUNTIME_ACTIVE canonical_text_commands=commands.py locks=runtime.chat_locks")
 
 async def on_startup(dp):
     logging.info("MafiaNights production startup");await app.startup()
+    try:
+        if getattr(app, "_register_telegram_commands", None):
+            await app._register_telegram_commands()
+    except Exception:
+        logging.exception("Canonical Telegram command menu startup failed")
     try:
         allowed_group_id=int(os.getenv("ALLOWED_GROUP_ID","-1002356353761"));active_game=app.runtime.state.active_game(allowed_group_id)
         if active_game:
