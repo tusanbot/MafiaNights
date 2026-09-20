@@ -80,8 +80,17 @@ register_canonical_commands(app)
 try:
     _handlers = getattr(dp.message_handlers, "handlers", [])
     _canonical = [x for x in _handlers if getattr(getattr(x, "handler", None) or getattr(x, "callback", None), "__module__", "") == "commands"]
-    for _x in reversed(_canonical):
-        _handlers.remove(_x); _handlers.insert(0, _x)
+    _guard = next((x for x in _handlers if getattr(getattr(x, "handler", None) or getattr(x, "callback", None), "__name__", "") == "chat_lock_message_guard"), None)
+    for _x in _canonical:
+        try: _handlers.remove(_x)
+        except ValueError: pass
+    if _guard in _handlers:
+        _pos = _handlers.index(_guard) + 1
+        for _x in _canonical:
+            _handlers.insert(_pos, _x); _pos += 1
+    else:
+        for _x in reversed(_canonical):
+            _handlers.insert(0, _x)
 except Exception:
     logging.exception("Failed to prioritize canonical text command handler")
 
