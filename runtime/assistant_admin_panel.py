@@ -365,7 +365,8 @@ class AssistantAdminPanel:
             body = (
                 "📊 <b>وضعیت دستیار</b>\n\n"
                 f"🤖 AI گروه: <b>{'فعال' if row['enabled'] else 'غیرفعال'}</b>\n"
-                f"🧠 مدل گروه: <code>{html.escape(str(row['model'] or 'پیش‌فرض'))}</code>\n"
+                f"🧠 سرویس: <b>Gemini</b>\n"
+                f"🧠 مدل گروه: <code>{html.escape(str(row['model'] or 'gemini-2.5-flash'))}</code>\n"
                 f"🔑 کلید گروه: <b>{'ثبت شده' if row['has_group_key'] else 'ثبت نشده'}</b>\n"
                 f"🔐 AI پیوی: <b>{'فعال' if row['private_enabled'] else 'غیرفعال'}</b>\n"
                 f"🧠 مدل پیوی: <code>{html.escape(str(row['private_model'] or 'پیش‌فرض'))}</code>\n"
@@ -382,7 +383,7 @@ class AssistantAdminPanel:
         kb = InlineKeyboardMarkup(row_width=1)
         kb.add(InlineKeyboardButton(f"🤖 AI گروه: {'روشن' if enabled else 'خاموش'}", callback_data="aip:toggle_group"))
         kb.add(InlineKeyboardButton("⬅️ پنل دستیار", callback_data="aip:menu"))
-        await callback.message.edit_text("🤖 <b>تنظیمات AI گروه</b>\n\nکلید گروه از مسیر فعلی /ai_key مدیریت می‌شود.", reply_markup=kb, parse_mode="HTML")
+        await callback.message.edit_text("🤖 <b>تنظیمات AI گروه</b>\n\nکلید Gemini گروه از بخش «🔑 کلید AI گروه» مدیریت می‌شود.", reply_markup=kb, parse_mode="HTML")
         await callback.answer()
 
     async def toggle_group(self, callback):
