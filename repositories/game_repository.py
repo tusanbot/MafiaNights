@@ -237,6 +237,38 @@ class GameRepository(DatabaseRepository):
         self._invalidate(game_id=game_id)
         return row
 
+    def reactivate_player(self, game_id, player_id, seat=None, is_substitute=False):
+        """Re-enter a player in an existing lobby after a prior lobby removal/replacement."""
+        uid = int(player_id)
+        with self.SessionLocal() as session:
+            resolved = self._resolve_id(session, game_id)
+            if seat is not None and session.execute(
+                text("select 1 from public.mafia_game_players where game_id=:game_id and seat=:seat and player_id<>:player_id limit 1"),
+                {"game_id": resolved, "seat": int(seat), "player_id": uid},
+            ).first():
+                raise ValueError("این صندلی قبلاً رزرو شده است")
+            result = session.execute(text("""
+                update public.mafia_game_players
+                   set seat=:seat,
+                       status=:status,
+                       is_substitute=:is_substitute,
+                       is_alive=true,
+                       role=null,
+                       updated_at=now()
+                 where game_id=:game_id
+                   and (player_id=:player_id or user_id=:player_id)
+                   and status in ('removed','kicked','finished','dead')
+            """), {
+                "game_id": resolved,
+                "player_id": uid,
+                "seat": seat,
+                "status": "waiting" if seat is None else "active",
+                "is_substitute": bool(is_substitute),
+            })
+            session.commit()
+        self._invalidate(game_id=game_id)
+        return result.rowcount > 0
+
     def list_players(self, game_id):
         key = str(game_id)
         cached = self._players_cache.get(key)
