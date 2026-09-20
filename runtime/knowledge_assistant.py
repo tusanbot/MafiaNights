@@ -95,7 +95,7 @@ def _ai_config(app: Any, message: Any, resolved_gid: int | None = None) -> tuple
                                     else pgp_sym_decrypt(api_key_ciphertext, :secret)
                                end as api_key
                         from public.mafia_ai_settings where group_id=:gid limit 1"""),
-                {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
+                {"gid": gid, "secret": os.getenv("MAFIA_AI_ENCRYPTION_SECRET") or os.getenv("DATABASE_URL") or ""},
             ).mappings().first()
         if not row or (is_private and not row["private_enabled"]):
             return False, None, "gemini", None
