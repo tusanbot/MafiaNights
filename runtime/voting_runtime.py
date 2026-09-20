@@ -221,12 +221,13 @@ def _manual_start_kb():
 
 
 def _manual_next_kb(last=False):
-    return InlineKeyboardMarkup(row_width=1).add(
-        InlineKeyboardButton(
-            "🏁 اتمام رای‌گیری" if last else "➡️ بعدی",
-            callback_data="vote:manual_end" if last else "vote:manual_next",
-        )
-    )
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast"))
+    kb.add(InlineKeyboardButton(
+        "🏁 اتمام رای‌گیری" if last else "➡️ بعدی",
+        callback_data="vote:manual_end" if last else "vote:manual_next",
+    ))
+    return kb
 
 
 def _disabled_vote_kb():
