@@ -69,100 +69,53 @@ def _web_search(query: str, limit: int = 4) -> list[dict[str, str]]:
 
 
 def _ai_config(app: Any, message: Any) -> tuple[bool, str | None, str, str | None]:
-    """Load AI settings and safely infer Gemini from an AIza key.
-    
-    Older installations stored every key as provider=openai. Gemini keys are
-    recognizable by the AIza prefix, so an existing registration is upgraded
-    transparently without requiring the moderator to re-enter the key.
-    """
+    """Load global/group AI settings, with a separate private-chat configuration."""
     try:
+        is_private = getattr(message.chat, "type", None) == "private"
         gid = int(message.chat.id)
         with KnowledgeRepository().SessionLocal() as session:
             from sqlalchemy import text
-            row = session.execute(
-                text(
-                    """select enabled, provider, model,
-                              case when api_key_ciphertext is null then null
-                                   else pgp_sym_decrypt(api_key_ciphertext, :secret)
-                              end as api_key
-                       from public.mafia_ai_settings where group_id=:gid"""
-                ),
-                {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
-            ).mappings().first()
-        if not row:
-            # AI configuration is global. A private chat, another group, or a
-            # group without an explicit registration must never lose access to
-            # the bot-wide assistant settings. Row 0 is the canonical global
-            # setting; the final query keeps compatibility with older installs.
-            with KnowledgeRepository().SessionLocal() as fallback_session:
-                row = fallback_session.execute(
-                    text(
-                        """select enabled, provider, model,
-                                  case when api_key_ciphertext is null then null
-                                       else pgp_sym_decrypt(api_key_ciphertext, :secret)
-                                  end as api_key
-                           from public.mafia_ai_settings
-                           where group_id = 0
-                           limit 1"""
-                    ),
+            if is_private:
+                row = session.execute(
+                    text("""select private_enabled as enabled,
+                                   private_provider as provider,
+                                   private_model as model,
+                                   case when private_api_key_ciphertext is null then null
+                                        else pgp_sym_decrypt(private_api_key_ciphertext, :secret)
+                                   end as api_key,
+                                   private_web_search_enabled as web_search_enabled
+                            from public.mafia_ai_settings where group_id=0 limit 1"""),
                     {"secret": os.getenv("DATABASE_URL") or ""},
                 ).mappings().first()
+                if row and row["enabled"] and row["api_key"]:
+                    provider = str(row["provider"] or "").lower()
+                    key = str(row["api_key"])
+                    if key.startswith("AIza"):
+                        provider = "gemini"
+                    if provider not in {"gemini", "openai"}:
+                        provider = "gemini" if key.startswith("AIza") else "openai"
+                    model = str(row["model"]) if row["model"] else None
+                    if provider == "gemini" and (not model or model.startswith(("gpt-", "o1", "o3", "o4"))):
+                        model = "gemini-2.5-flash"
+                    return True, key, provider, model
+                # No private key/config: fall through to the existing global configuration.
+            row = session.execute(
+                text("""select enabled, provider, model,
+                               case when api_key_ciphertext is null then null
+                                    else pgp_sym_decrypt(api_key_ciphertext, :secret)
+                               end as api_key
+                        from public.mafia_ai_settings where group_id=:gid limit 1"""),
+                {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
+            ).mappings().first()
             if not row:
-                # Migrate the newest legacy group-scoped key into the global row
-                # transparently. This is important for installations where the
-                # moderator registered the Gemini key before global settings
-                # were introduced.
-                with KnowledgeRepository().SessionLocal() as fallback_session:
-                    legacy = fallback_session.execute(
-                        text(
-                            """select enabled, provider, model, api_key_ciphertext
-                               from public.mafia_ai_settings
-                               where group_id <> 0
-                                 and api_key_ciphertext is not null
-                               order by updated_at desc
-                               limit 1"""
-                        )
-                    ).mappings().first()
-                    if legacy:
-                        fallback_session.execute(
-                            text(
-                                """insert into public.mafia_ai_settings
-                                   (group_id,provider,model,api_key_ciphertext,
-                                    web_search_enabled,enabled,updated_at)
-                                   values(0,:provider,:model,:ciphertext,true,:enabled,now())
-                                   on conflict(group_id) do nothing"""
-                            ),
-                            dict(legacy),
-                        )
-                        fallback_session.commit()
-                        row = fallback_session.execute(
-                            text(
-                                """select enabled, provider, model,
-                                          case when api_key_ciphertext is null then null
-                                               else pgp_sym_decrypt(api_key_ciphertext, :secret)
-                                          end as api_key
-                                   from public.mafia_ai_settings
-                                   where group_id = 0
-                                   limit 1"""
-                            ),
-                            {"secret": os.getenv("DATABASE_URL") or ""},
-                        ).mappings().first()
-            if not row:
-                with KnowledgeRepository().SessionLocal() as fallback_session:
-                    row = fallback_session.execute(
-                        text(
-                            """select enabled, provider, model,
-                                      case when api_key_ciphertext is null then null
-                                           else pgp_sym_decrypt(api_key_ciphertext, :secret)
-                                      end as api_key
-                               from public.mafia_ai_settings
-                               where enabled = true
-                                 and api_key_ciphertext is not null
-                               order by updated_at desc
-                               limit 1"""
-                        ),
-                        {"secret": os.getenv("DATABASE_URL") or ""},
-                    ).mappings().first()
+                row = session.execute(
+                    text("""select enabled, provider, model,
+                                   case when api_key_ciphertext is null then null
+                                        else pgp_sym_decrypt(api_key_ciphertext, :secret)
+                                   end as api_key
+                            from public.mafia_ai_settings where group_id=0 limit 1"""),
+                    {"secret": os.getenv("DATABASE_URL") or ""},
+                ).mappings().first()
         if not row:
             key = os.getenv("MAFIA_AI_API_KEY")
             provider = "gemini" if str(key or "").startswith("AIza") else "openai"
@@ -175,14 +128,13 @@ def _ai_config(app: Any, message: Any) -> tuple[bool, str | None, str, str | Non
             provider = "gemini" if str(key or "").startswith("AIza") else "openai"
         model = str(row["model"]) if row["model"] else None
         if provider == "gemini" and (not model or model.startswith(("gpt-", "o1", "o3", "o4"))):
-            model = "gemini-3.5-flash"
+            model = "gemini-2.5-flash"
         return bool(row["enabled"]), key, provider, model
     except Exception:
         logging.exception("knowledge assistant: AI config lookup failed")
         key = os.getenv("MAFIA_AI_API_KEY")
         provider = "gemini" if str(key or "").startswith("AIza") else "openai"
         return False, key, provider, None
-
 
 def _call_ai(
     prompt: str,
