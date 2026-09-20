@@ -246,6 +246,9 @@ async def _ai_control(message: types.Message, app: Any, action: str) -> None:
     with KnowledgeRepository().SessionLocal() as session:
         session.execute(text("create extension if not exists pgcrypto"))
         session.execute(text("""
+            create extension if not exists pgcrypto
+        """))
+        session.execute(text("""
             create table if not exists public.mafia_ai_settings (
                 group_id bigint primary key,
                 provider text not null default 'openai',
@@ -253,8 +256,23 @@ async def _ai_control(message: types.Message, app: Any, action: str) -> None:
                 api_key_ciphertext bytea,
                 web_search_enabled boolean not null default true,
                 enabled boolean not null default false,
-                updated_at timestamptz not null default now()
+                updated_at timestamptz not null default now(),
+                private_enabled boolean not null default false,
+                private_provider text not null default 'gemini',
+                private_model text,
+                private_api_key_ciphertext bytea,
+                private_web_search_enabled boolean not null default true,
+                private_updated_at timestamptz
             )
+        """))
+        session.execute(text("""
+            alter table public.mafia_ai_settings
+              add column if not exists private_enabled boolean not null default false,
+              add column if not exists private_provider text not null default 'gemini',
+              add column if not exists private_model text,
+              add column if not exists private_api_key_ciphertext bytea,
+              add column if not exists private_web_search_enabled boolean not null default true,
+              add column if not exists private_updated_at timestamptz
         """))
         session.commit()
     if action != "status":
@@ -310,6 +328,9 @@ async def _ai_key(message: types.Message, app: Any) -> None:
     with KnowledgeRepository().SessionLocal() as session:
         session.execute(text("create extension if not exists pgcrypto"))
         session.execute(text("""
+            create extension if not exists pgcrypto
+        """))
+        session.execute(text("""
             create table if not exists public.mafia_ai_settings (
                 group_id bigint primary key,
                 provider text not null default 'openai',
@@ -317,8 +338,23 @@ async def _ai_key(message: types.Message, app: Any) -> None:
                 api_key_ciphertext bytea,
                 web_search_enabled boolean not null default true,
                 enabled boolean not null default false,
-                updated_at timestamptz not null default now()
+                updated_at timestamptz not null default now(),
+                private_enabled boolean not null default false,
+                private_provider text not null default 'gemini',
+                private_model text,
+                private_api_key_ciphertext bytea,
+                private_web_search_enabled boolean not null default true,
+                private_updated_at timestamptz
             )
+        """))
+        session.execute(text("""
+            alter table public.mafia_ai_settings
+              add column if not exists private_enabled boolean not null default false,
+              add column if not exists private_provider text not null default 'gemini',
+              add column if not exists private_model text,
+              add column if not exists private_api_key_ciphertext bytea,
+              add column if not exists private_web_search_enabled boolean not null default true,
+              add column if not exists private_updated_at timestamptz
         """))
         session.commit()
     if not secret:
