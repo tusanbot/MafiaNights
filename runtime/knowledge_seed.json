@@ -1,0 +1,2239 @@
+[
+  {
+    "title": "الکلاسیکو",
+    "content": "سناریوی الکلاسیکو در Mafia Nights با ۱۱ صندلی اجرا می‌شود و نقش‌های داخلی آن شامل مورنو(تفنگدار)، پابلو اسکوبار(پدرخوانده)، دکتر بریجیت، خوان(ماتادور)، بناپارت(اوشن)، شهروند ساده، بلانکو(گودمن)، مارتینز(حرفه‌ای)، چاپلین و چرچیل است. در منابع منتشرشده درباره این سناریو، پابلو اسکوبار رهبر تیم سیاه و صاحب شلیک معرفی شده؛ خوان/ماتادور توانایی بستن قابلیت یک بازیکن سفید را دارد؛ بلانکو توان خریداری یک شهر ساده/چاپلین را دارد؛ چرچیل مستقل با پیش‌بینی خروج بازیکن شرط برد ویژه دارد؛ بریجیت توان نجات دارد؛ مورنو یک اسلحه جنگی و یک مشقی در اختیار دارد؛ بناپارت با کد، بازیکن را برای بیداری بعدی هدف می‌گیرد؛ مارتینز شلیک و تشخیص هویت دارد؛ و چاپلین از بازیکن در برابر برخی تغییرات نقش/خرید محافظت می‌کند. این جزئیات از منبع عمومی آمده‌اند و باید با پیاده‌سازی داخلی بازی تطبیق داده شوند.",
+    "scope": "scenario",
+    "scenario_name": "الکلاسیکو",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "web+internal",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو بالاخره منتشر شد — 2ghaab",
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "مورنو(تفنگدار)",
+        "پابلو اسکوبار(پدرخوانده)",
+        "دکتر بریجیت",
+        "خوان(ماتادور)",
+        "بناپارت(اوشن)",
+        "شهروند ساده",
+        "بلانکو(گودمن)",
+        "مارتینز(حرفه‌ای)",
+        "چاپلین",
+        "چرچیل",
+        "شهروند ساده"
+      ],
+      "config": {
+        "sides": {
+          "چرچیل": "مستقل",
+          "چاپلین": "شهروند",
+          "دکتر بریجیت": "شهروند",
+          "شهروند ساده": "شهروند",
+          "بلانکو(گودمن)": "مافیا",
+          "بناپارت(اوشن)": "شهروند",
+          "خوان(ماتادور)": "مافیا",
+          "مورنو(تفنگدار)": "شهروند",
+          "مارتینز(حرفه‌ای)": "شهروند",
+          "پابلو اسکوبار(پدرخوانده)": "مافیا"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 11,
+      "min_players": 11,
+      "review_note": "External role descriptions are reference material, not a replacement for Mafia Nights rules.",
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "بازپرس",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 10 تا 10\n\nنقش‌ها: [\"شهروند ساده\", \"بازپرس\", \"شیاد\", \"روئین تن\", \"محقق\", \"ناتو\", \"پزشک\", \"کارآگاه\", \"رئیس مافیا\", \"شهروند ساده\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"شیاد\": \"مافیا\", \"محقق\": \"شهروند\", \"ناتو\": \"مافیا\", \"پزشک\": \"شهروند\", \"بازپرس\": \"شهروند\", \"کارآگاه\": \"شهروند\", \"روئین تن\": \"شهروند\", \"رئیس مافیا\": \"مافیا\", \"شهروند ساده\": \"شهروند\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"free\", \"challenge_limit\": null}",
+    "scope": "scenario",
+    "scenario_name": "بازپرس",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "شهروند ساده",
+        "بازپرس",
+        "شیاد",
+        "روئین تن",
+        "محقق",
+        "ناتو",
+        "پزشک",
+        "کارآگاه",
+        "رئیس مافیا",
+        "شهروند ساده"
+      ],
+      "config": {
+        "sides": {
+          "شیاد": "مافیا",
+          "محقق": "شهروند",
+          "ناتو": "مافیا",
+          "پزشک": "شهروند",
+          "بازپرس": "شهروند",
+          "کارآگاه": "شهروند",
+          "روئین تن": "شهروند",
+          "رئیس مافیا": "مافیا",
+          "شهروند ساده": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "free",
+        "challenge_limit": null
+      },
+      "max_players": 10,
+      "min_players": 10,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "پدرخوانده-جک",
+    "content": "پدرخوانده-جک در Mafia Nights با ۱۱ صندلی و نقش‌های کنستانتین، شهر ساده، پدرخوانده، لئون، دکتر واتسون، ماتادور، جک گنجیشکه، گودمن و همشهری اجرا می‌شود. ساید هر نقش از تنظیم داخلی سناریو خوانده می‌شود. این سناریو یک نسخه سفارشی از خانواده سناریوهای پدرخوانده است؛ بنابراین توضیحات عمومی نقش‌های مشابه را نباید بدون تطبیق با منطق داخلی ربات به‌عنوان قانون قطعی پاسخ داد.",
+    "scope": "scenario",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "کنستانتین",
+        "شهر ساده",
+        "شهر ساده",
+        "پدرخوانده",
+        "لئون",
+        "دکتر واتسون",
+        "ماتادور",
+        "جک گنجیشکه",
+        "گودمن",
+        "همشهری",
+        "شهر ساده"
+      ],
+      "config": {
+        "sides": {
+          "لئون": "شهروند",
+          "گودمن": "مافیا",
+          "همشهری": "شهروند",
+          "ماتادور": "مافیا",
+          "شهر ساده": "شهروند",
+          "پدرخوانده": "مافیا",
+          "کنستانتین": "شهروند",
+          "جک گنجیشکه": "مستقل",
+          "دکتر واتسون": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 11,
+      "min_players": 11,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "پدرخوانده-نوسترا",
+    "content": "پدرخوانده-نوسترا در Mafia Nights با ۱۱ صندلی و نقش‌های کنستانتین، شهر ساده، پدرخوانده، لئون، دکتر واتسون، ماتادور، نوستراداموس، گودمن، همشهری کین و شهر ساده اجرا می‌شود. نوستراداموس در تنظیم داخلی این سناریو مستقل است. برای پاسخ‌های ربات، قوانین داخلی سناریو بر منابع عمومی مشابه اولویت دارد.",
+    "scope": "scenario",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "کنستانتین",
+        "شهر ساده",
+        "شهر ساده",
+        "پدرخوانده",
+        "لئون",
+        "دکتر واتسون",
+        "ماتادور",
+        "نوستراداموس",
+        "گودمن",
+        "همشهری کین",
+        "شهر ساده"
+      ],
+      "config": {
+        "sides": {
+          "لئون": "شهروند",
+          "گودمن": "مافیا",
+          "ماتادور": "مافیا",
+          "شهر ساده": "شهروند",
+          "پدرخوانده": "مافیا",
+          "کنستانتین": "شهروند",
+          "همشهری کین": "شهروند",
+          "دکتر واتسون": "شهروند",
+          "نوستراداموس": "مستقل"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 11,
+      "min_players": 11,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "پدرخوانده-شرلوک",
+    "content": "پدرخوانده-شرلوک در Mafia Nights با ۱۱ صندلی و نقش‌های کنستانتین، شهر ساده، پدرخوانده، لئون، دکتر واتسون، ماتادور، شرلوک، گودمن، همشهری کین و شهر ساده اجرا می‌شود. شرلوک در تنظیم داخلی این سناریو مستقل است. برای پاسخ‌های ربات، قوانین داخلی سناریو بر منابع عمومی مشابه اولویت دارد.",
+    "scope": "scenario",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "کنستانتین",
+        "شهر ساده",
+        "شهر ساده",
+        "پدرخوانده",
+        "لئون",
+        "دکتر واتسون",
+        "ماتادور",
+        "شرلوک",
+        "گودمن",
+        "همشهری کین",
+        "شهر ساده"
+      ],
+      "config": {
+        "sides": {
+          "لئون": "شهروند",
+          "شرلوک": "مستقل",
+          "گودمن": "مافیا",
+          "ماتادور": "مافیا",
+          "شهر ساده": "شهروند",
+          "پدرخوانده": "مافیا",
+          "کنستانتین": "شهروند",
+          "همشهری کین": "شهروند",
+          "دکتر واتسون": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 11,
+      "min_players": 11,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "روسی 6",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 6 تا 6\n\nنقش‌ها: [\"شهروند\", \"شهروند\", \"مافیا\", \"شهروند\", \"مافیا\", \"شهروند\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"مافیا\": \"مافیا\", \"شهروند\": \"شهروند\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"free\", \"challenge_limit\": null}",
+    "scope": "scenario",
+    "scenario_name": "روسی 6",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "شهروند",
+        "شهروند",
+        "مافیا",
+        "شهروند",
+        "مافیا",
+        "شهروند"
+      ],
+      "config": {
+        "sides": {
+          "مافیا": "مافیا",
+          "شهروند": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "free",
+        "challenge_limit": null
+      },
+      "max_players": 6,
+      "min_players": 6,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "زودیاک",
+    "content": "سناریوی زودیاک در این ربات با ۱۲ صندلی و نقش‌های ثبت‌شده در جدول سناریو اجرا می‌شود: شعبده باز، تفنگدار، شهر ساده، اوشن، محافظ، حرفه ای، آل کاپون، بمب گذار، دکتر، کاراگاه، شهر ساده و زودیاک. سایدها از تنظیم داخلی سناریو خوانده می‌شوند و برای پاسخ‌های ربات، تنظیم داخلی Mafia Nights مرجع اول است. منابع وب برای تکمیل توضیح نقش‌ها و قوانین عمومی استفاده می‌شوند و در صورت تعارض، پیاده‌سازی داخلی اولویت دارد. منابع بیرونی توضیح می‌دهند که زودیاک یک نقش مستقل است و در نسخه‌های رایج این سناریو با شهر و مافیا رقابت می‌کند؛ همچنین شعبده‌باز توانایی شبانه را می‌بندد، بمب‌گذار بمب می‌گذارد، پزشک نجات می‌دهد، کارآگاه استعلام می‌گیرد، حرفه‌ای شلیک دارد، تفنگدار اسلحه می‌دهد و اوشن هم‌شهری‌ها را بیدار می‌کند. جزئیات دقیق این اقدامات باید با قوانین همین ربات تطبیق داده شود.",
+    "scope": "scenario",
+    "scenario_name": "زودیاک",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "web+internal",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/zodiac/",
+    "source_title": "سناریو زودیاک — RoundGangs",
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "شعبده باز",
+        "تفنگدار",
+        "شهر ساده",
+        "اوشن",
+        "محافظ",
+        "حرفه ای",
+        "آل کاپون",
+        "بمب گذار",
+        "دکتر",
+        "کاراگاه",
+        "شهر ساده",
+        "زودیاک"
+      ],
+      "config": {
+        "sides": {
+          "اوشن": "شهروند",
+          "دکتر": "شهروند",
+          "محافظ": "شهروند",
+          "زودیاک": "مستقل",
+          "حرفه ای": "شهروند",
+          "تفنگدار": "شهروند",
+          "کاراگاه": "شهروند",
+          "آل کاپون": "مافیا",
+          "بمب گذار": "مافیا",
+          "شهر ساده": "شهروند",
+          "شعبده باز": "مافیا"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 12,
+      "min_players": 12,
+      "review_note": "Internal Mafia Nights configuration is authoritative; web source is supplementary.",
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "سناریو تستی 2",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 2 تا 2\n\nنقش‌ها: [\"مافیا\", \"شهروند\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"مافیا\": \"مافیا\", \"شهروند\": \"شهروند\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"limited\", \"challenge_limit\": 1}",
+    "scope": "scenario",
+    "scenario_name": "سناریو تستی 2",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "مافیا",
+        "شهروند"
+      ],
+      "config": {
+        "sides": {
+          "مافیا": "مافیا",
+          "شهروند": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 2,
+      "min_players": 2,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "قمار باز",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 11 تا 11\n\nنقش‌ها: [\"ماسون\", \"آهنگر\", \"قمار باز\", \"تفنگدار\", \"کابوی\", \"معشوقه\", \"شاهکش\", \"روان شناس\", \"عنکبوت\", \"تروریست\", \"عینک ساز\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"آهنگر\": \"شهروند\", \"شاهکش\": \"مافیا\", \"ماسون\": \"شهروند\", \"کابوی\": \"شهروند\", \"عنکبوت\": \"شهروند\", \"معشوقه\": \"مافیا\", \"تروریست\": \"مافیا\", \"تفنگدار\": \"شهروند\", \"عینک ساز\": \"شهروند\", \"قمار باز\": \"مافیا\", \"روان شناس\": \"شهروند\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"limited\", \"challenge_limit\": 1}",
+    "scope": "scenario",
+    "scenario_name": "قمار باز",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "ماسون",
+        "آهنگر",
+        "قمار باز",
+        "تفنگدار",
+        "کابوی",
+        "معشوقه",
+        "شاهکش",
+        "روان شناس",
+        "عنکبوت",
+        "تروریست",
+        "عینک ساز"
+      ],
+      "config": {
+        "sides": {
+          "آهنگر": "شهروند",
+          "شاهکش": "مافیا",
+          "ماسون": "شهروند",
+          "کابوی": "شهروند",
+          "عنکبوت": "شهروند",
+          "معشوقه": "مافیا",
+          "تروریست": "مافیا",
+          "تفنگدار": "شهروند",
+          "عینک ساز": "شهروند",
+          "قمار باز": "مافیا",
+          "روان شناس": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 11,
+      "min_players": 11,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "کاپو",
+    "content": "سناریوی کاپو در نسخه فعلی Mafia Nights با ۱۰ صندلی ثبت شده است و نقش‌های آن عبارت‌اند از کاراگاه، شهر ساده، جلاد، وارث، مظنون، دن مافیا، عطار، زره ساز، جادوگر و شهر ساده. سایدها از تنظیم داخلی سناریو خوانده می‌شوند. منابع عمومی کاپو را سناریویی شهر/مافیا با نقش‌های تخصصی معرفی می‌کنند: دن مافیا رهبر و فرمانده شلیک است، جلاد با حدس نقش حذف می‌کند، جادوگر توانایی یا استعلام را مختل/معکوس می‌کند، زره‌ساز نجات می‌دهد، عطار زهر و پادزهر دارد، کارآگاه استعلام می‌گیرد و وارث می‌تواند توانایی نقش هدف را به ارث ببرد. این توضیحات وبی هستند و قبل از استفاده به‌عنوان قانون قطعی باید با منطق داخلی Mafia Nights تطبیق داده شوند.",
+    "scope": "scenario",
+    "scenario_name": "کاپو",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "web+internal",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/capo/",
+    "source_title": "کاپو — RoundGangs",
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "کاراگاه",
+        "شهر ساده",
+        "جلاد",
+        "وارث",
+        "مظنون",
+        "دن مافیا",
+        "عطار",
+        "زره ساز",
+        "جادوگر",
+        "شهر ساده"
+      ],
+      "config": {
+        "sides": {
+          "جلاد": "مافیا",
+          "عطار": "شهروند",
+          "وارث": "شهروند",
+          "مظنون": "شهروند",
+          "جادوگر": "مافیا",
+          "زره ساز": "شهروند",
+          "کاراگاه": "شهروند",
+          "دن مافیا": "مافیا",
+          "شهر ساده": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "free",
+        "challenge_limit": null
+      },
+      "max_players": 10,
+      "min_players": 10,
+      "review_note": "Internal Mafia Nights configuration is authoritative; web source is supplementary.",
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "کلاسیک 12",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 12 تا 12\n\nنقش‌ها: [\"ماسون\", \"کابوی\", \"رئیس مافیا\", \"دکتر\", \"خرابکار\", \"اسنایپر\", \"ساقی\", \"جاسوس\", \"کشیش\", \"تفنگدار\", \"ناتاشا\", \"روئین تن\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"دکتر\": \"شهروند\", \"ساقی\": \"شهروند\", \"کشیش\": \"شهروند\", \"جاسوس\": \"مافیا\", \"ماسون\": \"شهروند\", \"کابوی\": \"شهروند\", \"ناتاشا\": \"مافیا\", \"اسنایپر\": \"شهروند\", \"تفنگدار\": \"شهروند\", \"خرابکار\": \"مافیا\", \"روئین تن\": \"شهروند\", \"رئیس مافیا\": \"مافیا\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"limited\", \"challenge_limit\": 1}",
+    "scope": "scenario",
+    "scenario_name": "کلاسیک 12",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "ماسون",
+        "کابوی",
+        "رئیس مافیا",
+        "دکتر",
+        "خرابکار",
+        "اسنایپر",
+        "ساقی",
+        "جاسوس",
+        "کشیش",
+        "تفنگدار",
+        "ناتاشا",
+        "روئین تن"
+      ],
+      "config": {
+        "sides": {
+          "دکتر": "شهروند",
+          "ساقی": "شهروند",
+          "کشیش": "شهروند",
+          "جاسوس": "مافیا",
+          "ماسون": "شهروند",
+          "کابوی": "شهروند",
+          "ناتاشا": "مافیا",
+          "اسنایپر": "شهروند",
+          "تفنگدار": "شهروند",
+          "خرابکار": "مافیا",
+          "روئین تن": "شهروند",
+          "رئیس مافیا": "مافیا"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 12,
+      "min_players": 12,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "کلاسیک 13",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 13 تا 13\n\nنقش‌ها: [\"ماسون\", \"کابوی\", \"رئیس مافیا\", \"نوفیس\", \"دکتر\", \"خرابکار\", \"اسنایپر\", \"ساقی\", \"جاسوس\", \"کشیش\", \"تفنگدار\", \"ناتاشا\", \"روئین تن\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"دکتر\": \"شهروند\", \"ساقی\": \"شهروند\", \"کشیش\": \"شهروند\", \"جاسوس\": \"مافیا\", \"ماسون\": \"شهروند\", \"نوفیس\": \"مستقل\", \"کابوی\": \"شهروند\", \"ناتاشا\": \"مافیا\", \"اسنایپر\": \"شهروند\", \"تفنگدار\": \"شهروند\", \"خرابکار\": \"مافیا\", \"روئین تن\": \"شهروند\", \"رئیس مافیا\": \"مافیا\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"limited\", \"challenge_limit\": 1}",
+    "scope": "scenario",
+    "scenario_name": "کلاسیک 13",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "ماسون",
+        "کابوی",
+        "رئیس مافیا",
+        "نوفیس",
+        "دکتر",
+        "خرابکار",
+        "اسنایپر",
+        "ساقی",
+        "جاسوس",
+        "کشیش",
+        "تفنگدار",
+        "ناتاشا",
+        "روئین تن"
+      ],
+      "config": {
+        "sides": {
+          "دکتر": "شهروند",
+          "ساقی": "شهروند",
+          "کشیش": "شهروند",
+          "جاسوس": "مافیا",
+          "ماسون": "شهروند",
+          "نوفیس": "مستقل",
+          "کابوی": "شهروند",
+          "ناتاشا": "مافیا",
+          "اسنایپر": "شهروند",
+          "تفنگدار": "شهروند",
+          "خرابکار": "مافیا",
+          "روئین تن": "شهروند",
+          "رئیس مافیا": "مافیا"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 13,
+      "min_players": 13,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "مارتینز(حرفه‌ای)",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "مارتینز(حرفه‌ای)",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو"
+    }
+  },
+  {
+    "title": "مورنو(تفنگدار)",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "مورنو(تفنگدار)",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو"
+    }
+  },
+  {
+    "title": "چرچیل",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مستقل\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "چرچیل",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "الکلاسیکو"
+    }
+  },
+  {
+    "title": "پابلو اسکوبار(پدرخوانده)",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "پابلو اسکوبار(پدرخوانده)",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "الکلاسیکو"
+    }
+  },
+  {
+    "title": "دکتر بریجیت",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "دکتر بریجیت",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو"
+    }
+  },
+  {
+    "title": "چاپلین",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "چاپلین",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو"
+    }
+  },
+  {
+    "title": "خوان(ماتادور)",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "خوان(ماتادور)",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "الکلاسیکو"
+    }
+  },
+  {
+    "title": "شهروند ساده",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "شهروند ساده",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو"
+    }
+  },
+  {
+    "title": "بناپارت(اوشن)",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "بناپارت(اوشن)",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو"
+    }
+  },
+  {
+    "title": "بلانکو(گودمن)",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "بلانکو(گودمن)",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "الکلاسیکو"
+    }
+  },
+  {
+    "title": "بازپرس",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "بازپرس",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس"
+    }
+  },
+  {
+    "title": "پزشک",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "پزشک",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس"
+    }
+  },
+  {
+    "title": "شیاد",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "شیاد",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "بازپرس"
+    }
+  },
+  {
+    "title": "محقق",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "محقق",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس"
+    }
+  },
+  {
+    "title": "روئین تن",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "روئین تن",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس"
+    }
+  },
+  {
+    "title": "شهروند ساده",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "شهروند ساده",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس"
+    }
+  },
+  {
+    "title": "رئیس مافیا",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "رئیس مافیا",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "بازپرس"
+    }
+  },
+  {
+    "title": "کارآگاه",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "کارآگاه",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس"
+    }
+  },
+  {
+    "title": "ناتو",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "ناتو",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "بازپرس"
+    }
+  },
+  {
+    "title": "ماتادور",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "ماتادور",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-جک"
+    }
+  },
+  {
+    "title": "دکتر واتسون",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "دکتر واتسون",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-جک"
+    }
+  },
+  {
+    "title": "کنستانتین",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "کنستانتین",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-جک"
+    }
+  },
+  {
+    "title": "همشهری",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "همشهری",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-جک"
+    }
+  },
+  {
+    "title": "گودمن",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "گودمن",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-جک"
+    }
+  },
+  {
+    "title": "شهر ساده",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "شهر ساده",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-جک"
+    }
+  },
+  {
+    "title": "پدرخوانده",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "پدرخوانده",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-جک"
+    }
+  },
+  {
+    "title": "جک گنجیشکه",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مستقل\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "جک گنجیشکه",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "پدرخوانده-جک"
+    }
+  },
+  {
+    "title": "لئون",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "لئون",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-جک"
+    }
+  },
+  {
+    "title": "ماتادور",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "ماتادور",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-نوسترا"
+    }
+  },
+  {
+    "title": "دکتر واتسون",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "دکتر واتسون",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-نوسترا"
+    }
+  },
+  {
+    "title": "کنستانتین",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "کنستانتین",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-نوسترا"
+    }
+  },
+  {
+    "title": "گودمن",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "گودمن",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-نوسترا"
+    }
+  },
+  {
+    "title": "شهر ساده",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "شهر ساده",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-نوسترا"
+    }
+  },
+  {
+    "title": "پدرخوانده",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "پدرخوانده",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-نوسترا"
+    }
+  },
+  {
+    "title": "نوستراداموس",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مستقل\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "نوستراداموس",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "پدرخوانده-نوسترا"
+    }
+  },
+  {
+    "title": "همشهری کین",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "همشهری کین",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-نوسترا"
+    }
+  },
+  {
+    "title": "لئون",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "لئون",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-نوسترا"
+    }
+  },
+  {
+    "title": "شرلوک",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مستقل\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "شرلوک",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "پدرخوانده-شرلوک"
+    }
+  },
+  {
+    "title": "ماتادور",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "ماتادور",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-شرلوک"
+    }
+  },
+  {
+    "title": "دکتر واتسون",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "دکتر واتسون",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-شرلوک"
+    }
+  },
+  {
+    "title": "کنستانتین",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "کنستانتین",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-شرلوک"
+    }
+  },
+  {
+    "title": "گودمن",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "گودمن",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-شرلوک"
+    }
+  },
+  {
+    "title": "شهر ساده",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "شهر ساده",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-شرلوک"
+    }
+  },
+  {
+    "title": "پدرخوانده",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "پدرخوانده",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-شرلوک"
+    }
+  },
+  {
+    "title": "همشهری کین",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "همشهری کین",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-شرلوک"
+    }
+  },
+  {
+    "title": "لئون",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "لئون",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-شرلوک"
+    }
+  },
+  {
+    "title": "مافیا",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "روسی 6",
+    "role_name": "مافیا",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "روسی 6"
+    }
+  },
+  {
+    "title": "شهروند",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "روسی 6",
+    "role_name": "شهروند",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "روسی 6"
+    }
+  },
+  {
+    "title": "بمب گذار",
+    "content": "بمب‌گذار نقش مافیایی است. منبع عمومی سناریوی زودیاک می‌گوید یک‌بار در بازی می‌تواند روی بازیکنی بمب بگذارد و عددی به گرداننده اعلام کند؛ جزئیات خنثی‌سازی بمب به قوانین نسخه بازی وابسته است.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "بمب گذار",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/zodiac/",
+    "source_title": "سناریو زودیاک — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "زودیاک"
+    }
+  },
+  {
+    "title": "تفنگدار",
+    "content": "تفنگدار شهروند است و در منابع عمومی زودیاک هر شب به یک بازیکن تفنگ جنگی یا مشقی می‌دهد؛ گیرنده از نوع تفنگ مطلع نیست و فقط روز بعد امکان شلیک دارد. جزئیات تبدیل یا اثر تفنگ در Mafia Nights باید از منطق داخلی بازی تأیید شود.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "تفنگدار",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/roles/",
+    "source_title": "فهرست نقش‌های مافیا — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک"
+    }
+  },
+  {
+    "title": "شهر ساده",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "شهر ساده",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک"
+    }
+  },
+  {
+    "title": "آل کاپون",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "آل کاپون",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "زودیاک"
+    }
+  },
+  {
+    "title": "شعبده باز",
+    "content": "شعبده‌باز نقش مافیایی است. منبع عمومی زودیاک می‌گوید هر شب یک بازیکن را انتخاب می‌کند و توانایی شبانه او را می‌بندد و نمی‌تواند دو شب پیاپی یک نفر را انتخاب کند. در صورت هدف‌گیری تفنگدار، تفنگ جنگی آن شب به مشقی تبدیل می‌شود. این متن باید با منطق داخلی Mafia Nights تطبیق داده شود.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "شعبده باز",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/roles/zodiac-magician/",
+    "source_title": "نقش شعبده باز — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "زودیاک"
+    }
+  },
+  {
+    "title": "زودیاک",
+    "content": "زودیاک یک قاتل مستقل است. در منابع عمومی این سناریو، او شب‌های زوج شلیک می‌کند و در برابر شلیک شبانه مصون است؛ در برابر محافظ بمب، شلیک به خودش برمی‌گردد. شرط برد مستقل باید از قانون داخلی Mafia Nights خوانده شود و ربات نباید صرفاً از منبع وب نتیجه‌گیری کند.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "زودیاک",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/roles/zodiac/",
+    "source_title": "نقش زودیاک — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "زودیاک"
+    }
+  },
+  {
+    "title": "کاراگاه",
+    "content": "کاراگاه شهروند است و در منبع عمومی هر شب یک بازیکن را استعلام می‌کند و ساید او را می‌فهمد؛ پدرخوانده معمولاً منفی خوانده می‌شود و برخی نقش‌ها ممکن است نتیجه را تغییر دهند. پاسخ دقیق باید با قوانین داخلی Mafia Nights تطبیق داده شود.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "کاراگاه",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/zodiac/",
+    "source_title": "سناریو زودیاک — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک"
+    }
+  },
+  {
+    "title": "اوشن",
+    "content": "اوشن شهروند است و در منبع عمومی می‌تواند تا دو بار بازیکنی را بیدار کند و او را به حلقه متحدان وارد کند؛ اگر به اشتباه عضو مافیا را بیدار کند، خودش از بازی خارج می‌شود. جزئیات دقیق بیداری در Mafia Nights باید با منطق داخلی تطبیق داده شود.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "اوشن",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/roles/",
+    "source_title": "فهرست نقش‌های مافیا — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک"
+    }
+  },
+  {
+    "title": "محافظ",
+    "content": "محافظ شهروند است. در منابع عمومی زودیاک محافظ بمب توانایی شبانه ندارد و از قربانی بمب محافظت می‌کند؛ اگر زودیاک او را هدف بگیرد، شلیک زودیاک بی‌اثر شده و به خود زودیاک بازمی‌گردد. در Mafia Nights نام نقش محافظ است و باید اثر دقیق آن از قوانین داخلی تأیید شود.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "محافظ",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/roles/bomb-protector/",
+    "source_title": "نقش محافظ بمب — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک"
+    }
+  },
+  {
+    "title": "حرفه ای",
+    "content": "حرفه‌ای شهروند است و در منبع عمومی دو شلیک برای کل بازی دارد؛ شلیک به مافیا یا مستقل حذف‌کننده است و شلیک اشتباه به شهروند باعث حذف خود حرفه‌ای می‌شود. جزئیات اثر روی پدرخوانده و بلاک شدن باید با قوانین داخلی Mafia Nights تطبیق داده شود.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "حرفه ای",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/roles/",
+    "source_title": "فهرست نقش‌های مافیا — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک"
+    }
+  },
+  {
+    "title": "دکتر",
+    "content": "دکتر شهروند است و در منبع عمومی هر شب یک بازیکن را برای محافظت انتخاب می‌کند تا در برابر شلیک شبانه مافیا نجات پیدا کند. محدودیت‌های خودنجاتی و تکرار هدف وابسته به سناریو هستند.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "دکتر",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/zodiac/",
+    "source_title": "سناریو زودیاک — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک"
+    }
+  },
+  {
+    "title": "مافیا",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "سناریو تستی 2",
+    "role_name": "مافیا",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "سناریو تستی 2"
+    }
+  },
+  {
+    "title": "شهروند",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "سناریو تستی 2",
+    "role_name": "شهروند",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "سناریو تستی 2"
+    }
+  },
+  {
+    "title": "تروریست",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "تروریست",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "قمار باز"
+    }
+  },
+  {
+    "title": "معشوقه",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "معشوقه",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "قمار باز"
+    }
+  },
+  {
+    "title": "عینک ساز",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "عینک ساز",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز"
+    }
+  },
+  {
+    "title": "آهنگر",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "آهنگر",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز"
+    }
+  },
+  {
+    "title": "روان شناس",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "روان شناس",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز"
+    }
+  },
+  {
+    "title": "تفنگدار",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "تفنگدار",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز"
+    }
+  },
+  {
+    "title": "کابوی",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "کابوی",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز"
+    }
+  },
+  {
+    "title": "عنکبوت",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "عنکبوت",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز"
+    }
+  },
+  {
+    "title": "قمار باز",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "قمار باز",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "قمار باز"
+    }
+  },
+  {
+    "title": "ماسون",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "ماسون",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز"
+    }
+  },
+  {
+    "title": "شاهکش",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "شاهکش",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "قمار باز"
+    }
+  },
+  {
+    "title": "جلاد",
+    "content": "جلاد مافیاست و در منابع عمومی کاپو هر شب می‌تواند نقش یک شهروند را حدس بزند؛ اگر حدس درست باشد، هدف حتی در شرایطی که زره‌ساز نجات داده باشد حذف می‌شود. این اقدام جایگزین شلیک عادی مافیا معرفی شده است.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "جلاد",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/capo/",
+    "source_title": "سناریو کاپو — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کاپو"
+    }
+  },
+  {
+    "title": "زره ساز",
+    "content": "زره ساز شهروند است و در منابع عمومی کاپو هر شب برای یک بازیکن زره می‌سازد تا شلیک شبانه مافیا را جذب کند. اگر جادوگر او را طلسم کند، نجات بی‌اثر می‌شود.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "زره ساز",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/roles/armorer/",
+    "source_title": "نقش زره ساز — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو"
+    }
+  },
+  {
+    "title": "مظنون",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "مظنون",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو"
+    }
+  },
+  {
+    "title": "دن مافیا",
+    "content": "دن مافیا رهبر تیم مافیاست و در منابع عمومی کاپو فرمان شلیک شبانه را می‌دهد؛ استعلام کارآگاه برای او منفی است و ویژگی‌های دیگری مانند جان دوم، پادزهر و امکان جذب شهروند در قوانین کاپو مطرح شده‌اند. این جزئیات باید با منطق داخلی Mafia Nights تأیید شوند.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "دن مافیا",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/roles/don/",
+    "source_title": "نقش دن مافیا — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کاپو"
+    }
+  },
+  {
+    "title": "وارث",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "وارث",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو"
+    }
+  },
+  {
+    "title": "شهر ساده",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "شهر ساده",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو"
+    }
+  },
+  {
+    "title": "جادوگر",
+    "content": "جادوگر مافیاست و در منابع عمومی کاپو هر شب یک شهروند را هدف می‌گیرد و توانایی او را مختل/معکوس می‌کند؛ نمونه‌های اثر شامل بی‌اثر کردن نجات زره‌ساز یا استعلام کارآگاه است. جزئیات دقیق در Mafia Nights باید با پیاده‌سازی داخلی بررسی شود.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "جادوگر",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/roles/magician/",
+    "source_title": "نقش جادوگر — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کاپو"
+    }
+  },
+  {
+    "title": "کاراگاه",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "کاراگاه",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو"
+    }
+  },
+  {
+    "title": "عطار",
+    "content": "عطار شهروند است و در منابع عمومی کاپو یک زهر و یکی از پادزهرهای بازی را در اختیار دارد. می‌تواند بازیکنی را مسموم کند و در شرایط مربوط به روز بعد، پادزهر برای درمان استفاده می‌شود.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "عطار",
+    "status": "review",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/roles/poisoner/",
+    "source_title": "نقش عطار — RoundGangs",
+    "confidence": "high",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو"
+    }
+  },
+  {
+    "title": "جاسوس",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "جاسوس",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "خرابکار",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "خرابکار",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "تفنگدار",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "تفنگدار",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "اسنایپر",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "اسنایپر",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "کشیش",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "کشیش",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "روئین تن",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "روئین تن",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "ناتاشا",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "ناتاشا",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "ساقی",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "ساقی",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "رئیس مافیا",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "رئیس مافیا",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "کابوی",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "کابوی",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "ماسون",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "ماسون",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "دکتر",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "دکتر",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12"
+    }
+  },
+  {
+    "title": "جاسوس",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "جاسوس",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "خرابکار",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "خرابکار",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "تفنگدار",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "تفنگدار",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "اسنایپر",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "اسنایپر",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "کشیش",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "کشیش",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "روئین تن",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "روئین تن",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "ناتاشا",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "ناتاشا",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "ساقی",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "ساقی",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "نوفیس",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مستقل\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "نوفیس",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "رئیس مافیا",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مافیا\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "رئیس مافیا",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "کابوی",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "کابوی",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "ماسون",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "ماسون",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "دکتر",
+    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: شهروند\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "دکتر",
+    "status": "draft",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13"
+    }
+  }
+]
