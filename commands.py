@@ -475,6 +475,9 @@ async def _join(message: types.Message, app: Any) -> None:
     except Exception:
         pass
     app.runtime.state.lobby.join(game["id"], uid, seat, is_substitute=False)
+    refresh = getattr(app, "_refresh_final_lobby_from_text", None)
+    if refresh:
+        await refresh(message)
     await message.reply(f"✅ وارد بازی شدید؛ صندلی <b>{seat}</b>.", parse_mode="HTML")
 
 
@@ -493,7 +496,16 @@ async def _leave(message: types.Message, app: Any) -> None:
     if not current:
         await message.reply("ℹ️ شما در لابی ثبت نشده‌اید.")
         return
+    freed_seat = current.get("seat")
     app.runtime.state.lobby.leave(game["id"], uid)
+    if freed_seat is not None:
+        try:
+            app.runtime.state.lobby.promote_waiting(game["id"], int(freed_seat))
+        except Exception:
+            logging.exception("text leave: waiting promotion failed")
+    refresh = getattr(app, "_refresh_final_lobby_from_text", None)
+    if refresh:
+        await refresh(message)
     await message.reply("🚪 از بازی خارج شدید.")
 
 
@@ -855,6 +867,9 @@ async def _reserve_text(message, app, cancel=False):
     if cancel:
         if current and current.get("seat") is None and str(current.get("status") or "") in {"waiting", "substitute"}:
             app.runtime.state.lobby.leave(game["id"], uid)
+            refresh = getattr(app, "_refresh_final_lobby_from_text", None)
+            if refresh:
+                await refresh(message)
             await message.reply("✅ رزرو شما لغو شد.")
         else:
             await message.reply("ℹ️ رزرو فعالی برای شما ثبت نشده است.")
@@ -885,6 +900,9 @@ async def _reserve_text(message, app, cancel=False):
         logging.exception("text reserve failed")
         await message.reply("❌ ثبت رزرو انجام نشد. احتمالاً رزرو شما از قبل ثبت شده یا اطلاعات بازیکن تکراری است.")
         return
+    refresh = getattr(app, "_refresh_final_lobby_from_text", None)
+    if refresh:
+        await refresh(message)
     await message.reply("🎟 رزرو شما با موفقیت ثبت شد.")
 
 
