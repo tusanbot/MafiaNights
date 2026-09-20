@@ -200,15 +200,18 @@ class KnowledgeRepository(DatabaseRepository):
             return {"roles": [], "scenarios": []}
         with self.SessionLocal() as session:
             rows = session.execute(text("""
-                select distinct scope, scenario_name, role_name, title
-                from public.mafia_knowledge_documents
-                where is_active=true
-                  and status in ('verified','published')
-                  and (
-                    (role_name is not null and :q ilike ('%' || role_name || '%'))
-                    or
-                    (scenario_name is not null and :q ilike ('%' || scenario_name || '%'))
-                  )
+                select scope, scenario_name, role_name, title
+                from (
+                    select distinct scope, scenario_name, role_name, title
+                    from public.mafia_knowledge_documents
+                    where is_active=true
+                      and status in ('verified','published')
+                      and (
+                        (role_name is not null and :q ilike ('%' || role_name || '%'))
+                        or
+                        (scenario_name is not null and :q ilike ('%' || scenario_name || '%'))
+                      )
+                ) matched
                 order by
                   case when role_name is not null then length(role_name) else 0 end desc,
                   case when scenario_name is not null then length(scenario_name) else 0 end desc
