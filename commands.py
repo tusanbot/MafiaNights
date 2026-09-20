@@ -251,7 +251,7 @@ async def _ai_control(message: types.Message, app: Any, action: str) -> None:
         session.execute(text("""
             create table if not exists public.mafia_ai_settings (
                 group_id bigint primary key,
-                provider text not null default 'openai',
+                provider text not null default 'gemini',
                 model text,
                 api_key_ciphertext bytea,
                 web_search_enabled boolean not null default true,
@@ -279,9 +279,9 @@ async def _ai_control(message: types.Message, app: Any, action: str) -> None:
         with KnowledgeRepository().SessionLocal() as session:
             session.execute(text("""
                 insert into public.mafia_ai_settings(group_id,provider,model,enabled,web_search_enabled,updated_at)
-                values(:gid,'openai',:model,:enabled,true,now())
+                values(:gid,'gemini',:model,:enabled,true,now())
                 on conflict(group_id) do update set enabled=:enabled, updated_at=now()
-            """), {"gid": gid, "model": os.getenv("MAFIA_AI_MODEL") or None, "enabled": enabled})
+            """), {"gid": gid, "model": "gemini-2.5-flash", "enabled": enabled})
             session.commit()
     if action == "status":
         with KnowledgeRepository().SessionLocal() as session:
@@ -333,7 +333,7 @@ async def _ai_key(message: types.Message, app: Any) -> None:
         session.execute(text("""
             create table if not exists public.mafia_ai_settings (
                 group_id bigint primary key,
-                provider text not null default 'openai',
+                provider text not null default 'gemini',
                 model text,
                 api_key_ciphertext bytea,
                 web_search_enabled boolean not null default true,
@@ -360,28 +360,9 @@ async def _ai_key(message: types.Message, app: Any) -> None:
     if not secret:
         await message.reply("❌ اتصال امن پایگاه‌داده برای رمزنگاری در دسترس نیست.")
         return
-    # /ai_key is kept for compatibility, but provider selection must not be
-    # guessed from the key prefix. The shared assistant in this deployment uses
-    # an explicit provider, with Gemini as the safe legacy default.
-    with KnowledgeRepository().SessionLocal() as settings_session:
-        existing = settings_session.execute(text("""
-            select provider, private_provider
-            from public.mafia_ai_settings
-            where group_id=:gid
-            limit 1
-        """), {"gid": gid}).mappings().first()
-    provider = str(
-        (existing or {}).get("private_provider")
-        or (existing or {}).get("provider")
-        or "gemini"
-    ).lower()
-    if provider not in {"gemini", "openai"}:
-        provider = "gemini"
-    default_model = (
-        os.getenv("MAFIA_AI_MODEL")
-        if provider == "openai"
-        else "gemini-2.5-flash"
-    )
+    # The legacy text command remains available, but the assistant is Gemini-only.
+    provider = "gemini"
+    default_model = "gemini-2.5-flash"
     with KnowledgeRepository().SessionLocal() as session:
         session.execute(text("""
             insert into public.mafia_ai_settings(group_id,provider,model,enabled,private_enabled,web_search_enabled,api_key_ciphertext,updated_at)
