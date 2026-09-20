@@ -247,6 +247,11 @@ class GameManagement:
         if not row:
             await callback.answer("❌ بازیکن پیدا نشد.", show_alert=True); return
         seat = row.get("seat")
+        state = self._state(game)
+        return_seats = dict(state.get("birthday_return_seats") or {})
+        if seat is not None:
+            return_seats[str(uid)] = int(seat)
+            self._save(game, birthday_return_seats=return_seats)
         self.app.runtime.state.games.set_player_seat(game["id"], uid, None)
         self.app.runtime.state.games.set_player_status(game["id"], uid, "removed")
         if seat is not None and str(game.get("status")) == "lobby":
@@ -408,10 +413,33 @@ class GameManagement:
         gid = int(callback.message.chat.id); game = self._game(gid); uid = int(p[3])
         if not game or not await self._allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        row = next((r for r in self._rows(game) if int(r.get("player_id") or 0) == uid), None)
+        if not row:
+            await callback.answer("❌ بازیکن پیدا نشد.", show_alert=True)
+            return
+        state = self._state(game)
+        return_seats = dict(state.get("birthday_return_seats") or {})
+        target_seat = row.get("seat")
+        if target_seat is None:
+            target_seat = return_seats.get(str(uid))
+        if target_seat is not None:
+            occupied = {
+                int(r.get("seat")) for r in self._rows(game)
+                if r.get("seat") is not None and int(r.get("player_id") or 0) != uid
+                and str(r.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
+            }
+            if int(target_seat) in occupied:
+                target_seat = None
+        if target_seat is None:
+            await callback.answer("⚠️ صندلی قبلی آزاد نیست؛ ابتدا یک صندلی آزاد برای بازگشت فراهم کنید.", show_alert=True)
+            return
+        self.app.runtime.state.games.set_player_seat(game["id"], uid, int(target_seat))
         self.app.runtime.state.games.set_player_status(game["id"], uid, "active")
         alive = getattr(self.app.runtime.state.games, "set_player_alive", None)
         if alive: alive(game["id"], uid, True)
-        await callback.message.edit_text("🎂 <b>بازیکن بازگردانده شد.</b>", parse_mode="HTML", reply_markup=self.panel(game["id"]))
+        return_seats.pop(str(uid), None)
+        self._save(game, birthday_return_seats=return_seats)
+        await callback.message.edit_text(f"🎂 <b>بازیکن بازگردانده شد.</b>\n\n💺 صندلی: <b>{int(target_seat):02d}</b>", parse_mode="HTML", reply_markup=self.panel(game["id"]))
         await callback.answer()
 
     async def challenge(self, callback):
