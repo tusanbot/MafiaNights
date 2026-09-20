@@ -498,7 +498,7 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
         "ai_off": lambda m, a: _ai_control(m, a, "off"),
         "ai_status": lambda m, a: _ai_control(m, a, "status"),
         "ai_key": _ai_key,
-        "ai_panel": lambda m, a: __import__("runtime.assistant_admin_panel", fromlist=["install"]).install(a).open(m),
+        "ai_panel": lambda m, a: a.assistant_admin_panel.open(m),
         "kb_list": lambda m, a: _kb_control(m, a, "list"),
         "kb_add": lambda m, a: _kb_control(m, a, "add"),
         "kb_publish": lambda m, a: _kb_control(m, a, "publish"),
