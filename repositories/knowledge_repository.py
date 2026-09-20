@@ -185,6 +185,45 @@ class KnowledgeRepository(DatabaseRepository):
             """), params).mappings().all()
             return [dict(row) for row in rows]
 
+    def find_explicit_context(self, query: str, limit: int = 12) -> dict[str, list[str]]:
+        """Find role/scenario names explicitly mentioned in the user's question.
+
+        This prevents the generic token search from selecting an unrelated
+        scenario document merely because a common word appears in its content.
+        """
+        normalized = (
+            (query or "").strip()
+            .replace("ي", "ی").replace("ى", "ی").replace("ك", "ک")
+            .replace("ۀ", "ه").replace("ة", "ه")
+        )
+        if not normalized:
+            return {"roles": [], "scenarios": []}
+        with self.SessionLocal() as session:
+            rows = session.execute(text("""
+                select distinct scope, scenario_name, role_name, title
+                from public.mafia_knowledge_documents
+                where is_active=true
+                  and status in ('verified','published')
+                  and (
+                    (role_name is not null and :q ilike ('%' || role_name || '%'))
+                    or
+                    (scenario_name is not null and :q ilike ('%' || scenario_name || '%'))
+                  )
+                order by
+                  case when role_name is not null then length(role_name) else 0 end desc,
+                  case when scenario_name is not null then length(scenario_name) else 0 end desc
+                limit :limit
+            """), {"q": normalized, "limit": max(1, min(int(limit), 30))}).mappings().all()
+        roles, scenarios = [], []
+        for row in rows:
+            role = str(row["role_name"] or "").strip()
+            scenario = str(row["scenario_name"] or "").strip()
+            if role and role not in roles:
+                roles.append(role)
+            if scenario and scenario not in scenarios:
+                scenarios.append(scenario)
+        return {"roles": roles, "scenarios": scenarios}
+
     def get_context(self, query: str, scenario_name: str | None = None,
                     role_name: str | None = None, limit: int = 8) -> list[dict[str, Any]]:
         # Production Vercel workers can start against the legacy database before
