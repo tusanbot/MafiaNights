@@ -118,8 +118,40 @@ class KnowledgeRepository(DatabaseRepository):
         query = (query or "").strip()
         if not query:
             return []
+        # Normalize the most common Persian/Arabic keyboard variants so a
+        # question still matches documents entered with a different keyboard.
+        normalized = (
+            query.replace("ي", "ی").replace("ى", "ی").replace("ك", "ک")
+                 .replace("ۀ", "ه").replace("ة", "ه")
+        )
+        tokens = [t for t in normalized.replace("؟", " ").replace("?", " ").split()
+                  if len(t.strip()) >= 3]
+        tokens = list(dict.fromkeys(tokens[:12]))
         with self.SessionLocal() as session:
-            rows = session.execute(text("""
+            params = {
+                "q": f"%{normalized}%",
+                "scenario": scenario_name,
+                "role": role_name,
+                "limit": max(1, min(int(limit), 20)),
+            }
+            token_clauses = []
+            score_terms = []
+            for i, token in enumerate(tokens):
+                key = f"t{i}"
+                params[key] = f"%{token}%"
+                token_clauses.append(
+                    f"(d.title ilike :{key} or d.content ilike :{key} "
+                    f"or coalesce(d.role_name,'') ilike :{key} "
+                    f"or coalesce(d.scenario_name,'') ilike :{key})"
+                )
+                score_terms.append(
+                    f"(case when d.title ilike :{key} or d.content ilike :{key} "
+                    f"or coalesce(d.role_name,'') ilike :{key} "
+                    f"or coalesce(d.scenario_name,'') ilike :{key} then 1 else 0 end)"
+                )
+            token_filter = " or ".join(token_clauses) or "false"
+            score_expr = " + ".join(score_terms) or "0"
+            rows = session.execute(text(f"""
                 select d.id, d.title, d.content, d.scope, d.scenario_name,
                        d.role_name, d.status, d.source_type, d.source_url,
                        d.confidence, d.metadata
@@ -130,12 +162,14 @@ class KnowledgeRepository(DatabaseRepository):
                     d.title ilike :q or d.content ilike :q
                     or coalesce(d.role_name,'') ilike :q
                     or coalesce(d.scenario_name,'') ilike :q
+                    or {token_filter}
                   )
                   and (:scenario is null or d.scope = 'global'
                        or d.scenario_name = :scenario)
                   and (:role is null or d.scope = 'global'
                        or d.role_name = :role)
                 order by
+                  ({score_expr}) desc,
                   case
                     when d.source_type like '%internal%' and d.scope='role'
                          and :role is not null and d.role_name=:role then 0
@@ -148,10 +182,7 @@ class KnowledgeRepository(DatabaseRepository):
                   end,
                   d.updated_at desc
                 limit :limit
-            """), {
-                "q": f"%{query}%", "scenario": scenario_name,
-                "role": role_name, "limit": max(1, min(int(limit), 20)),
-            }).mappings().all()
+            """), params).mappings().all()
             return [dict(row) for row in rows]
 
     def get_context(self, query: str, scenario_name: str | None = None,
