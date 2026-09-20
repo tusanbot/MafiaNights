@@ -102,6 +102,36 @@ try:
 except Exception:
     logging.exception("Failed to prioritize canonical text command handler")
 
+# Final assistant message authority: natural-language questions must be allowed
+# through before generic legacy/player text handlers. Slash commands remain owned
+# by the canonical command registry above.
+try:
+    _handlers = getattr(dp.message_handlers, "handlers", [])
+    _panel = getattr(app, "assistant_admin_panel", None)
+    _assistant_callbacks = {
+        "title", "content", "scenario", "role", "source", "save_group_key", "open",
+    }
+    _fsm, _auto, _rest = [], [], []
+    for _item in list(_handlers):
+        _cb = getattr(_item, "handler", None) or getattr(_item, "callback", None)
+        _owner = getattr(_cb, "__self__", None)
+        _name = getattr(_cb, "__name__", "")
+        if _panel is not None and _owner is _panel and _name in _assistant_callbacks:
+            _fsm.append(_item)
+        elif _cb is getattr(app, "_knowledge_assistant_auto_handler", None):
+            _auto.append(_item)
+        else:
+            _rest.append(_item)
+    # FSM first; then natural-language AI auto-route; then all other handlers.
+    if _fsm or _auto:
+        _handlers[:] = _fsm + _auto + _rest
+        logging.info(
+            "ASSISTANT FINAL MESSAGE AUTHORITY ACTIVE fsm=%s auto=%s",
+            len(_fsm), len(_auto),
+        )
+except Exception:
+    logging.exception("Failed to prioritize final assistant message handlers")
+
 logging.info("PRODUCTION_RUNTIME_ACTIVE canonical_text_commands=commands.py locks=runtime.chat_locks pv_menu_callbacks=runtime.pv_menu_callbacks assistant_callback_router=runtime.assistant_callback_router")
 
 async def on_startup(dp):
