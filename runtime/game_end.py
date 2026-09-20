@@ -233,8 +233,13 @@ def _summary_text(game: dict[str, Any]) -> str:
 
 
 def _final_player_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Keep only actual seated participants at finalization; exclude reservations/exited users."""
-    excluded = {"removed", "kicked", "left", "finished", "waiting", "substitute"}
+    """Keep players who actually participated in the started game.
+    
+    Kicked/dead/face-off/removed players remain historical participants.
+    Only users who never became final participants (replacement, pre-start
+    removal, or explicit exit) are excluded.
+    """
+    excluded = {"left", "waiting", "substitute", "replacement"}
     result = []
     for row in rows:
         status = str(row.get("status") or "active").strip().lower()
