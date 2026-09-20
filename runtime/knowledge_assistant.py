@@ -49,7 +49,21 @@ def _looks_like_question(text: str) -> bool:
         return True
     if "؟" in value or "?" in value:
         return True
-    return lowered.startswith(("چی ", "چیه", "چه ", "چطور", "چگونه", "چرا ", "آیا ", "کی ", "کجا ", "میشه ", "می‌شه ", "میتونه ", "می‌تونه "))
+    # Natural questions in Persian do not always start with the interrogative
+    # word (e.g. «نقش بازپرس چیست؟»). Detect interrogative terms anywhere in
+    # the sentence so the production auto-route can actually reach the AI.
+    question_terms = (
+        "چی", "چه", "چطور", "چگونه", "چرا", "آیا", "کی", "کجا",
+        "میشه", "می‌شه", "میتونه", "می‌تونه", "چند", "کدام", "کدوم",
+        "چیه", "چیست", "هست", "است",
+    )
+    words = lowered.replace("،", " ").replace(",", " ").replace(".", " ").split()
+    if any(
+        word in question_terms or any(word.startswith(term) for term in question_terms if len(term) >= 3)
+        for word in words
+    ):
+        return True
+    return False
 
 def _web_search(query: str, limit: int = 4) -> list[dict[str, str]]:
     """Optional no-key fallback using DuckDuckGo HTML search.
@@ -556,6 +570,10 @@ async def answer(message: Any, app: Any, question: str) -> None:
 
     response: str | None = None
     if ai_enabled and api_key:
+        logging.info(
+            "knowledge assistant: AI generation starting provider=%s model=%s context_rows=%s web_rows=%s chat_type=%s",
+            provider, model or "default", len(rows), len(web), getattr(message.chat, "type", None),
+        )
         response = await _thread_call(
             "AI generation",
             _call_ai,
@@ -569,7 +587,20 @@ async def answer(message: Any, app: Any, question: str) -> None:
         )
 
     if response is None:
-        if rows:
+        # Never silently turn an AI-enabled request into a shallow first-document
+        # answer. That masks provider/routing failures and makes the user think
+        # the model answered when it did not.
+        if ai_enabled and api_key:
+            logging.error(
+                "knowledge assistant: AI generation returned no response; refusing silent KB fallback provider=%s model=%s",
+                provider, model or "default",
+            )
+            response = (
+                "⚠️ سؤال به دستیار هوش مصنوعی رسید، اما تولید پاسخ توسط سرویس AI انجام نشد. "
+                "پایگاه دانش داخلی پیدا شد، ولی برای جلوگیری از پاسخ سطحی، آن را به‌جای پاسخ هوش مصنوعی نمایش نمی‌دهم."
+            )
+            suffix = ""
+        elif rows:
             response = str(rows[0].get("content") or "").strip()
             suffix = "\n\nمنبع: پایگاه دانش داخلی Mafia Nights"
         elif web:
