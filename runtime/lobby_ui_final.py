@@ -76,7 +76,37 @@ def install(main):
             return m.status in {"creator", "administrator"}
         except Exception: return False
 
+    def promote_waiting_into_free_seats(gid, g=None):
+        """Fill every currently free seat from the FIFO reservation queue."""
+        g = g or game(gid)
+        if not g:
+            return []
+        r = scenario(g)
+        cap = len((r or {}).get("roles") or [])
+        promoted = []
+        if cap <= 0:
+            return promoted
+        for seat_no in range(1, cap + 1):
+            fresh = players(game(gid) or g)
+            occupied = {
+                int(row.get("seat")) for row in fresh
+                if row.get("seat") is not None
+                and str(row.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
+            }
+            if seat_no in occupied:
+                continue
+            try:
+                item = main.runtime.state.lobby.promote_waiting(g["id"], seat_no)
+            except ValueError:
+                continue
+            if not item:
+                continue
+            promoted.append(item)
+        return promoted
+
     def lobby_view(gid):
+        g = game(gid)
+        promote_waiting_into_free_seats(gid, g)
         g = game(gid); r = scenario(g); ps = players(g)
         active = [p for p in ps if p.get("seat") is not None and str(p.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}]
         waiting = [p for p in ps if p.get("seat") is None and str(p.get("status") or "waiting") in {"waiting", "substitute"}]
@@ -438,6 +468,40 @@ def install(main):
 
     dp.register_message_handler(start_command,commands=["start"],state="*")
     move_front(mr,start_command)
+    async def refresh_from_text(message):
+        """Refresh the canonical lobby message after a text-command mutation."""
+        gid = int(message.chat.id)
+        g = game(gid)
+        if not g or str(g.get("status") or "") != "lobby":
+            return False
+        promote_waiting_into_free_seats(gid, g)
+        fresh = game(gid)
+        state_data = dict((fresh or {}).get("state") or {})
+        message_id = state_data.get("lobby_message_id") or getattr(main, "lobby_message_id", None)
+        if not message_id:
+            return False
+        # Reuse the canonical renderer with a callback-shaped object whose
+        # message points at the actual lobby message, not the user's command.
+        from types import SimpleNamespace
+        target = SimpleNamespace(
+            message=SimpleNamespace(
+                chat=message.chat,
+                message_id=int(message_id),
+                edit_text=lambda *args, **kwargs: main.bot.edit_message_text(*args, chat_id=int(message.chat.id), message_id=int(message_id), **kwargs),
+            ),
+            from_user=message.from_user,
+            data="lobby_refresh",
+            answer=lambda *args, **kwargs: None,
+        )
+        try:
+            text, kb = lobby_view(gid)
+            await main.bot.edit_message_text(text, int(message.chat.id), int(message_id), parse_mode="HTML", reply_markup=kb)
+            return True
+        except Exception:
+            logging.exception("text command lobby refresh failed")
+            return False
+
+    main._refresh_final_lobby_from_text = refresh_from_text
     main._render_final_lobby=render
     logging.info("FINAL_LOBBY_UI active: authoritative lobby + capacity-gated reserve + role distribution")
     return True
