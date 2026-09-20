@@ -274,6 +274,35 @@ async def on_startup(dp):
     # only after every startup-time callback installer has finished.
     from runtime.assistant_callback_router import install as install_assistant_callback_router
     install_assistant_callback_router(main)
+
+    # Final message-handler authority: several compatibility installers are
+    # registered after AssistantAdminPanel. Re-prioritize its FSM handlers now,
+    # at the very end of startup, so waiting_group_key (and knowledge-entry FSM
+    # states) cannot be consumed by the generic player-id/text parsers.
+    try:
+        panel = getattr(main, "assistant_admin_panel", None)
+        registry = getattr(getattr(main.dp, "message_handlers", None), "handlers", None)
+        if panel is not None and registry is not None:
+            assistant_names = {
+                "title", "content", "scenario", "role", "source",
+                "save_group_key", "open",
+            }
+            mine, rest = [], []
+            for item in list(registry):
+                cb = getattr(item, "callback", None) or getattr(item, "handler", None)
+                if getattr(cb, "__self__", None) is panel and getattr(cb, "__name__", "") in assistant_names:
+                    mine.append(item)
+                else:
+                    rest.append(item)
+            if mine:
+                registry[:] = mine + rest
+                logging.info(
+                    "ASSISTANT FSM MESSAGE AUTHORITY REARMED handlers=%s",
+                    len(mine),
+                )
+    except Exception:
+        logging.exception("assistant admin: final FSM message prioritization failed")
+
     logging.info("ASSISTANT ADMIN PANEL + CALLBACK ROUTER ACTIVE in player_runtime_entry")
 
 main.on_startup = on_startup
