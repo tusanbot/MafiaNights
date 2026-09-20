@@ -227,10 +227,41 @@ def _ensure_ai_settings_table() -> None:
         session.commit()
 
 
+async def _thread_call(label: str, func: Any, *args: Any, timeout: float = 12.0, **kwargs: Any) -> Any:
+    """Run blocking DB/network work without allowing one stage to swallow the whole webhook."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(func, *args, **kwargs),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        logging.error("knowledge assistant: %s timed out after %.1fs", label, timeout)
+        return None
+    except Exception:
+        logging.exception("knowledge assistant: %s failed", label)
+        return None
+
+
+async def _send_plain_reply(message: Any, text: str) -> bool:
+    """Send a plain Telegram message with a guaranteed fallback path."""
+    if not text:
+        text = "پاسخی تولید نشد."
+    for kwargs in (
+        {"disable_web_page_preview": True},
+        {},
+    ):
+        try:
+            await message.reply(text, **kwargs)
+            return True
+        except Exception:
+            logging.exception("knowledge assistant: reply failed kwargs=%s", kwargs)
+    return False
+
+
 async def answer(message: Any, app: Any, question: str) -> None:
     question = (question or "").strip()
     if not question:
-        await message.reply("❓ سوالت را بعد از /ask بنویس.")
+        await _send_plain_reply(message, "❓ سوالت را بعد از /ask بنویس.")
         return
 
     try:
@@ -238,84 +269,110 @@ async def answer(message: Any, app: Any, question: str) -> None:
     except Exception:
         pass
 
-    # Give the user an immediate acknowledgement. Gemini/web/database work can
-    # take several seconds; Telegram's typing indicator alone is not sufficient
-    # feedback and can hide where a failure occurs.
+    # Immediate acknowledgement is intentionally sent before every DB/network stage.
     try:
         await message.reply("⏳ در حال بررسی پایگاه دانش و آماده‌سازی پاسخ...")
     except Exception:
         logging.exception("knowledge assistant: acknowledgement send failed")
 
     scenario_name, role_name = _game_context(app, message)
-    repo = KnowledgeRepository()
-    # Repository/network operations are synchronous; never block aiogram's event loop.
-    rows = await asyncio.to_thread(
-        repo.get_context,
-        question,
-        scenario_name=scenario_name,
-        role_name=role_name,
-        limit=8,
-    )
 
-    # Only query the web when internal knowledge is absent or clearly insufficient.
-    web = (
-        []
-        if len(rows) >= 2
-        else await asyncio.to_thread(
+    # Do not let a slow/broken legacy DB prevent an answer.
+    repo = None
+    try:
+        repo = KnowledgeRepository()
+    except Exception:
+        logging.exception("knowledge assistant: repository initialization failed")
+
+    rows: list[dict[str, Any]] = []
+    if repo is not None:
+        result = await _thread_call(
+            "knowledge lookup",
+            repo.get_context,
+            question,
+            scenario_name=scenario_name,
+            role_name=role_name,
+            limit=8,
+            timeout=10.0,
+        )
+        if isinstance(result, list):
+            rows = result
+
+    # Web is only a fallback, and is bounded so it cannot block Telegram indefinitely.
+    web: list[dict[str, str]] = []
+    if len(rows) < 2:
+        result = await _thread_call(
+            "web search",
             _web_search,
             (f"مافیا {scenario_name or ''} {role_name or ''} {question}").strip(),
+            timeout=10.0,
         )
-    )
-    ai_enabled, api_key, provider, model = await asyncio.to_thread(_ai_config, app, message)
-    response = (
-        await asyncio.to_thread(
-            _call_ai, question, rows, web, api_key, provider, model
+        if isinstance(result, list):
+            web = result
+
+    # Load the key/config separately from the AI call. If settings are broken,
+    # the internal KB/web fallback must still produce a visible answer.
+    config = await _thread_call("AI settings lookup", _ai_config, app, message, timeout=8.0)
+    if isinstance(config, tuple) and len(config) == 4:
+        ai_enabled, api_key, provider, model = config
+    else:
+        ai_enabled, api_key, provider, model = False, None, "gemini", None
+
+    response: str | None = None
+    if ai_enabled and api_key:
+        response = await _thread_call(
+            "AI generation",
+            _call_ai,
+            question,
+            rows,
+            web,
+            api_key,
+            provider,
+            model,
+            timeout=35.0,
         )
-        if ai_enabled
-        else None
-    )
 
     if response is None:
         if rows:
-            response = rows[0]["content"]
-            suffix = "\n\n<i>منبع: پایگاه دانش داخلی Mafia Nights</i>"
+            response = str(rows[0].get("content") or "").strip()
+            suffix = "\n\nمنبع: پایگاه دانش داخلی Mafia Nights"
         elif web:
             response = "اطلاعات داخلی کافی نبود. منابع بیرونی مرتبط پیدا شد:\n" + "\n".join(
-                f'• <a href="{html.escape(x["url"], quote=True)}">{html.escape(x["title"])}</a>'
+                f'• {x.get("title", "").strip()} — {x.get("url", "").strip()}'
                 for x in web
+                if x.get("title") and x.get("url")
             )
-            suffix = "\n\n<i>منبع: جست‌وجوی وب؛ نیازمند بررسی</i>"
+            suffix = "\n\nمنبع: جست‌وجوی وب؛ نیازمند بررسی"
         else:
             response = (
-                "در پایگاه دانش ربات اطلاعات کافی برای این سؤال پیدا نشد و "
-                "جست‌وجوی وب هم نتیجه قابل اتکایی نداد."
+                "در پایگاه دانش ربات اطلاعات کافی برای این سؤال پیدا نشد. "
+                "اگر API دستیار فعال باشد، پاسخ هوش مصنوعی نیز در دسترس خواهد بود."
             )
             suffix = ""
     else:
         suffix = ""
         if rows:
-            suffix += "\n\n<i>پاسخ بر اساس پایگاه دانش داخلی و قوانین سناریوی جاری تنظیم شده است.</i>"
+            suffix += "\n\nپاسخ بر اساس پایگاه دانش داخلی و قوانین سناریوی جاری تنظیم شده است."
         elif web:
-            suffix += "\n\n<i>پاسخ با کمک منابع بیرونی تهیه شده است.</i>"
+            suffix += "\n\nپاسخ با کمک منابع بیرونی تهیه شده است."
 
-    # Assistant answers may contain arbitrary model/KB text. Sending them as
-    # HTML is fragile: one stray '<' or '&' can make Telegram reject the whole
-    # message, leaving the user with only the typing indicator. Send the final
-    # answer as plain text so the response path cannot fail on formatting.
-    final_text = response + suffix.replace("<i>", "").replace("</i>", "")
-    # Telegram rejects messages over its size limit. Split long KB/AI output
-    # into safe plain-text chunks so one oversized answer cannot disappear.
+    final_text = (response or "پاسخی تولید نشد.") + suffix
+
+    # Telegram has a message-size limit. Keep every chunk safely below it.
     chunks = [final_text[i:i + 3800] for i in range(0, len(final_text), 3800)] or ["پاسخی تولید نشد."]
+    sent = False
     for chunk in chunks:
-        try:
-            await message.reply(chunk, disable_web_page_preview=True)
-        except Exception:
-            logging.exception("knowledge assistant: final reply send failed")
-            # Last-resort plain text path without optional Telegram parameters.
-            try:
-                await message.reply(chunk)
-            except Exception:
-                logging.exception("knowledge assistant: last-resort reply failed")
+        if await _send_plain_reply(message, chunk):
+            sent = True
+        else:
+            logging.error("knowledge assistant: unable to deliver final response chunk")
+
+    # Never leave the user with only the acknowledgement.
+    if not sent:
+        await _send_plain_reply(
+            message,
+            "⚠️ پاسخ آماده شد اما ارسال پیام نهایی ناموفق بود. لطفاً دوباره سؤال را ارسال کنید.",
+        )
 
 
 def install(app: Any) -> bool:
