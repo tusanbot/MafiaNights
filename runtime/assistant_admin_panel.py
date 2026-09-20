@@ -323,9 +323,9 @@ class AssistantAdminPanel:
                        private_enabled,private_provider,private_model,
                        private_web_search_enabled,
                        (api_key_ciphertext is not null) as has_group_key,
-                       (private_api_key_ciphertext is not null) as has_group_key
+                       (api_key_ciphertext is not null) as has_group_key
                 from public.mafia_ai_settings where group_id=:gid
-            """), {"gid": self._selected_group_id(callback.from_user.id)}).mappings().first()
+            """), {"gid": self._selected_group_id(user_id)}).mappings().first()
 
     async def status(self, callback):
         if not await self._guard(callback):
@@ -349,7 +349,7 @@ class AssistantAdminPanel:
     async def ai(self, callback):
         if not await self._guard(callback):
             await callback.answer(); return
-        row = self._settings_row()
+        row = self._settings_row(callback.from_user.id)
         enabled = bool(row and row["enabled"])
         kb = InlineKeyboardMarkup(row_width=1)
         kb.add(InlineKeyboardButton(f"🤖 AI گروه: {'روشن' if enabled else 'خاموش'}", callback_data="aip:toggle_group"))
@@ -366,7 +366,7 @@ class AssistantAdminPanel:
                 insert into public.mafia_ai_settings(group_id,enabled,web_search_enabled,updated_at)
                 values(:gid,true,true,now())
                 on conflict(group_id) do update set enabled=not public.mafia_ai_settings.enabled,updated_at=now()
-            """), {"gid": self._group_id()})
+            """), {"gid": self._selected_group_id(callback.from_user.id)})
             session.commit()
         await callback.answer("وضعیت AI گروه تغییر کرد.")
         await self.ai(callback)
@@ -404,14 +404,14 @@ class AssistantAdminPanel:
             await callback.answer(); return
         row = self._settings_row()
         enabled = bool(row and row["private_enabled"])
-        has_key = bool(row and row["has_private_key"])
+        has_key = bool(row and row["has_group_key"])
         kb = InlineKeyboardMarkup(row_width=1)
         kb.add(InlineKeyboardButton("🔑 کلید مشترک گروه", callback_data="aip:groupkey"))
         kb.add(InlineKeyboardButton(f"🔐 AI پیوی: {'روشن' if enabled else 'خاموش'}", callback_data="aip:pvtoggle"))
         kb.add(InlineKeyboardButton("⬅️ پنل دستیار", callback_data="aip:menu"))
         await callback.message.edit_text(
             "🔐 <b>دستیار درخواست‌های پیوی</b>\n\n"
-            f"کلید: <b>{'ثبت شده' if has_key else 'ثبت نشده'}</b>\n"
+            f"کلید مشترک گروه: <b>{'ثبت شده' if has_key else 'ثبت نشده'}</b>\n"
             f"وضعیت: <b>{'فعال' if enabled else 'غیرفعال'}</b>\n\n"
             "کلید در دیتابیس رمزنگاری می‌شود و متن پیام کلید بعد از ثبت حذف خواهد شد.",
             reply_markup=kb, parse_mode="HTML",
