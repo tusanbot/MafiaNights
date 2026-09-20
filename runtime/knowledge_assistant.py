@@ -388,6 +388,23 @@ async def _send_plain_reply(message: Any, text: str) -> bool:
     return False
 
 
+async def _edit_assistant_message(bot: Any, sent_message: Any, text: str) -> bool:
+    """Replace the temporary acknowledgement with the final answer."""
+    if not sent_message or not text:
+        return False
+    try:
+        await bot.edit_message_text(
+            chat_id=sent_message.chat.id,
+            message_id=sent_message.message_id,
+            text=text,
+            disable_web_page_preview=True,
+        )
+        return True
+    except Exception:
+        logging.exception("knowledge assistant: final message edit failed")
+        return False
+
+
 async def answer(message: Any, app: Any, question: str) -> None:
     question = (question or "").strip()
     if not question:
@@ -399,15 +416,19 @@ async def answer(message: Any, app: Any, question: str) -> None:
     except Exception:
         pass
 
-    # Immediate acknowledgement is intentionally sent before every DB/network stage.
+    # Use one visible message for the whole interaction. It starts as a
+    # progress notice and is replaced by the final answer instead of creating
+    # a second message for the same question.
+    progress_message = None
     try:
-        await message.reply("⏳ در حال بررسی پایگاه دانش و آماده‌سازی پاسخ...")
+        progress_message = await message.reply(
+            "⏳ در حال بررسی پایگاه دانش و آماده‌سازی پاسخ..."
+        )
     except Exception:
         logging.exception("knowledge assistant: acknowledgement send failed")
 
     scenario_name, role_name = _game_context(app, message)
 
-    # Do not let a slow/broken legacy DB prevent an answer.
     repo = None
     try:
         repo = KnowledgeRepository()
@@ -428,7 +449,6 @@ async def answer(message: Any, app: Any, question: str) -> None:
         if isinstance(result, list):
             rows = result
 
-    # Web is only a fallback, and is bounded so it cannot block Telegram indefinitely.
     web: list[dict[str, str]] = []
     if len(rows) < 2:
         result = await _thread_call(
@@ -440,9 +460,9 @@ async def answer(message: Any, app: Any, question: str) -> None:
         if isinstance(result, list):
             web = result
 
-    # Load the key/config separately from the AI call. If settings are broken,
-    # the internal KB/web fallback must still produce a visible answer.
-    config = await _thread_call("AI settings lookup", _ai_config, app, message, timeout=8.0)
+    config = await _thread_call(
+        "AI settings lookup", _ai_config, app, message, timeout=8.0
+    )
     if isinstance(config, tuple) and len(config) == 4:
         ai_enabled, api_key, provider, model = config
     else:
@@ -487,22 +507,20 @@ async def answer(message: Any, app: Any, question: str) -> None:
             suffix += "\n\nپاسخ با کمک منابع بیرونی تهیه شده است."
 
     final_text = (response or "پاسخی تولید نشد.") + suffix
-
-    # Telegram has a message-size limit. Keep every chunk safely below it.
     chunks = [final_text[i:i + 3800] for i in range(0, len(final_text), 3800)] or ["پاسخی تولید نشد."]
-    sent = False
-    for chunk in chunks:
-        if await _send_plain_reply(message, chunk):
-            sent = True
-        else:
-            logging.error("knowledge assistant: unable to deliver final response chunk")
 
-    # Never leave the user with only the acknowledgement.
-    if not sent:
-        await _send_plain_reply(
-            message,
-            "⚠️ پاسخ آماده شد اما ارسال پیام نهایی ناموفق بود. لطفاً دوباره سؤال را ارسال کنید.",
-        )
+    # First chunk replaces the progress message. Only additional chunks create
+    # new messages when Telegram's 4096-character limit requires them.
+    edited = await _edit_assistant_message(
+        getattr(message, "bot", None), progress_message, chunks[0]
+    )
+    if not edited:
+        if not await _send_plain_reply(message, chunks[0]):
+            logging.error("knowledge assistant: unable to deliver first response chunk")
+
+    for chunk in chunks[1:]:
+        if not await _send_plain_reply(message, chunk):
+            logging.error("knowledge assistant: unable to deliver response chunk")
 
 
 def install(app: Any) -> bool:
