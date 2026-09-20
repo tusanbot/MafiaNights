@@ -28,36 +28,57 @@ class AssistantAdminPanel:
     def __init__(self, app: Any):
         self.app = app
 
-    @staticmethod
-    def _group_id() -> int | None:
-        raw = os.getenv("AI_PRIMARY_GROUP_ID") or os.getenv("ALLOWED_GROUP_ID") or ""
-        try:
-            return int(raw)
-        except Exception:
-            return None
-
-    async def _authorized(self, user_id: int) -> bool:
-        group_id = self._group_id()
-        if not group_id:
-            return False
-        try:
-            member = await self.app.bot.get_chat_member(group_id, int(user_id))
-            return str(getattr(member, "status", "")) in {"creator", "administrator"}
-        except Exception:
-            logging.exception("assistant admin: group-admin authorization check failed")
-            return False
-
-    async def _guard(self, message_or_callback: Any) -> bool:
-        uid = int(message_or_callback.from_user.id)
-        if await self._authorized(uid):
-            return True
-        target = getattr(message_or_callback, "message", message_or_callback)
-        await target.answer("⛔ این پنل فقط برای مدیر/گرداننده مجاز گروه فعال است.")
-        return False
-
     def _repo(self):
         KnowledgeRepository.ensure_schema()
-        return KnowledgeRepository()
+        repo=KnowledgeRepository()
+        with repo.SessionLocal() as session:
+            session.execute(text("""create table if not exists public.mafia_ai_user_preferences(
+                user_id bigint primary key, group_id bigint not null, updated_at timestamptz not null default now()
+            )"""))
+            session.commit()
+        return repo
+    def _selected_group_id(self,user_id:int)->int|None:
+        with self._repo().SessionLocal() as session:
+            row=session.execute(text("select group_id from public.mafia_ai_user_preferences where user_id=:uid limit 1"),{"uid":int(user_id)}).mappings().first()
+        return int(row["group_id"]) if row else None
+    def _set_selected_group(self,user_id:int,group_id:int)->None:
+        with self._repo().SessionLocal() as session:
+            session.execute(text("""insert into public.mafia_ai_user_preferences(user_id,group_id,updated_at)
+                values(:uid,:gid,now()) on conflict(user_id) do update set group_id=:gid,updated_at=now()"""),{"uid":int(user_id),"gid":int(group_id)})
+            session.commit()
+    def _ensure_group_row(self,group_id:int)->None:
+        if not group_id:return
+        with self._repo().SessionLocal() as session:
+            session.execute(text("""insert into public.mafia_ai_settings(
+                group_id,enabled,private_enabled,web_search_enabled,private_web_search_enabled,updated_at)
+                values(:gid,false,false,true,true,now()) on conflict(group_id) do nothing"""),{"gid":int(group_id)})
+            session.commit()
+    async def _admin_groups(self,user_id:int)->list[int]:
+        raw=os.getenv("AI_PRIMARY_GROUP_ID") or os.getenv("ALLOWED_GROUP_ID") or ""
+        if str(raw).strip().lstrip("-").isdigit():self._ensure_group_row(int(raw))
+        with self._repo().SessionLocal() as session:
+            rows=session.execute(text("select group_id from public.mafia_ai_settings order by group_id")).mappings().all()
+        groups=[]
+        for row in rows:
+            gid=int(row["group_id"])
+            try:
+                member=await self.app.bot.get_chat_member(gid,int(user_id))
+                if str(getattr(member,"status","")) in {"creator","administrator"}:groups.append(gid)
+            except Exception:continue
+        return groups
+    async def _authorized(self,user_id:int,group_id:int|None=None)->bool:
+        gid=group_id if group_id is not None else self._selected_group_id(user_id)
+        if not gid:return False
+        try:
+            member=await self.app.bot.get_chat_member(int(gid),int(user_id))
+            return str(getattr(member,"status","")) in {"creator","administrator"}
+        except Exception:
+            logging.exception("assistant admin: group-admin authorization check failed");return False
+    async def _guard(self,message_or_callback:Any)->bool:
+        uid=int(message_or_callback.from_user.id);gid=self._selected_group_id(uid)
+        if await self._authorized(uid,gid):return True
+        target=getattr(message_or_callback,"message",message_or_callback)
+        await target.answer("⛔ ابتدا گروه موردنظر را در پنل دستیار انتخاب کنید.");return False
 
     @staticmethod
     def _menu() -> InlineKeyboardMarkup:
@@ -78,27 +99,39 @@ class AssistantAdminPanel:
         kb.add(InlineKeyboardButton("⬅️ پنل دستیار", callback_data="aip:menu"))
         return kb
 
-    async def open(self, message: types.Message):
-        if message.chat.type != "private":
-            await message.reply("⚠️ پنل مدیریت دستیار فقط در پیوی مدیران گروه قابل استفاده است.")
-            return
-        if not await self._guard(message):
-            return
-        await message.answer(
-            "🤖 <b>پنل مدیریت دستیار Mafia Nights</b>\n\n"
-            "از این بخش می‌توانید پایگاه دانش، تنظیمات هوش مصنوعی و کلید مشترک گروه برای درخواست‌های پیوی را مدیریت کنید.",
-            reply_markup=self._menu(), parse_mode="HTML",
-        )
+    async def open(self,message:types.Message):
+        uid=int(message.from_user.id)
+        if message.chat.type in {"group","supergroup"}:
+            try:
+                member=await self.app.bot.get_chat_member(message.chat.id,uid)
+                if str(getattr(member,"status","")) not in {"creator","administrator"}:
+                    await message.reply("⛔ فقط مدیر/گرداننده گروه می‌تواند گروه را برای دستیار ثبت کند.");return
+            except Exception:
+                await message.reply("❌ بررسی دسترسی مدیر گروه انجام نشد.");return
+            self._ensure_group_row(int(message.chat.id));self._set_selected_group(uid,int(message.chat.id))
+            await message.reply("✅ این گروه برای دستیار ثبت شد. حالا «/ai_panel» را در پیوی ربات باز کنید.");return
+        if message.chat.type!="private":return
+        groups=await self._admin_groups(uid);selected=self._selected_group_id(uid)
+        if selected not in groups:selected=None
+        if selected is None and len(groups)==1:selected=groups[0];self._set_selected_group(uid,selected)
+        if selected is None:
+            if not groups:
+                await message.answer("🤖 <b>پنل دستیار</b>\n\nهنوز گروه فعالی برای این حساب ثبت نشده است. در هر گروهی که مدیر آن هستید، یک‌بار <code>/ai_panel</code> را ارسال کنید تا گروه ثبت شود.",parse_mode="HTML");return
+            kb=InlineKeyboardMarkup(row_width=1)
+            for gid in groups:kb.add(InlineKeyboardButton(f"👥 گروه {gid}",callback_data=f"aip:select:{gid}"))
+            await message.answer("👥 <b>انتخاب گروه دستیار</b>\n\nگروهی را که می‌خواهید مدیریت کنید انتخاب کنید:",reply_markup=kb,parse_mode="HTML");return
+        await message.answer(f"🤖 <b>پنل مدیریت دستیار Mafia Nights</b>\n\nگروه انتخاب‌شده: <code>{selected}</code>\n\nیک بخش را انتخاب کنید.",reply_markup=self._menu(),parse_mode="HTML")
 
-    async def menu(self, callback: types.CallbackQuery):
-        if not await self._guard(callback):
-            await callback.answer()
-            return
-        await callback.message.edit_text(
-            "🤖 <b>پنل مدیریت دستیار Mafia Nights</b>\n\nیک بخش را انتخاب کنید:",
-            reply_markup=self._menu(), parse_mode="HTML",
-        )
-        await callback.answer()
+    async def select_group(self,callback:types.CallbackQuery):
+        try:gid=int(str(callback.data).split(":")[2])
+        except Exception:await callback.answer("شناسه گروه نامعتبر است.",show_alert=True);return
+        uid=int(callback.from_user.id);groups=await self._admin_groups(uid)
+        if gid not in groups:await callback.answer("⛔ شما مدیر این گروه نیستید.",show_alert=True);return
+        self._set_selected_group(uid,gid);await callback.answer("✅ گروه انتخاب شد.")
+        await callback.message.edit_text(f"🤖 <b>پنل مدیریت دستیار Mafia Nights</b>\n\nگروه انتخاب‌شده: <code>{gid}</code>\n\nیک بخش را انتخاب کنید:",reply_markup=self._menu(),parse_mode="HTML")
+    async def menu(self,callback:types.CallbackQuery):
+        if not await self._guard(callback):await callback.answer();return
+        await callback.message.edit_text("🤖 <b>پنل مدیریت دستیار Mafia Nights</b>\n\nیک بخش را انتخاب کنید:",reply_markup=self._menu(),parse_mode="HTML");await callback.answer()
 
     async def kb(self, callback: types.CallbackQuery):
         if not await self._guard(callback):
@@ -283,21 +316,21 @@ class AssistantAdminPanel:
             await state.finish()
             await message.answer("❌ ثبت مطلب انجام نشد.", reply_markup=self._menu())
 
-    def _settings_row(self):
+    def _settings_row(self,user_id:int):
         with self._repo().SessionLocal() as session:
             return session.execute(text("""
                 select enabled,provider,model,web_search_enabled,
                        private_enabled,private_provider,private_model,
                        private_web_search_enabled,
                        (api_key_ciphertext is not null) as has_group_key,
-                       (private_api_key_ciphertext is not null) as has_private_key
+                       (private_api_key_ciphertext is not null) as has_group_key
                 from public.mafia_ai_settings where group_id=:gid
-            """), {"gid": self._group_id()}).mappings().first()
+            """), {"gid": self._selected_group_id(callback.from_user.id)}).mappings().first()
 
     async def status(self, callback):
         if not await self._guard(callback):
             await callback.answer(); return
-        row = self._settings_row()
+        row = self._settings_row(callback.from_user.id)
         if not row:
             body = "📊 <b>وضعیت دستیار</b>\n\nهنوز تنظیماتی ثبت نشده است."
         else:
@@ -348,7 +381,7 @@ class AssistantAdminPanel:
     async def save_group_key(self, message: types.Message, state: FSMContext):
         if message.chat.type != "private" or not await self._authorized(message.from_user.id):
             await state.finish(); return
-        key=(message.text or "").strip(); gid=self._group_id(); secret=os.getenv("DATABASE_URL") or ""
+        key=(message.text or "").strip(); gid=self._selected_group_id(message.from_user.id); secret=os.getenv("DATABASE_URL") or ""
         if not key or not gid or not secret:
             await message.answer("❌ کلید، گروه اصلی یا تنظیمات رمزنگاری ناقص است."); return
         provider="gemini" if key.startswith("AIza") else "openai"
@@ -373,7 +406,7 @@ class AssistantAdminPanel:
         enabled = bool(row and row["private_enabled"])
         has_key = bool(row and row["has_private_key"])
         kb = InlineKeyboardMarkup(row_width=1)
-        kb.add(InlineKeyboardButton("🔑 ثبت / تغییر کلید پیوی", callback_data="aip:pvkey"))
+        kb.add(InlineKeyboardButton("🔑 کلید مشترک گروه", callback_data="aip:groupkey"))
         kb.add(InlineKeyboardButton(f"🔐 AI پیوی: {'روشن' if enabled else 'خاموش'}", callback_data="aip:pvtoggle"))
         kb.add(InlineKeyboardButton("⬅️ پنل دستیار", callback_data="aip:menu"))
         await callback.message.edit_text(
@@ -428,7 +461,7 @@ class AssistantAdminPanel:
         dp.register_message_handler(self.source, state=AssistantAdminStates.waiting_source)
         dp.register_message_handler(self.save_group_key, state=AssistantAdminStates.waiting_group_key)
         for action, fn in {
-            "menu": self.menu, "kb": self.kb, "doc": self.doc,
+            "select": self.select_group, "menu": self.menu, "kb": self.kb, "doc": self.doc,
             "publish": self.publish, "disable": self.disable,
             "add": self.add_start, "guide": self.guide, "scope": self.scope,
             "status": self.status, "ai": self.ai, "toggle_group": self.toggle_group,
