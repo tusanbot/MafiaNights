@@ -435,13 +435,7 @@ async def _newgame(message: types.Message, app: Any) -> None:
     if handler is None:
         await message.reply("⚠️ مسیر ایجاد بازی در دسترس نیست.")
         return
-    callback = SimpleNamespace(
-        message=message,
-        from_user=message.from_user,
-        data="fl_new",
-        answer=message.answer,
-        _from_text_command=True,
-    )
+    callback = _callback_proxy(message, "fl_new"); callback._from_text_command = True
     await handler(callback)
 
 
@@ -569,6 +563,14 @@ async def _simple_phase(message, app, phase: str):
     await message.reply(f"✅ <b>{title}</b> فعال شد.", parse_mode="HTML")
 
 
+async def _callback_answer(*args, **kwargs):
+    return None
+
+
+def _callback_proxy(message, data):
+    return SimpleNamespace(message=message, from_user=message.from_user, data=data, answer=_callback_answer)
+
+
 async def _start_round_text(message, app):
     game = _game(app, message)
     if not game or not await _manager(app, message, game):
@@ -592,7 +594,7 @@ async def _start_round_text(message, app):
         app.runtime.state.games.update_game(game["id"], state=state, current_turn_index=0)
         await message.reply("✅ دور شروع شد.")
         return
-    cb = SimpleNamespace(message=message, from_user=message.from_user, data="start_round", answer=message.answer)
+    cb = _callback_proxy(message, "start_round")
     await handler(cb)
 
 
@@ -614,7 +616,7 @@ async def _next_text(message, app):
     if handler is None:
         await message.reply("⚠️ موتور نوبت در دسترس نیست.")
         return
-    cb = SimpleNamespace(message=message, from_user=message.from_user, data=f"next_{seat}", answer=message.answer)
+    cb = _callback_proxy(message, f"next_{seat}")
     await handler(cb)
 
 
