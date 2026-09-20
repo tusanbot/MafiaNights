@@ -279,8 +279,20 @@ async def _timer(main, deadline, expected):
 
 async def _start_wait(main):
     v = _v(main)
+    v.update(target_index=0, votes={})
+    if v.get("mode") == MANUAL:
+        v.update(phase="manual_ready", started_at=None, deadline=None)
+        _put(main, v)
+        await main.bot.send_message(
+            _gid(main),
+            "🗳 <b>شروع رای‌گیری</b>\n\nرای‌گیری دستی آماده است. با زدن دکمه زیر توسط گرداننده، رای‌گیری نفر اول شروع می‌شود.",
+            parse_mode="HTML",
+            reply_markup=_manual_start_kb(),
+        )
+        main._voting_task = None
+        return
     deadline = time.time() + int(v["wait_seconds"])
-    v.update(phase="waiting", started_at=time.time(), deadline=deadline, target_index=0, votes={})
+    v.update(phase="waiting", started_at=time.time(), deadline=deadline)
     _put(main, v)
     blocked = _active_rights(v)
     names = [_row_name(main, r) for r in _players(main) if int(r["player_id"]) in blocked]
@@ -290,18 +302,7 @@ async def _start_wait(main):
     await asyncio.sleep(max(0, float(deadline) - time.time()))
     current = _v(main)
     if current.get("phase") == "waiting" and current.get("deadline") == deadline:
-        if current.get("mode") == MANUAL:
-            current["phase"] = "manual_ready"
-            current["deadline"] = None
-            _put(main, current)
-            await main.bot.send_message(
-                _gid(main),
-                "🗳 <b>رای‌گیری آماده است.</b>\n\nبا زدن دکمه زیر توسط گرداننده، رای‌گیری نفر اول شروع می‌شود.",
-                parse_mode="HTML",
-                reply_markup=_manual_start_kb(),
-            )
-        else:
-            await _start_target(main)
+        await _start_target(main)
 
 
 async def _end_target(main):
