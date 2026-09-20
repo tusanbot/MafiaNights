@@ -215,6 +215,40 @@ def _rearm_canonical_new_game():
 
 _rearm_canonical_new_game()
 
+# Final assistant authority for the REAL production runtime.
+# player_runtime_entry -> main1 is the webhook path; main.py is not imported here.
+# Re-arm both explicit /ask and natural-language AI handlers after every feature
+# installer so generic player/text handlers cannot consume assistant questions.
+try:
+    _handlers = getattr(main.dp.message_handlers, "handlers", [])
+    _panel = getattr(main, "assistant_admin_panel", None)
+    _assistant_handler = getattr(main, "_knowledge_assistant_handler", None)
+    _assistant_auto = getattr(main, "_knowledge_assistant_auto_handler", None)
+    _assistant_names = {
+        "title", "content", "scenario", "role", "source", "save_group_key", "open",
+    }
+    _fsm, _explicit, _auto, _rest = [], [], [], []
+    for _item in list(_handlers):
+        _cb = getattr(_item, "handler", None) or getattr(_item, "callback", None)
+        _owner = getattr(_cb, "__self__", None)
+        _name = getattr(_cb, "__name__", "")
+        if _panel is not None and _owner is _panel and _name in _assistant_names:
+            _fsm.append(_item)
+        elif _assistant_handler is not None and _cb is _assistant_handler:
+            _explicit.append(_item)
+        elif _assistant_auto is not None and _cb is _assistant_auto:
+            _auto.append(_item)
+        else:
+            _rest.append(_item)
+    if _fsm or _explicit or _auto:
+        _handlers[:] = _fsm + _explicit + _auto + _rest
+    logging.info(
+        "ASSISTANT PRODUCTION AUTHORITY ACTIVE fsm=%s explicit=%s auto=%s",
+        len(_fsm), len(_explicit), len(_auto),
+    )
+except Exception:
+    logging.exception("Failed to arm final assistant production authority")
+
 _original_startup = main.on_startup
 
 async def on_startup(dp):
