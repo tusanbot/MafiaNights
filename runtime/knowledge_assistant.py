@@ -9,6 +9,7 @@ import html
 import json
 import logging
 import os
+import asyncio
 import urllib.parse
 import urllib.request
 from typing import Any
@@ -148,9 +149,16 @@ async def answer(message: Any, app: Any, question: str) -> None:
         await message.reply("❓ سوالت را بعد از /ask بنویس.")
         return
 
+    try:
+        await message.bot.send_chat_action(message.chat.id, "typing")
+    except Exception:
+        pass
+
     scenario_name, role_name = _game_context(app, message)
     repo = KnowledgeRepository()
-    rows = repo.get_context(
+    # Repository/network operations are synchronous; never block aiogram's event loop.
+    rows = await asyncio.to_thread(
+        repo.get_context,
         question,
         scenario_name=scenario_name,
         role_name=role_name,
@@ -158,11 +166,20 @@ async def answer(message: Any, app: Any, question: str) -> None:
     )
 
     # Only query the web when internal knowledge is absent or clearly insufficient.
-    web = [] if len(rows) >= 2 else _web_search(
-        (f"مافیا {scenario_name or ''} {role_name or ''} {question}").strip()
+    web = (
+        []
+        if len(rows) >= 2
+        else await asyncio.to_thread(
+            _web_search,
+            (f"مافیا {scenario_name or ''} {role_name or ''} {question}").strip(),
+        )
     )
-    ai_enabled, api_key = _ai_config(app, message)
-    response = _call_ai(question, rows, web, api_key) if ai_enabled else None
+    ai_enabled, api_key = await asyncio.to_thread(_ai_config, app, message)
+    response = (
+        await asyncio.to_thread(_call_ai, question, rows, web, api_key)
+        if ai_enabled
+        else None
+    )
 
     if response is None:
         if rows:
@@ -219,7 +236,11 @@ def install(app: Any) -> bool:
                 parse_mode="HTML",
             )
             return
-        await answer(message, app, question)
+        try:
+            await answer(message, app, question)
+        except Exception:
+            logging.exception("knowledge assistant: answer failed")
+            await message.reply("⚠️ پردازش سؤال با خطا مواجه شد. لطفاً دوباره تلاش کنید.")
 
     from aiogram import types
 
