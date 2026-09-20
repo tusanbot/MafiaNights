@@ -214,6 +214,26 @@ def _day_end_kb():
         InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"),
     )
 
+def _manual_start_kb():
+    return InlineKeyboardMarkup(row_width=1).add(
+        InlineKeyboardButton("▶️ شروع رای‌گیری", callback_data="vote:manual_start"),
+    )
+
+
+def _manual_next_kb(last=False):
+    return InlineKeyboardMarkup(row_width=1).add(
+        InlineKeyboardButton(
+            "🏁 اتمام رای‌گیری" if last else "➡️ بعدی",
+            callback_data="vote:manual_end" if last else "vote:manual_next",
+        )
+    )
+
+
+def _disabled_vote_kb():
+    return InlineKeyboardMarkup(row_width=1).add(
+        InlineKeyboardButton("✅ ثبت شد", callback_data="vote:noop")
+    )
+
 
 async def _settings(main, callback):
     v = _v(main)
@@ -232,11 +252,13 @@ async def _start_target(main):
     rows = {int(x["player_id"]): x for x in _players(main)}
     name = _name(main, target, rows.get(target, {}).get("seat"))
     now = time.time()
-    deadline = now + int(v["vote_seconds"])
+    deadline = None if v.get("mode") == MANUAL else now + int(v["vote_seconds"])
     v["phase"], v["started_at"], v["deadline"] = "voting", now, deadline
     v.setdefault("votes", {}).setdefault(str(target), [])
     _put(main, v)
-    markup = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast")) if v.get("mode") == AUTO else None
+    markup = InlineKeyboardMarkup(row_width=1).add(
+        InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast")
+    ) if v.get("mode") == AUTO else _manual_next_kb(idx >= len(targets) - 1)
     sent = await main.bot.send_message(
         _gid(main),
         _vote_message_text(main, v, target),
@@ -268,7 +290,18 @@ async def _start_wait(main):
     await asyncio.sleep(max(0, float(deadline) - time.time()))
     current = _v(main)
     if current.get("phase") == "waiting" and current.get("deadline") == deadline:
-        await _start_target(main)
+        if current.get("mode") == MANUAL:
+            current["phase"] = "manual_ready"
+            current["deadline"] = None
+            _put(main, current)
+            await main.bot.send_message(
+                _gid(main),
+                "🗳 <b>رای‌گیری آماده است.</b>\n\nبا زدن دکمه زیر توسط گرداننده، رای‌گیری نفر اول شروع می‌شود.",
+                parse_mode="HTML",
+                reply_markup=_manual_start_kb(),
+            )
+        else:
+            await _start_target(main)
 
 
 async def _end_target(main):
@@ -283,6 +316,16 @@ async def _end_target(main):
     rows = {int(x["player_id"]): x for x in _players(main)}
     target_name = _name(main, target, rows.get(target, {}).get("seat"))
     voter_text = _voter_lines(main, v, target)
+    message_id = v.get("vote_message_id")
+    if message_id:
+        try:
+            await main.bot.edit_message_reply_markup(
+                chat_id=_gid(main),
+                message_id=int(message_id),
+                reply_markup=_disabled_vote_kb(),
+            )
+        except Exception:
+            pass
     await main.bot.send_message(
         _gid(main),
         f"📊 <b>نتیجه رای‌گیری برای {html.escape(target_name)}</b>\n\n"
@@ -402,6 +445,67 @@ def install(main):
         await _start_wait(main)
         raise CancelHandler()
 
+    async def manual_start(c):
+        await only_mod(c)
+        v = _v(main)
+        if v.get("mode") != MANUAL or v.get("phase") != "manual_ready":
+            await c.answer("⛔ رای‌گیری دستی آماده نیست.", show_alert=True)
+            raise CancelHandler()
+        await c.answer("▶️ رای‌گیری نفر اول شروع شد.")
+        await _start_target(main)
+        raise CancelHandler()
+
+    async def manual_next(c):
+        await only_mod(c)
+        v = _v(main)
+        if v.get("mode") != MANUAL or v.get("phase") != "voting":
+            await c.answer("⛔ رای‌گیری دستی فعال نیست.", show_alert=True)
+            raise CancelHandler()
+        idx = int(v.get("target_index") or 0)
+        targets = list(v.get("targets") or [])
+        message_id = v.get("vote_message_id")
+        if message_id:
+            try:
+                await main.bot.edit_message_reply_markup(
+                    chat_id=_gid(main),
+                    message_id=int(message_id),
+                    reply_markup=_disabled_vote_kb(),
+                )
+            except Exception:
+                pass
+        v["target_index"] = idx + 1
+        v["started_at"], v["deadline"] = None, None
+        _put(main, v)
+        await c.answer("➡️ نفر بعدی")
+        await _start_target(main)
+        raise CancelHandler()
+
+    async def manual_end(c):
+        await only_mod(c)
+        v = _v(main)
+        if v.get("mode") != MANUAL or v.get("phase") != "voting":
+            await c.answer("⛔ رای‌گیری دستی فعال نیست.", show_alert=True)
+            raise CancelHandler()
+        message_id = v.get("vote_message_id")
+        if message_id:
+            try:
+                await main.bot.edit_message_reply_markup(
+                    chat_id=_gid(main),
+                    message_id=int(message_id),
+                    reply_markup=_disabled_vote_kb(),
+                )
+            except Exception:
+                pass
+        v["target_index"] = len(list(v.get("targets") or []))
+        v["started_at"], v["deadline"] = None, None
+        _put(main, v)
+        await c.answer("🏁 رای‌گیری این دور به پایان رسید.")
+        await _finish_round(main)
+        raise CancelHandler()
+
+    async def noop(c):
+        await c.answer("این پیام مربوط به مرحله قبلی رای‌گیری است.")
+
     async def cast(c):
         v = _v(main)
         if v.get("phase") != "voting":
@@ -499,6 +603,10 @@ def install(main):
         (lambda c: c.data == "vote:mode", mode_menu),
         (lambda c: c.data.startswith("vote:mode:"), mode_set),
         (lambda c: c.data == "vote:start", start),
+        (lambda c: c.data == "vote:manual_start", manual_start),
+        (lambda c: c.data == "vote:manual_next", manual_next),
+        (lambda c: c.data == "vote:manual_end", manual_end),
+        (lambda c: c.data == "vote:noop", noop),
         (lambda c: c.data == "vote:cast", cast),
         (lambda c: c.data == "vote:round2", r2),
         (lambda c: c.data.startswith("vote:r2pick:"), r2pick),
