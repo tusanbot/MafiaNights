@@ -149,6 +149,11 @@ class KnowledgeRepository(DatabaseRepository):
 
     def get_context(self, query: str, scenario_name: str | None = None,
                     role_name: str | None = None, limit: int = 8) -> list[dict[str, Any]]:
+        # Production Vercel workers can start against the legacy database before
+        # any KB request has initialized its schema. Ensure the schema/seed exists
+        # before the first SELECT instead of letting the first question fail with
+        # UndefinedTable.
+        self.ensure_schema()
         rows = self.search(query, scenario_name, role_name, limit)
         return rows
 
