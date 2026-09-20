@@ -68,14 +68,20 @@ def _web_search(query: str, limit: int = 4) -> list[dict[str, str]]:
     return results
 
 
-def _ai_config(app: Any, message: Any) -> tuple[bool, str | None]:
+def _ai_config(app: Any, message: Any) -> tuple[bool, str | None, str, str | None]:
+    """Load AI settings and safely infer Gemini from an AIza key.
+    
+    Older installations stored every key as provider=openai. Gemini keys are
+    recognizable by the AIza prefix, so an existing registration is upgraded
+    transparently without requiring the moderator to re-enter the key.
+    """
     try:
         gid = int(message.chat.id)
         with KnowledgeRepository().SessionLocal() as session:
             from sqlalchemy import text
             row = session.execute(
                 text(
-                    """select enabled,
+                    """select enabled, provider, model,
                               case when api_key_ciphertext is null then null
                                    else pgp_sym_decrypt(api_key_ciphertext, :secret)
                               end as api_key
@@ -84,13 +90,24 @@ def _ai_config(app: Any, message: Any) -> tuple[bool, str | None]:
                 {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
             ).mappings().first()
         if not row:
-            return False, os.getenv("MAFIA_AI_API_KEY")
-        return bool(row["enabled"]), (
-            str(row["api_key"]) if row["api_key"] else os.getenv("MAFIA_AI_API_KEY")
-        )
+            key = os.getenv("MAFIA_AI_API_KEY")
+            provider = "gemini" if str(key or "").startswith("AIza") else "openai"
+            return False, key, provider, None
+        key = str(row["api_key"]) if row["api_key"] else os.getenv("MAFIA_AI_API_KEY")
+        provider = str(row["provider"] or "").lower()
+        if str(key or "").startswith("AIza"):
+            provider = "gemini"
+        if provider not in {"gemini", "openai"}:
+            provider = "gemini" if str(key or "").startswith("AIza") else "openai"
+        model = str(row["model"]) if row["model"] else None
+        if provider == "gemini" and (not model or model.startswith(("gpt-", "o1", "o3", "o4"))):
+            model = "gemini-2.5-flash"
+        return bool(row["enabled"]), key, provider, model
     except Exception:
         logging.exception("knowledge assistant: AI config lookup failed")
-        return False, os.getenv("MAFIA_AI_API_KEY")
+        key = os.getenv("MAFIA_AI_API_KEY")
+        provider = "gemini" if str(key or "").startswith("AIza") else "openai"
+        return False, key, provider, None
 
 
 def _call_ai(
@@ -98,12 +115,60 @@ def _call_ai(
     context: list[dict[str, Any]],
     web: list[dict[str, str]],
     api_key: str | None = None,
+    provider: str = "openai",
+    model: str | None = None,
 ) -> str | None:
     api_key = api_key or os.getenv("MAFIA_AI_API_KEY")
     if not api_key:
         return None
 
-    model = os.getenv("MAFIA_AI_MODEL", "gpt-5.6-mini")
+    provider = (provider or "openai").lower()
+    if provider == "gemini":
+        model = model or os.getenv("MAFIA_AI_MODEL") or "gemini-2.5-flash"
+        system = (
+            "تو دستیار رسمی Mafia Nights هستی. "
+            "پاسخ را فارسی، دقیق و کوتاه بده. "
+            "قوانین داخلی تاییدشده ربات بر هر منبع وب اولویت دارند. "
+            "اطلاعات مخفی نقش، نقش سایر بازیکنان، هدف شبانه، رای یا استراتژی خصوصی بازیکنان را افشا نکن. "
+            "اگر منبع داخلی کافی نیست، صریحاً بگو که پاسخ بر پایه منبع بیرونی است. "
+            "برای سوال نامرتبط هم پاسخ مفید و عمومی بده."
+        )
+        payload = {
+            "system_instruction": {"parts": [{"text": system}]},
+            "contents": [{
+                "role": "user",
+                "parts": [{
+                    "text": json.dumps(
+                        {"question": prompt, "knowledge": context, "web_sources": web},
+                        ensure_ascii=False,
+                    )
+                }]
+            }],
+            "generationConfig": {"temperature": 0.2},
+        }
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            + urllib.parse.quote(model, safe="")
+            + ":generateContent?key="
+            + urllib.parse.quote(api_key, safe="")
+        )
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=25) as response:
+                obj = json.loads(response.read().decode("utf-8"))
+            parts = obj.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            text_parts = [str(p.get("text", "")) for p in parts if p.get("text")]
+            return "".join(text_parts).strip() or None
+        except Exception:
+            logging.exception("knowledge assistant: Gemini request failed")
+            return None
+
+    model = model or os.getenv("MAFIA_AI_MODEL", "gpt-5.6-mini")
     base = os.getenv("MAFIA_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     system = (
         "تو دستیار رسمی Mafia Nights هستی. "
@@ -193,9 +258,11 @@ async def answer(message: Any, app: Any, question: str) -> None:
             (f"مافیا {scenario_name or ''} {role_name or ''} {question}").strip(),
         )
     )
-    ai_enabled, api_key = await asyncio.to_thread(_ai_config, app, message)
+    ai_enabled, api_key, provider, model = await asyncio.to_thread(_ai_config, app, message)
     response = (
-        await asyncio.to_thread(_call_ai, question, rows, web, api_key)
+        await asyncio.to_thread(
+            _call_ai, question, rows, web, api_key, provider, model
+        )
         if ai_enabled
         else None
     )
