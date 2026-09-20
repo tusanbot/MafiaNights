@@ -223,9 +223,6 @@ async def cmd_commands(message: types.Message, app: Any) -> None:
 
 
 async def _ai_panel_text(message: types.Message, app: Any) -> None:
-    if message.chat.type != "private":
-        await message.reply("ℹ️ پنل دستیار فقط در پیوی قابل استفاده است.")
-        return
     from runtime.assistant_admin_panel import AssistantAdminPanel
     await AssistantAdminPanel(app).open(message)
 
