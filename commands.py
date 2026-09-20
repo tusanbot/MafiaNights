@@ -22,6 +22,9 @@ CommandHandler = Callable[[types.Message], Awaitable[None]]
 COMMANDS = {
     "commands": {"commands", "دستورات", "دستورها"},
     "ask": {"ask", "mafia", "سوال", "سؤال"},
+    "ai_on": {"ai_on", "فعال کردن هوش مصنوعی"},
+    "ai_off": {"ai_off", "غیرفعال کردن هوش مصنوعی"},
+    "ai_status": {"ai_status", "وضعیت هوش مصنوعی"},
     "newgame": {"newgame", "بازی جدید"},
     "join": {"join", "ورود"},
     "leave": {"leave", "خروج"},
@@ -141,6 +144,11 @@ COMMAND_REFERENCE = (
     ("🤖 دستیار", (
         ("/ask", "پرسش از دستیار مافیا"),
         ("/mafia", "پرسش از دستیار مافیا"),
+        ("/ai_on", "فعال‌سازی هوش مصنوعی"),
+        ("/ai_off", "غیرفعال‌سازی هوش مصنوعی"),
+        ("/ai_status", "وضعیت هوش مصنوعی"),
+        ("/ask", "پرسش از دستیار مافیا"),
+        ("/mafia", "پرسش از دستیار مافیا"),
     )),
     ("ℹ️ عمومی", (
         ("/start", "نمایش منوی اصلی"),
@@ -158,7 +166,46 @@ async def cmd_commands(message: types.Message, app: Any) -> None:
     await message.reply("\n".join(lines).rstrip(), parse_mode="HTML")
 
 
-async def cmd_tag_all(message: types.Message, app: Any) -> None:
+async def _ai_control(message: types.Message, app: Any, action: str) -> None:
+    if message.chat.type not in {"group", "supergroup"}:
+        await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
+        return
+    gid = int(message.chat.id)
+    try:
+        status = (await app.bot.get_chat_member(gid, int(message.from_user.id))).status
+    except Exception:
+        status = "left"
+    if status not in {"creator", "administrator"} and int(message.from_user.id) != int(getattr(app, "moderator_id", 0) or 0):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه.")
+        return
+    from repositories.knowledge_repository import KnowledgeRepository
+    from sqlalchemy import text
+    import os
+    enabled = action == "on"
+    with KnowledgeRepository().SessionLocal() as session:
+        session.execute(text("""
+            insert into public.mafia_ai_settings(group_id,provider,model,enabled,web_search_enabled,updated_at)
+            values(:gid,'openai',:model,:enabled,true,now())
+            on conflict(group_id) do update set enabled=:enabled, updated_at=now()
+        """), {"gid": gid, "model": os.getenv("MAFIA_AI_MODEL") or None, "enabled": enabled})
+        session.commit()
+    if action == "status":
+        with KnowledgeRepository().SessionLocal() as session:
+            row=session.execute(text("select provider,model,enabled,web_search_enabled from public.mafia_ai_settings where group_id=:gid"),{"gid":gid}).mappings().first()
+        key = bool(os.getenv("MAFIA_AI_API_KEY"))
+        if not row:
+            await message.reply(f"🤖 وضعیت: <b>غیرفعال</b>\n🔑 API Key: <b>{'ثبت شده در محیط اجرا' if key else 'ثبت نشده'}</b>",parse_mode="HTML")
+            return
+        await message.reply(
+            f"🤖 وضعیت: <b>{'فعال' if row['enabled'] else 'غیرفعال'}</b>\n"
+            f"🧠 مدل: <code>{html.escape(str(row['model'] or os.getenv('MAFIA_AI_MODEL') or 'پیش‌فرض'))}</code>\n"
+            f"🔑 API Key: <b>{'ثبت شده در محیط اجرا' if key else 'ثبت نشده'}</b>\n"
+            f"🌐 جست‌وجوی وب: <b>{'فعال' if row['web_search_enabled'] else 'غیرفعال'}</b>",
+            parse_mode="HTML"
+        )
+        return
+    await message.reply(f"✅ دستیار هوش مصنوعی {'فعال' if enabled else 'غیرفعال'} شد.")
+    \nasync def cmd_tag_all(message: types.Message, app: Any) -> None:
     if message.chat.type not in {"group", "supergroup"}:
         await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
         return
@@ -298,6 +345,9 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
     handlers = {
         "commands": cmd_commands,
         "ask": lambda m, a: __import__("runtime.knowledge_assistant", fromlist=["answer"]).answer(m, a, (m.text or "").split(" ", 1)[1] if " " in (m.text or "") else ""),
+        "ai_on": lambda m, a: _ai_control(m, a, "on"),
+        "ai_off": lambda m, a: _ai_control(m, a, "off"),
+        "ai_status": lambda m, a: _ai_control(m, a, "status"),
         "newgame": _newgame,
         "join": _join,
         "leave": _leave,
