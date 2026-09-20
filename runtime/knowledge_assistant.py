@@ -55,7 +55,9 @@ def _looks_like_question(text: str) -> bool:
     question_terms = (
         "چی", "چه", "چطور", "چگونه", "چرا", "آیا", "کی", "کجا",
         "میشه", "می‌شه", "میتونه", "می‌تونه", "چند", "کدام", "کدوم",
-        "چیه", "چیست", "هست", "است",
+        "چیه", "چیست", "هست", "است", "داره", "دارم", "دارد",
+        "توضیح", "توضیح بده", "توضیح دهید", "درباره", "تعریف", "معنی",
+        "بگو", "بگید", "بده", "بدید",
     )
     words = lowered.replace("،", " ").replace(",", " ").replace(".", " ").split()
     if any(
@@ -104,7 +106,8 @@ def _ai_config(app: Any, message: Any, resolved_gid: int | None = None) -> tuple
         with KnowledgeRepository().SessionLocal() as session:
             from sqlalchemy import text
             row = session.execute(
-                text("""select enabled, private_enabled, provider, model,
+                text("""select enabled, private_enabled,
+                               provider, model, private_provider, private_model,
                                case when api_key_ciphertext is null then null
                                     else pgp_sym_decrypt(api_key_ciphertext, :secret)
                                end as api_key
@@ -116,12 +119,32 @@ def _ai_config(app: Any, message: Any, resolved_gid: int | None = None) -> tuple
         key = str(row["api_key"]) if row["api_key"] else None
         if not key:
             return False, None, "gemini", None
-        provider = str(row["provider"] or "").lower()
-        if key.startswith("AIza"):
+
+        # Provider is explicit configuration. For private requests use the
+        # private provider/model fields because the PV shares the group's key
+        # but may have its own provider metadata.
+        provider = str(
+            (row["private_provider"] if is_private else row["provider"]) or ""
+        ).lower()
+        model = (
+            row["private_model"] if is_private else row["model"]
+        )
+        model = str(model) if model else None
+
+        # Backward compatibility for rows written by the legacy /ai_key route:
+        # that route used provider=openai while leaving private_provider=gemini.
+        # The current product uses Gemini, so treat that exact stale combination
+        # as Gemini rather than sending the Gemini credential to OpenAI.
+        if (
+            provider == "openai"
+            and str(row["private_provider"] or "").lower() == "gemini"
+            and str(row["model"] or "").lower().startswith(("gpt-", "o1", "o3", "o4"))
+        ):
             provider = "gemini"
+            model = "gemini-2.5-flash"
+
         if provider not in {"gemini", "openai"}:
-            provider = "gemini" if key.startswith("AIza") else "openai"
-        model = str(row["model"]) if row["model"] else None
+            provider = "gemini"
         if provider == "gemini" and (not model or model.startswith(("gpt-", "o1", "o3", "o4"))):
             model = "gemini-2.5-flash"
         enabled = bool(row["private_enabled"]) if is_private else bool(row["enabled"])
