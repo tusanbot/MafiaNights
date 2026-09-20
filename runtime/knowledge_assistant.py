@@ -98,7 +98,10 @@ def _ai_config(app: Any, message: Any) -> tuple[bool, str | None, str, str | Non
                     if provider == "gemini" and (not model or model.startswith(("gpt-", "o1", "o3", "o4"))):
                         model = "gemini-2.5-flash"
                     return True, key, provider, model
-                # No private key/config: fall through to the existing global configuration.
+                # Private chats are isolated from group/global AI credentials.
+                # If no dedicated PV configuration exists, do not silently consume
+                # the group's API key.
+                return False, None, "gemini", None
             row = session.execute(
                 text("""select enabled, provider, model,
                                case when api_key_ciphertext is null then null
