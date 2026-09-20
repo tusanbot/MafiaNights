@@ -572,12 +572,35 @@ class AssistantAdminPanel:
         except Exception:
             logging.exception("assistant admin: failed to prioritize panel handler")
 
-        dp.register_message_handler(self.title, state=AssistantAdminStates.waiting_title)
-        dp.register_message_handler(self.content, state=AssistantAdminStates.waiting_content)
-        dp.register_message_handler(self.scenario, state=AssistantAdminStates.waiting_scenario)
-        dp.register_message_handler(self.role, state=AssistantAdminStates.waiting_role)
-        dp.register_message_handler(self.source, state=AssistantAdminStates.waiting_source)
-        dp.register_message_handler(self.save_group_key, state=AssistantAdminStates.waiting_group_key)
+        # Register FSM input handlers and then move the whole assistant FSM block
+        # ahead of generic text/player-id handlers. Otherwise a group-key message
+        # can be consumed by the game's player-id parser before the FSM handler.
+        assistant_message_handlers = [
+            (self.title, AssistantAdminStates.waiting_title),
+            (self.content, AssistantAdminStates.waiting_content),
+            (self.scenario, AssistantAdminStates.waiting_scenario),
+            (self.role, AssistantAdminStates.waiting_role),
+            (self.source, AssistantAdminStates.waiting_source),
+            (self.save_group_key, AssistantAdminStates.waiting_group_key),
+        ]
+        for fn, st in assistant_message_handlers:
+            dp.register_message_handler(fn, state=st)
+
+        try:
+            handlers = getattr(dp.message_handlers, "handlers", [])
+            assistant_callbacks = {self.title, self.content, self.scenario, self.role, self.source, self.save_group_key, self.open}
+            mine, rest = [], []
+            for item in list(handlers):
+                cb = getattr(item, "callback", None) or getattr(item, "handler", None)
+                if cb in assistant_callbacks:
+                    mine.append(item)
+                else:
+                    rest.append(item)
+            if mine:
+                handlers[:] = mine + rest
+        except Exception:
+            logging.exception("assistant admin: failed to prioritize FSM message handlers")
+
         for action, fn in {
             "select": self.select_group, "menu": self.menu, "kb": self.kb, "doc": self.doc,
             "publish": self.publish, "disable": self.disable,
