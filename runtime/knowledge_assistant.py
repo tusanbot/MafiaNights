@@ -110,9 +110,7 @@ def _ai_config(app: Any, message: Any, resolved_gid: int | None = None) -> tuple
         if not key:
             return False, None, "gemini", None
 
-        # The configured assistant credential in this deployment is Gemini.
-        # Legacy rows can still contain provider=openai / gpt-* metadata; never
-        # send this credential to OpenAI.
+        # The assistant is Gemini-only; legacy provider metadata is ignored.
         provider = "gemini"
         model = "gemini-2.5-flash"
         enabled = bool(row["private_enabled"]) if is_private else bool(row["enabled"])
@@ -125,15 +123,16 @@ def _call_ai(
     context: list[dict[str, Any]],
     web: list[dict[str, str]],
     api_key: str | None = None,
-    provider: str = "openai",
+    provider: str = "gemini",
     model: str | None = None,
 ) -> str | None:
     api_key = api_key or os.getenv("MAFIA_AI_API_KEY")
     if not api_key:
         return None
 
-    provider = (provider or "openai").lower()
-    if provider == "gemini":
+    # Gemini is the only supported provider.
+    provider = "gemini"
+    if True:
         model = model or os.getenv("MAFIA_AI_MODEL") or "gemini-2.5-flash"
         system = (
             "تو دستیار رسمی Mafia Nights هستی. "
@@ -257,7 +256,7 @@ def _ensure_ai_settings_table() -> None:
         session.execute(text("""
             create table if not exists public.mafia_ai_settings (
                 group_id bigint primary key,
-                provider text not null default 'openai',
+                provider text not null default 'gemini',
                 model text,
                 api_key_ciphertext bytea,
                 web_search_enabled boolean not null default true,
