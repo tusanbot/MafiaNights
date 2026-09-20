@@ -84,4 +84,9 @@ def _install_final_score_hook(app):
     app.dp.register_callback_query_handler(finalized_game_end,lambda c:str(c.data or "").startswith("game_end:"),state="*");game_end._final_score_hook_installed=True
 
 def install(app:Any)->bool:
-    game_end._score_players=lambda app_,game_,rows_,winner_:score_game(app_,game_,rows_,winner_);_patch_final_report();_install_final_score_hook(app);app.player_scoring={"base":BASE_SCORE,"win":WIN_POINTS,"challenge":CHALLENGE_POINTS,"kick":KICK_PENALTY,"warnings":WARNING_PENALTIES};return True
+    game_end._score_players=lambda app_,game_,rows_,winner_:score_game(app_,game_,rows_,winner_)
+    app._score_finished_game=lambda game_, rows_, winner_: score_game(app, game_, rows_, winner_)
+    _patch_final_report()
+    _install_final_score_hook(app)
+    app.player_scoring={"base":BASE_SCORE,"win":WIN_POINTS,"challenge":CHALLENGE_POINTS,"kick":KICK_PENALTY,"warnings":WARNING_PENALTIES}
+    return True
