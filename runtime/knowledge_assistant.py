@@ -131,7 +131,7 @@ def _call_ai(
         return None
 
     # Gemini is the only supported provider.
-provider = "gemini"
+    provider = "gemini"
     model = model or os.getenv("MAFIA_AI_MODEL") or "gemini-2.5-flash"
     system = (
         "تو دستیار رسمی Mafia Nights هستی. "
