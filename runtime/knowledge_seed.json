@@ -2360,14 +2360,14 @@
   },
   {
     "title": "نوفیس",
-    "content": "اطلاعات ساختاری نقش در این سناریو.\n\nساید: مستقل\n\nتوجه: Ability و قوانین اختصاصی این نقش هنوز باید از منابع معتبر بررسی و تأیید شود.",
+    "content": "نوفیس در سناریوی «کلاسیک 13» ساید مستقل دارد. در داده‌های داخلی فعلی Mafia Nights، نام و ساید این نقش ثبت شده اما توانایی اختصاصی آن تعریف مستندی ندارد؛ بنابراین دستیار نباید برای قابلیت نوفیس حدس بزند و باید آن را «نامشخص در قوانین فعلی ربات» اعلام کند.",
     "scope": "role",
     "scenario_name": "کلاسیک 13",
     "role_name": "نوفیس",
-    "status": "draft",
+    "status": "published",
     "source_type": "internal",
     "source_url": null,
-    "source_title": null,
+    "source_title": "Mafia Nights scenarios.json",
     "confidence": "confirmed",
     "metadata": {
       "side": "مستقل",
