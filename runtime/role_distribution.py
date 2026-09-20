@@ -164,6 +164,15 @@ def install(app: Any) -> bool:
             "last_role_map": role_map,
             "players_in_game": {str(int(row["seat"])): {"id": int(row["player_id"]), "name": str(row.get("nickname") or row.get("first_name") or row.get("username") or row["player_id"]), "role": role_map[str(int(row["player_id"]))]} for row in players},
             "roles_distributed": True, "gameplay_ready": True, "role_delivery": {},
+            "started_participants": [
+                {
+                    "player_id": int(row["player_id"]),
+                    "seat": int(row["seat"]),
+                    "nickname": str(row.get("nickname") or row.get("first_name") or row.get("username") or row["player_id"]),
+                    "role": role_map[str(int(row["player_id"]))],
+                }
+                for row in players
+            ],
             "turn_order": [int(row["seat"]) for row in players], "current_turn_index": 0, "head_seat": None,
         })
         if not app.runtime.state.games.update_game(game_id, status="running", state=state, current_turn_index=0, current_turn_seat=None):
