@@ -70,6 +70,7 @@ def _events_markup(game_id: int, group_id: int, enabled: bool) -> InlineKeyboard
 def _final_markup(game_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(row_width=2).add(
         InlineKeyboardButton("📊 نتیجه بازی", callback_data=f"game_end:{int(game_id)}:result"),
+        InlineKeyboardButton("ℹ️ اطلاعات بازی", callback_data=f"game_end:{int(game_id)}:info"),
         InlineKeyboardButton("📝 اتفاقات بازی", callback_data=f"game_end:{int(game_id)}:events"),
         InlineKeyboardButton("📚 بازی‌های گذشته", callback_data=f"game_history:list:{int(game_id)}"),
         InlineKeyboardButton("✖️ بستن", callback_data=f"game_end:{int(game_id)}:close"),
@@ -288,13 +289,15 @@ def _events_message(events: dict[str, Any]) -> str:
     return "📝 <b>اتفاقات بازی</b>\n\nفعلا اتفاقات بازی ثبت نشده"
 
 
-def _history_markup(games: list[dict[str, Any]]) -> InlineKeyboardMarkup:
+def _history_markup(games: list[dict[str, Any]], back_game_id: int | None = None) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
     for game in games:
         number = int(game.get("event_number") or 1)
         state = dict(game.get("state") or {})
         winner = _result_label(str(state.get("game_result") or ""))
         kb.add(InlineKeyboardButton(f"📓 بازی {number} — {winner or 'بدون نتیجه'}", callback_data=f"game_history:view:{int(game['id'])}"))
+    if back_game_id is not None:
+        kb.add(InlineKeyboardButton("⬅️ بازگشت به نتیجه بازی", callback_data=f"game_end:{int(back_game_id)}:result"))
     return kb
 
 
@@ -412,19 +415,35 @@ def install(app: Any) -> bool:
             await callback.answer(f"🏆 برنده ثبت شد: {_result_label(winner)}")
             return
         if action == "events":
-            try:
-                await app.bot.send_message(
-                    int(callback.from_user.id),
-                    "📝 <b>پنل اتفاقات بازی</b>\n\n"
-                    "وضعیت ارسال اتفاقات بازی را انتخاب کنید.\n"
-                    "این پنل فقط دو گزینه دارد؛ ثبت محتوای اتفاقات بعداً به همین بخش متصل می‌شود.\n\n"
-                    f"وضعیت فعلی: <b>{'فعال' if events.get('enabled') else 'غیرفعال'}</b>",
-                    parse_mode="HTML",
-                    reply_markup=_events_markup(game_id, int(game.get("group_chat_id") or callback.message.chat.id), bool(events.get("enabled"))),
-                )
-                await callback.answer("📝 پنل اتفاقات در پیام خصوصی ارسال شد.")
-            except Exception:
-                await callback.answer("⚠️ ربات نمی‌تواند در پیام خصوصی با شما ارتباط بگیرد. ابتدا /start را در PV ربات بزنید.", show_alert=True)
+            await callback.message.edit_text(
+                _events_message(events),
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup().add(
+                    InlineKeyboardButton("⬅️ بازگشت به نتیجه بازی", callback_data=f"game_end:{game_id}:result")
+                ),
+            )
+            await callback.answer()
+            return
+        if action == "info":
+            rows = app.runtime.state.games.list_players(game_id)
+            started = _parse_dt(game.get("started_at"))
+            finished = _parse_dt(game.get("finished_at"))
+            state = dict(game.get("state") or {})
+            await callback.message.edit_text(
+                "ℹ️ <b>اطلاعات بازی</b>\n\n"
+                f"📓 شماره بازی: <b>{int(game.get('event_number') or 0) or '—'}</b>\n"
+                f"🎭 سناریو: <b>{html.escape(str(state.get('scenario_name') or game.get('scenario') or game.get('scenario_id') or '—'))}</b>\n"
+                f"🎩 گرداننده: <b>{html.escape(str(state.get('moderator_name') or game.get('moderator_name') or game.get('moderator_id') or '—'))}</b>\n"
+                f"👥 بازیکنان ثبت‌شده: <b>{len([r for r in rows if r.get('seat') is not None])}</b>\n"
+                f"▶️ شروع: <b>{_local_dt(started).strftime('%Y/%m/%d %H:%M') if started else '—'}</b>\n"
+                f"⏹ پایان: <b>{_local_dt(finished).strftime('%Y/%m/%d %H:%M') if finished else '—'}</b>\n"
+                f"🏆 نتیجه: <b>{html.escape(_result_label(str(state.get('game_result') or '')))}</b>",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup().add(
+                    InlineKeyboardButton("⬅️ بازگشت به نتیجه بازی", callback_data=f"game_end:{game_id}:result")
+                ),
+            )
+            await callback.answer()
             return
         if action == "finalize":
             winner = str(state.get("game_result") or "")
@@ -469,7 +488,14 @@ def install(app: Any) -> bool:
             }
             if not app.runtime.state.games.update_game(game_id, status="finished", state=state, started_at=game.get("started_at"), finished_at=now):
                 await callback.answer("❌ ثبت نهایی انجام نشد.", show_alert=True); return
-            _stop_and_finalize_players(app, {**game, "state": state}, rows)
+            final_game = {**game, "state": state, "status": "finished", "finished_at": now}
+            scorer = getattr(app, "_score_finished_game", None)
+            if scorer:
+                try:
+                    scorer(final_game, rows, winner)
+                except Exception:
+                    logging.exception("final game scoring failed game=%s", game_id)
+            _stop_and_finalize_players(app, final_game, rows)
             final_game = {**game, "state": state, "status": "finished", "finished_at": now}
             text = _final_text(final_game, rows)
             try:
@@ -530,7 +556,7 @@ def install(app: Any) -> bool:
             games = app.runtime.state.games.list_finished_games(group_id, limit=20)
             if not games:
                 await callback.answer("ℹ️ هنوز بازی ثبت نهایی‌شده‌ای وجود ندارد.", show_alert=True); return
-            await callback.message.edit_text("📚 <b>بازی‌های گذشته</b>\n\nبازی موردنظر را انتخاب کنید:", parse_mode="HTML", reply_markup=_history_markup(games))
+            await callback.message.edit_text("📚 <b>بازی‌های گذشته</b>\n\nبازی موردنظر را انتخاب کنید:", parse_mode="HTML", reply_markup=_history_markup(games, reference_id))
             await callback.answer(); return
         if action == "view":
             game = app.runtime.state.games.get_finished_game(reference_id)
