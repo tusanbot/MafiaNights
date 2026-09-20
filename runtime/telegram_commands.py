@@ -13,6 +13,10 @@ from aiogram.dispatcher.handler import CancelHandler
 
 GROUP_COMMANDS = [
     types.BotCommand("start", "نمایش منوی اصلی"),
+    types.BotCommand("ask", "پرسش از دستیار مافیا"),
+    types.BotCommand("mafia", "پرسش از دستیار مافیا"),
+    types.BotCommand("ask", "پرسش از دستیار مافیا"),
+    types.BotCommand("mafia", "پرسش از دستیار مافیا"),
     types.BotCommand("commands", "فهرست دستورات متنی"),
     types.BotCommand("newgame", "بازی جدید"),
     types.BotCommand("join", "ورود"),
