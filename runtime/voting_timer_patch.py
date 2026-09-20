@@ -231,7 +231,7 @@ async def _finish_round(main):
         votes = v.get("votes") or {}
         candidates = []
         for target in [int(x) for x in (v.get("targets") or [])]:
-            count = len({int(x) for x in (votes.get(str(target)) or [])})
+            count = len(voting_runtime._vote_records(v, target))
             if threshold is not None and count >= threshold:
                 candidates.append(target)
         v["defense_threshold"] = threshold
