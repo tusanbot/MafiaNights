@@ -182,13 +182,14 @@ async def _ai_control(message: types.Message, app: Any, action: str) -> None:
     from sqlalchemy import text
     import os
     enabled = action == "on"
-    with KnowledgeRepository().SessionLocal() as session:
-        session.execute(text("""
-            insert into public.mafia_ai_settings(group_id,provider,model,enabled,web_search_enabled,updated_at)
-            values(:gid,'openai',:model,:enabled,true,now())
-            on conflict(group_id) do update set enabled=:enabled, updated_at=now()
-        """), {"gid": gid, "model": os.getenv("MAFIA_AI_MODEL") or None, "enabled": enabled})
-        session.commit()
+    if action != "status":
+        with KnowledgeRepository().SessionLocal() as session:
+            session.execute(text("""
+                insert into public.mafia_ai_settings(group_id,provider,model,enabled,web_search_enabled,updated_at)
+                values(:gid,'openai',:model,:enabled,true,now())
+                on conflict(group_id) do update set enabled=:enabled, updated_at=now()
+            """), {"gid": gid, "model": os.getenv("MAFIA_AI_MODEL") or None, "enabled": enabled})
+            session.commit()
     if action == "status":
         with KnowledgeRepository().SessionLocal() as session:
             row=session.execute(text("select provider,model,enabled,web_search_enabled from public.mafia_ai_settings where group_id=:gid"),{"gid":gid}).mappings().first()
@@ -205,7 +206,8 @@ async def _ai_control(message: types.Message, app: Any, action: str) -> None:
         )
         return
     await message.reply(f"✅ دستیار هوش مصنوعی {'فعال' if enabled else 'غیرفعال'} شد.")
-    \nasync def cmd_tag_all(message: types.Message, app: Any) -> None:
+
+async def cmd_tag_all(message: types.Message, app: Any) -> None:
     if message.chat.type not in {"group", "supergroup"}:
         await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
         return
