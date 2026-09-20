@@ -264,7 +264,7 @@ async def _ai_control(message: types.Message, app: Any, action: str) -> None:
         with KnowledgeRepository().SessionLocal() as session:
             session.execute(text("""
                 insert into public.mafia_ai_settings(group_id,provider,model,enabled,web_search_enabled,updated_at)
-                values(0,'openai',:model,:enabled,true,now())
+                values(:gid,'openai',:model,:enabled,true,now())
                 on conflict(group_id) do update set enabled=:enabled, updated_at=now()
             """), {"gid": gid, "model": os.getenv("MAFIA_AI_MODEL") or None, "enabled": enabled})
             session.commit()
@@ -273,7 +273,7 @@ async def _ai_control(message: types.Message, app: Any, action: str) -> None:
             row=session.execute(text("""select provider,model,enabled,web_search_enabled,
                                       (api_key_ciphertext is not null) as has_db_key
                                from public.mafia_ai_settings
-                               where group_id=0
+                               where group_id=:gid
                                limit 1""")).mappings().first()
         key = bool(os.getenv("MAFIA_AI_API_KEY")) or bool(row and row["has_db_key"])
         if not row:
@@ -336,10 +336,11 @@ async def _ai_key(message: types.Message, app: Any) -> None:
     with KnowledgeRepository().SessionLocal() as session:
         session.execute(text("""
             insert into public.mafia_ai_settings(group_id,provider,model,enabled,web_search_enabled,api_key_ciphertext,updated_at)
-            values(0,:provider,:model,true,true,pgp_sym_encrypt(:key,:secret),now())
+            values(:gid,:provider,:model,true,true,pgp_sym_encrypt(:key,:secret),now())
             on conflict(group_id) do update set
                 provider=:provider,
                 model=:model,
+                enabled=true,
                 api_key_ciphertext=pgp_sym_encrypt(:key,:secret),
                 updated_at=now()
         """), {
