@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 import html
 import time
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from aiogram.dispatcher.handler import CancelHandler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -75,6 +77,59 @@ def _name(main, uid, seat=None):
 
 def _row_name(main, row):
     return row.get("nickname") or row.get("first_name") or _name(main, row["player_id"], row.get("seat"))
+
+
+def _vote_timestamp():
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+
+
+def _vote_display_time(value):
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return dt.astimezone(ZoneInfo("Asia/Tehran")).strftime("%H:%M:%S.%f")[:-4]
+    except Exception:
+        return "نامشخص"
+
+
+def _vote_records(v, target):
+    raw = (v.get("votes") or {}).get(str(target), [])
+    records = []
+    for item in raw:
+        if isinstance(item, dict):
+            try:
+                records.append({"user_id": int(item["user_id"]), "voted_at": str(item["voted_at"])})
+            except Exception:
+                continue
+        else:
+            try:
+                records.append({"user_id": int(item), "voted_at": None})
+            except (TypeError, ValueError):
+                pass
+    return records
+
+
+def _voter_lines(main, v, target):
+    rows = {int(x["player_id"]): x for x in _players(main)}
+    records = _vote_records(v, target)
+    if not records:
+        return "• هنوز رأیی ثبت نشده است"
+    return "\n".join(
+        f"• {html.escape(_name(main, r['user_id'], rows.get(r['user_id'], {}).get('seat')))}"
+        f" — ⏱ {_vote_display_time(r['voted_at']) if r.get('voted_at') else 'زمان ثبت نشده'}"
+        for r in records
+    )
+
+
+def _vote_message_text(main, v, target):
+    rows = {int(x["player_id"]): x for x in _players(main)}
+    target_name = _name(main, target, rows.get(target, {}).get("seat"))
+    count = len(_vote_records(v, target))
+    return (
+        f"🗳 <b>رأی برای {html.escape(target_name)}</b>\n\n"
+        f"👥 تعداد رأی ثبت‌شده: <b>{count}</b>\n"
+        f"🗳 <b>رأی‌دهندگان:</b>\n{_voter_lines(main, v, target)}\n\n"
+        f"⏱ {int(v['vote_seconds'])} ثانیه فرصت دارید."
+    )
 
 
 def _default(main):
@@ -182,7 +237,14 @@ async def _start_target(main):
     v.setdefault("votes", {}).setdefault(str(target), [])
     _put(main, v)
     markup = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast")) if v.get("mode") == AUTO else None
-    await main.bot.send_message(_gid(main), f"🗳 <b>رای برای {html.escape(name)}</b>\n\n⏱ {int(v['vote_seconds'])} ثانیه فرصت دارید.", parse_mode="HTML", reply_markup=markup)
+    sent = await main.bot.send_message(
+        _gid(main),
+        _vote_message_text(main, v, target),
+        parse_mode="HTML",
+        reply_markup=markup,
+    )
+    v["vote_message_id"] = int(sent.message_id)
+    _put(main, v)
     main._voting_task = None
 
 
@@ -216,11 +278,18 @@ async def _end_target(main):
     if idx >= len(targets):
         return await _finish_round(main)
     target = int(targets[idx])
-    voted = {int(x) for x in (v.get("votes") or {}).get(str(target), [])}
+    records = _vote_records(v, target)
+    voted = {int(x["user_id"]) for x in records}
     rows = {int(x["player_id"]): x for x in _players(main)}
     target_name = _name(main, target, rows.get(target, {}).get("seat"))
-    voter_text = "\n".join(f"• {html.escape(_name(main, uid, rows.get(uid, {}).get('seat')))}" for uid in voted) or "• هیچ‌کس"
-    await main.bot.send_message(_gid(main), f"📊 <b>نتیجه رای‌گیری برای {html.escape(target_name)}</b>\n\n🗳 تعداد رای: <b>{len(voted)}</b>\n👥 رای‌دهندگان:\n{voter_text}", parse_mode="HTML")
+    voter_text = _voter_lines(main, v, target)
+    await main.bot.send_message(
+        _gid(main),
+        f"📊 <b>نتیجه رای‌گیری برای {html.escape(target_name)}</b>\n\n"
+        f"🗳 تعداد رای: <b>{len(voted)}\n"
+        f"👥 <b>رای‌دهندگان:</b>\n{voter_text}",
+        parse_mode="HTML",
+    )
     v["target_index"], v["started_at"], v["deadline"] = idx + 1, None, None
     _put(main, v)
     await _start_target(main)
@@ -344,12 +413,27 @@ def install(main):
             raise CancelHandler()
         target = int(list(v.get("targets") or [])[int(v.get("target_index") or 0)])
         bucket = list((v.setdefault("votes", {})).setdefault(str(target), []))
-        if uid in {int(x) for x in bucket}:
+        existing = _vote_records(v, target)
+        if uid in {int(x["user_id"]) for x in existing}:
             await c.answer("⚠️ رای شما قبلاً ثبت شده است.", show_alert=True)
             raise CancelHandler()
-        bucket.append(uid)
+        bucket.append({"user_id": uid, "voted_at": _vote_timestamp()})
         v["votes"][str(target)] = bucket
         _put(main, v)
+        message_id = v.get("vote_message_id")
+        if message_id:
+            try:
+                await main.bot.edit_message_text(
+                    _vote_message_text(main, v, target),
+                    chat_id=_gid(main),
+                    message_id=int(message_id),
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(row_width=1).add(
+                        InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast")
+                    ) if v.get("mode") == AUTO else None,
+                )
+            except Exception:
+                pass
         await c.answer("✅ رای شما ثبت شد.")
 
     async def r2(c):
