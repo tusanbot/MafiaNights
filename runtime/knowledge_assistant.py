@@ -81,75 +81,52 @@ def _web_search(query: str, limit: int = 4) -> list[dict[str, str]]:
 
 
 def _ai_config(app: Any, message: Any) -> tuple[bool, str | None, str, str | None]:
-    """Load global/group AI settings, with a separate private-chat configuration."""
+    """Load one group-owned AI credential for both group and private requests."""
     try:
         is_private = getattr(message.chat, "type", None) == "private"
-        gid = int(message.chat.id)
+        primary_raw = os.getenv("AI_PRIMARY_GROUP_ID") or os.getenv("ALLOWED_GROUP_ID") or ""
+        primary_gid = int(primary_raw) if str(primary_raw).strip().lstrip("-").isdigit() else None
+        gid = primary_gid if is_private else int(message.chat.id)
+        if gid is None:
+            return False, None, "gemini", None
         with KnowledgeRepository().SessionLocal() as session:
             from sqlalchemy import text
             if is_private:
                 row = session.execute(
-                    text("""select private_enabled as enabled,
-                                   private_provider as provider,
-                                   private_model as model,
-                                   case when private_api_key_ciphertext is null then null
-                                        else pgp_sym_decrypt(private_api_key_ciphertext, :secret)
-                                   end as api_key,
-                                   private_web_search_enabled as web_search_enabled
-                            from public.mafia_ai_settings where group_id=0 limit 1"""),
-                    {"secret": os.getenv("DATABASE_URL") or ""},
+                    text("""select enabled, private_enabled, provider, model,
+                                   case when api_key_ciphertext is null then null
+                                        else pgp_sym_decrypt(api_key_ciphertext, :secret)
+                                   end as api_key
+                            from public.mafia_ai_settings where group_id=:gid limit 1"""),
+                    {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
                 ).mappings().first()
-                if row and row["enabled"] and row["api_key"]:
-                    provider = str(row["provider"] or "").lower()
-                    key = str(row["api_key"])
-                    if key.startswith("AIza"):
-                        provider = "gemini"
-                    if provider not in {"gemini", "openai"}:
-                        provider = "gemini" if key.startswith("AIza") else "openai"
-                    model = str(row["model"]) if row["model"] else None
-                    if provider == "gemini" and (not model or model.startswith(("gpt-", "o1", "o3", "o4"))):
-                        model = "gemini-2.5-flash"
-                    return True, key, provider, model
-                # Private chats are isolated from group/global AI credentials.
-                # If no dedicated PV configuration exists, do not silently consume
-                # the group's API key.
-                return False, None, "gemini", None
-            row = session.execute(
-                text("""select enabled, provider, model,
-                               case when api_key_ciphertext is null then null
-                                    else pgp_sym_decrypt(api_key_ciphertext, :secret)
-                               end as api_key
-                        from public.mafia_ai_settings where group_id=:gid limit 1"""),
-                {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
-            ).mappings().first()
-            if not row:
+                if not row or not row["private_enabled"] or not row["api_key"]:
+                    return False, None, "gemini", None
+            else:
                 row = session.execute(
                     text("""select enabled, provider, model,
                                    case when api_key_ciphertext is null then null
                                         else pgp_sym_decrypt(api_key_ciphertext, :secret)
                                    end as api_key
-                            from public.mafia_ai_settings where group_id=0 limit 1"""),
-                    {"secret": os.getenv("DATABASE_URL") or ""},
+                            from public.mafia_ai_settings where group_id=:gid limit 1"""),
+                    {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
                 ).mappings().first()
         if not row:
-            key = os.getenv("MAFIA_AI_API_KEY")
-            provider = "gemini" if str(key or "").startswith("AIza") else "openai"
-            return False, key, provider, None
-        key = str(row["api_key"]) if row["api_key"] else os.getenv("MAFIA_AI_API_KEY")
+            return False, None, "gemini", None
+        key = str(row["api_key"]) if row["api_key"] else None
         provider = str(row["provider"] or "").lower()
-        if str(key or "").startswith("AIza"):
+        if key and key.startswith("AIza"):
             provider = "gemini"
         if provider not in {"gemini", "openai"}:
-            provider = "gemini" if str(key or "").startswith("AIza") else "openai"
+            provider = "gemini" if key and key.startswith("AIza") else "openai"
         model = str(row["model"]) if row["model"] else None
         if provider == "gemini" and (not model or model.startswith(("gpt-", "o1", "o3", "o4"))):
             model = "gemini-2.5-flash"
-        return bool(row["enabled"]), key, provider, model
+        enabled = bool(row["private_enabled"]) if is_private else bool(row["enabled"])
+        return enabled, key, provider, model
     except Exception:
         logging.exception("knowledge assistant: AI config lookup failed")
-        key = os.getenv("MAFIA_AI_API_KEY")
-        provider = "gemini" if str(key or "").startswith("AIza") else "openai"
-        return False, key, provider, None
+        return False, None, "gemini", None
 
 def _call_ai(
     prompt: str,
@@ -401,7 +378,23 @@ async def _edit_assistant_message(bot: Any, sent_message: Any, text: str) -> boo
         return False
 
 
+async def _private_group_member_allowed(message: Any, app: Any) -> bool:
+    if getattr(message.chat, "type", None) != "private":
+        return True
+    raw = os.getenv("AI_PRIMARY_GROUP_ID") or os.getenv("ALLOWED_GROUP_ID") or ""
+    try:
+        gid = int(raw)
+        member = await app.bot.get_chat_member(gid, int(message.from_user.id))
+        return str(getattr(member, "status", "")) not in {"left", "kicked"}
+    except Exception:
+        logging.exception("knowledge assistant: private group membership check failed")
+        return False
+
 async def answer(message: Any, app: Any, question: str) -> None:
+    if not await _private_group_member_allowed(message, app):
+        await _send_plain_reply(message, "⛔ دستیار پیوی فقط برای اعضای گروه فعال است.")
+        return
+
     question = (question or "").strip()
     if not question:
         await _send_plain_reply(message, "❓ سوالت را بعد از /ask بنویس.")
