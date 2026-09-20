@@ -403,8 +403,44 @@ class AssistantAdminPanel:
         if not await self._guard(callback):
             await callback.answer(); return
         await AssistantAdminStates.waiting_group_key.set()
-        await callback.message.edit_text("🔑 <b>ثبت کلید AI گروه</b>\n\nاین کلید مشترک برای دستیار گروه و درخواست‌های پیوی اعضای همین گروه است.\nکلید Gemini یا OpenAI را ارسال کنید؛ پیام حاوی کلید بلافاصله حذف می‌شود.", parse_mode="HTML")
+        kb = InlineKeyboardMarkup(row_width=2)
+        kb.add(
+            InlineKeyboardButton("✨ Gemini", callback_data="aip:provider_gemini"),
+            InlineKeyboardButton("🤖 OpenAI", callback_data="aip:provider_openai"),
+        )
+        kb.add(InlineKeyboardButton("⬅️ بازگشت", callback_data="aip:pv"))
+        await callback.message.edit_text(
+            "🔑 <b>کلید AI گروه</b>\n\n"
+            "ابتدا سرویس کلید را انتخاب کنید. کلید فعلی حذف نمی‌شود و فقط سرویس استفاده‌کننده از آن تغییر می‌کند.\n"
+            "در حال حاضر برای کلید شما <b>Gemini</b> را انتخاب کنید.",
+            reply_markup=kb, parse_mode="HTML",
+        )
         await callback.answer()
+
+    async def set_provider(self, callback, provider: str):
+        if not await self._guard(callback):
+            await callback.answer()
+            return
+        gid = self._selected_group_id(callback.from_user.id)
+        if not gid:
+            await callback.answer("ابتدا گروه را انتخاب کنید.", show_alert=True)
+            return
+        provider = "gemini" if provider == "gemini" else "openai"
+        model = "gemini-2.5-flash" if provider == "gemini" else (os.getenv("MAFIA_AI_MODEL") or "gpt-5.6-mini")
+        with self._repo().SessionLocal() as session:
+            session.execute(text("""
+                update public.mafia_ai_settings
+                   set provider=:provider,
+                       model=:model,
+                       private_provider=:provider,
+                       private_model=:model,
+                       updated_at=now(),
+                       private_updated_at=now()
+                 where group_id=:gid
+            """), {"provider": provider, "model": model, "gid": int(gid)})
+            session.commit()
+        await callback.answer("سرویس Gemini برای کلید گروه انتخاب شد." if provider == "gemini" else "سرویس OpenAI برای کلید گروه انتخاب شد.")
+        await self.pv(callback)
 
     async def save_group_key(self, message: types.Message, state: FSMContext):
         if message.chat.type != "private" or not await self._authorized(message.from_user.id):
@@ -606,7 +642,10 @@ class AssistantAdminPanel:
             "publish": self.publish, "disable": self.disable,
             "add": self.add_start, "guide": self.guide, "scope": self.scope,
             "status": self.status, "ai": self.ai, "toggle_group": self.toggle_group,
-            "pv": self.pv, "groupkey": self.group_key, "pvtoggle": self.pv_toggle,
+            "pv": self.pv, "groupkey": self.group_key,
+            "provider_gemini": lambda c: self.set_provider(c, "gemini"),
+            "provider_openai": lambda c: self.set_provider(c, "openai"),
+            "pvtoggle": self.pv_toggle,
         }.items():
             dp.register_callback_query_handler(
                 fn, lambda c, a=action: str(c.data or "").startswith(f"aip:{a}"), state="*"
@@ -618,7 +657,7 @@ class AssistantAdminPanel:
             names = {
                 "select_group", "menu", "kb", "doc", "publish", "disable",
                 "add_start", "guide", "scope", "status", "ai", "toggle_group",
-                "pv", "group_key", "pv_toggle",
+                "pv", "group_key", "set_provider", "pv_toggle",
             }
             mine, rest = [], []
             for item in list(handlers):
