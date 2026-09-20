@@ -176,6 +176,9 @@ def _events_state(game: dict[str, Any]) -> dict[str, Any]:
 
 def _final_text(game: dict[str, Any], rows: list[dict[str, Any]]) -> str:
     state = dict(game.get("state") or {})
+    snapshot = state.get("final_players")
+    if isinstance(snapshot, list) and snapshot:
+        rows = [dict(row) for row in snapshot]
     winner = str(state.get("game_result") or "")
     start, end = _game_times(game)
     start = _local_dt(start)
@@ -229,10 +232,23 @@ def _summary_text(game: dict[str, Any]) -> str:
     )
 
 
+def _final_player_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep only actual seated participants at finalization; exclude reservations/exited users."""
+    excluded = {"removed", "kicked", "left", "finished", "waiting", "substitute"}
+    result = []
+    for row in rows:
+        status = str(row.get("status") or "active").strip().lower()
+        if row.get("seat") is None or status in excluded:
+            continue
+        result.append(row)
+    return sorted(result, key=lambda r: int(r.get("seat") or 999))
+
+
 def _score_players(app: Any, game: dict[str, Any], rows: list[dict[str, Any]], winner: str) -> None:
     score_for = (lambda side: DRAW_SCORE) if winner == "draw" else (lambda side: WIN_SCORE if side == winner else 0)
     repo = RatingRepository()
     state = dict(game.get("state") or {})
+    rows = _final_player_rows(rows)
     recorded = set(str(x) for x in (state.get("rating_recorded_players") or []))
     for row in rows:
         uid = int(row["player_id"])
@@ -384,7 +400,7 @@ def install(app: Any) -> bool:
             if not app.runtime.state.games.update_game(game_id, state=state):
                 await callback.answer("❌ ثبت برنده انجام نشد.", show_alert=True); return
             game = get_game(game_id) or {**game, "state": state}
-            rows = app.runtime.state.games.list_players(game_id)
+            rows = _final_player_rows(app.runtime.state.games.list_players(game_id))
             _score_players(app, game, rows, winner)
             events = _events_state(game)
             await callback.message.edit_text(_summary_text(game), parse_mode="HTML", reply_markup=_main_markup(game_id, winner, bool(events.get("enabled"))))
@@ -422,7 +438,7 @@ def install(app: Any) -> bool:
             winner = str(state.get("game_result") or "")
             if winner not in dict(RESULTS):
                 await callback.answer("⚠️ ابتدا برنده را ثبت کنید.", show_alert=True); return
-            rows = app.runtime.state.games.list_players(game_id)
+            rows = _final_player_rows(app.runtime.state.games.list_players(game_id))
             now = datetime.now(timezone.utc)
             if not game.get("started_at"):
                 started = _parse_dt(game.get("created_at")) or now
@@ -430,6 +446,16 @@ def install(app: Any) -> bool:
             state["finished_manually"] = True
             state["finished_at"] = now.isoformat()
             state["finalized"] = True
+            state["final_players"] = [
+                {
+                    "player_id": int(row.get("player_id") or 0),
+                    "seat": int(row.get("seat")),
+                    "role": str(row.get("role") or ""),
+                    "side": _role_side(row, state),
+                    "nickname": _name(row),
+                }
+                for row in rows
+            ]
             state["game_archive"] = {
                 "status": "finished",
                 "winner": winner,
