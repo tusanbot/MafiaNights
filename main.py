@@ -45,7 +45,7 @@ for _item in list(getattr(dp.message_handlers,"handlers",[])):
     if getattr(_callback,"__name__","")=="group_command":
         dp.message_handlers.handlers.remove(_item);dp.message_handlers.handlers.insert(0,_item);break
 
-install_end_game_control(app);install_production_consistency(app);install_dual_winner_support(app);install_assistant_admin_panel(app)
+install_end_game_control(app);install_production_consistency(app);install_dual_winner_support(app);app.assistant_admin_panel=install_assistant_admin_panel(app)
 logging.info("PRODUCTION_RUNTIME_ACTIVE lobby=runtime.lobby_ui_final management=game_management+management_surface_final progress=achievements+tags+events+incidents")
 
 async def on_startup(dp):
