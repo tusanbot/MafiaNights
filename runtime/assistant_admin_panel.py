@@ -38,12 +38,24 @@ class AssistantAdminPanel:
                 ids.add(int(value))
         return ids
 
-    def _authorized(self, user_id: int) -> bool:
-        return int(user_id) in self._admin_ids()
+    async def _authorized(self, user_id: int) -> bool:
+        if int(user_id) in self._admin_ids():
+            return True
+        # Secure fallback: the Telegram creator of the configured main group
+        # can manage the assistant from a private chat without exposing an ID
+        # in source code or database.
+        group_raw = os.getenv("ALLOWED_GROUP_ID")
+        if group_raw:
+            try:
+                member = await self.app.bot.get_chat_member(int(group_raw), int(user_id))
+                return str(getattr(member, "status", "")) == "creator"
+            except Exception:
+                logging.exception("assistant admin: creator authorization check failed")
+        return False
 
     async def _guard(self, message_or_callback: Any) -> bool:
         uid = int(message_or_callback.from_user.id)
-        if self._authorized(uid):
+        if await self._authorized(uid):
             return True
         target = getattr(message_or_callback, "message", message_or_callback)
         await target.answer("⛔ این پنل فقط برای مدیر اصلی ربات فعال است.")
@@ -342,7 +354,7 @@ class AssistantAdminPanel:
         await callback.answer()
 
     async def save_pvkey(self, message: types.Message, state: FSMContext):
-        if message.chat.type != "private" or not self._authorized(message.from_user.id):
+        if message.chat.type != "private" or not await self._authorized(message.from_user.id):
             await state.finish()
             return
         key = (message.text or "").strip()
