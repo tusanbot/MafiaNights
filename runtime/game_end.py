@@ -233,15 +233,27 @@ def _summary_text(game: dict[str, Any]) -> str:
     )
 
 
-def _final_player_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Keep players who actually participated in the started game.
-    
-    Kicked/dead/face-off/removed players remain historical participants.
-    Only users who never became final participants (replacement, pre-start
-    removal, or explicit exit) are excluded.
-    """
-    excluded = {"left", "waiting", "substitute", "replacement"}
+def _final_player_rows(rows: list[dict[str, Any]], state: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Return the immutable set of players who actually started this game."""
+    state = state or {}
+    snapshot = state.get("started_participants") or []
+    current = {int(r.get("player_id") or 0): dict(r) for r in rows}
     result = []
+    if snapshot:
+        for saved in snapshot:
+            uid = int(saved.get("player_id") or 0)
+            row = dict(current.get(uid) or {})
+            # Keep the original seat for dead/removed/kicked participants.
+            row["player_id"] = uid
+            row["seat"] = int(saved.get("seat") or row.get("seat") or 0)
+            row.setdefault("nickname", saved.get("nickname"))
+            if not row.get("role"):
+                row["role"] = saved.get("role") or ""
+            result.append(row)
+        return sorted(result, key=lambda r: int(r.get("seat") or 999))
+
+    # Backward compatibility for games created before the immutable snapshot.
+    excluded = {"left", "waiting", "substitute", "replacement"}
     for row in rows:
         status = str(row.get("status") or "active").strip().lower()
         if row.get("seat") is None or status in excluded:
@@ -249,12 +261,11 @@ def _final_player_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         result.append(row)
     return sorted(result, key=lambda r: int(r.get("seat") or 999))
 
-
 def _score_players(app: Any, game: dict[str, Any], rows: list[dict[str, Any]], winner: str) -> None:
     score_for = (lambda side: DRAW_SCORE) if winner == "draw" else (lambda side: WIN_SCORE if side == winner else 0)
     repo = RatingRepository()
     state = dict(game.get("state") or {})
-    rows = _final_player_rows(rows)
+    rows = _final_player_rows(rows, state)
     recorded = set(str(x) for x in (state.get("rating_recorded_players") or []))
     for row in rows:
         uid = int(row["player_id"])
@@ -408,7 +419,7 @@ def install(app: Any) -> bool:
             if not app.runtime.state.games.update_game(game_id, state=state):
                 await callback.answer("❌ ثبت برنده انجام نشد.", show_alert=True); return
             game = get_game(game_id) or {**game, "state": state}
-            rows = _final_player_rows(app.runtime.state.games.list_players(game_id))
+            rows = _final_player_rows(app.runtime.state.games.list_players(game_id), state)
             _score_players(app, game, rows, winner)
             events = _events_state(game)
             await callback.message.edit_text(_summary_text(game), parse_mode="HTML", reply_markup=_main_markup(game_id, winner, bool(events.get("enabled"))))
