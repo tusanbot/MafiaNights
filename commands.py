@@ -937,6 +937,60 @@ def register_commands(app: Any) -> bool:
         await run_command(name, message, app)
         raise CancelHandler()
 
+    async def _register_menu():
+        try:
+            from aiogram.types import BotCommand, BotCommandScopeChat
+            group_commands = [
+                BotCommand("newgame", "بازی جدید"),
+                BotCommand("join", "ورود"),
+                BotCommand("leave", "خروج"),
+                BotCommand("sub", "جایگزین"),
+                BotCommand("attendance", "حاضری"),
+                BotCommand("management", "مدیریت"),
+                BotCommand("reserve", "رزرو"),
+                BotCommand("unreserve", "لغو رزرو"),
+                BotCommand("seat", "صندلی عدد"),
+                BotCommand("challenge", "چالش"),
+                BotCommand("start_round", "شروع دور"),
+                BotCommand("end", "اتمام بازی"),
+                BotCommand("night", "فاز شب"),
+                BotCommand("day", "فاز روز"),
+                BotCommand("warning", "تذکر"),
+                BotCommand("warning_remove", "حذف تذکر"),
+                BotCommand("kick", "کیک"),
+                BotCommand("mute", "سکوت"),
+                BotCommand("unmute", "حذف سکوت"),
+                BotCommand("extra", "ترن اضافه"),
+                BotCommand("birthday", "تولد"),
+                BotCommand("remove", "حذف بازیکن"),
+                BotCommand("cancel_game", "لغو بازی"),
+                BotCommand("challenge_limited", "چالش محدود"),
+                BotCommand("challenge_free", "چالش آزاد"),
+                BotCommand("chatlock", "قفل چت"),
+                BotCommand("nightlock", "قفل شب"),
+                BotCommand("turnlock", "قفل نوبت"),
+                BotCommand("next", "نکست"),
+                BotCommand("role", "نقش من"),
+                BotCommand("panel", "پنل"),
+                BotCommand("stats", "آمار"),
+                BotCommand("rank", "رتبه"),
+                BotCommand("commands", "دستورات"),
+            ]
+            gid = int(getattr(app, "ALLOWED_GROUP_ID", 0) or 0)
+            if gid:
+                await app.bot.set_my_commands(group_commands, scope=BotCommandScopeChat(chat_id=gid))
+            await app.bot.set_my_commands([
+                BotCommand("start", "منوی اصلی"),
+                BotCommand("pv", "پنل پیوی"),
+                BotCommand("role", "نقش من"),
+                BotCommand("panel", "پنل"),
+                BotCommand("stats", "آمار"),
+                BotCommand("commands", "دستورات"),
+            ])
+        except Exception:
+            logging.exception("Canonical Telegram command menu registration failed")
+
+    app._register_telegram_commands = _register_menu
     app._canonical_text_commands_installed = True
     logging.info("CANONICAL TEXT COMMAND AUTHORITY installed: single registry")
     return True
