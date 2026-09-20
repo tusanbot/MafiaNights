@@ -9,6 +9,64 @@ from .base import DatabaseRepository
 
 
 class KnowledgeRepository(DatabaseRepository):
+    @staticmethod
+    def ensure_schema() -> None:
+        """Create the KB tables on legacy production databases that predate the KB migration."""
+        with KnowledgeRepository().SessionLocal() as session:
+            session.execute(text("""
+                create table if not exists public.mafia_knowledge_categories (
+                    id bigserial primary key,
+                    slug text unique not null,
+                    title text not null,
+                    description text,
+                    sort_order int not null default 0,
+                    created_at timestamptz not null default now()
+                )
+            """))
+            session.execute(text("""
+                create table if not exists public.mafia_knowledge_documents (
+                    id bigserial primary key,
+                    category_id bigint references public.mafia_knowledge_categories(id) on delete set null,
+                    title text not null,
+                    slug text unique,
+                    content text not null default '',
+                    scope text not null default 'global',
+                    scenario_name text,
+                    role_name text,
+                    status text not null default 'draft',
+                    source_type text not null default 'internal',
+                    source_url text,
+                    source_title text,
+                    confidence text not null default 'unverified',
+                    is_active boolean not null default true,
+                    metadata jsonb not null default '{}'::jsonb,
+                    created_at timestamptz not null default now(),
+                    updated_at timestamptz not null default now()
+                )
+            """))
+            session.execute(text("""
+                create index if not exists idx_mafia_knowledge_scope
+                on public.mafia_knowledge_documents(scope, scenario_name, role_name)
+            """))
+            session.execute(text("""
+                create index if not exists idx_mafia_knowledge_status
+                on public.mafia_knowledge_documents(status, is_active)
+            """))
+            session.execute(text("""
+                insert into public.mafia_knowledge_categories(slug,title,sort_order)
+                values
+                  ('scenarios','سناریوها',1),
+                  ('roles','نقش‌ها',2),
+                  ('tutorials','آموزش‌ها',3),
+                  ('faq','پرسش‌های متداول',4),
+                  ('sources','منابع',5)
+                on conflict(slug) do nothing
+            """))
+            session.commit()
+
+    def _ensure_schema(self) -> None:
+        self.ensure_schema()
+
     def search(self, query: str, scenario_name: str | None = None,
                role_name: str | None = None, limit: int = 8):
         query = (query or "").strip()
