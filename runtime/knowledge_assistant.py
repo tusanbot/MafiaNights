@@ -477,13 +477,40 @@ async def answer(message: Any, app: Any, question: str) -> None:
         logging.exception("knowledge assistant: repository initialization failed")
 
     rows: list[dict[str, Any]] = []
+    explicit_role: str | None = None
+    explicit_scenario: str | None = None
+    if repo is not None:
+        explicit = await _thread_call(
+            "explicit knowledge context",
+            repo.find_explicit_context,
+            question,
+            timeout=8.0,
+        )
+        if isinstance(explicit, dict):
+            roles = [str(x).strip() for x in (explicit.get("roles") or []) if str(x).strip()]
+            scenarios = [str(x).strip() for x in (explicit.get("scenarios") or []) if str(x).strip()]
+            qnorm = question.replace("ي", "ی").replace("ك", "ک")
+            import re
+            m_role = re.search(r"(?:نقش|کاراکتر)\s+([^\s؟?]+(?:\s+[^\s؟?]+)?)", qnorm)
+            m_scenario = re.search(r"(?:سناریو|سناریوی)\s+([^\s؟?]+(?:\s+[^\s؟?]+)?)", qnorm)
+            if m_role:
+                candidate = m_role.group(1).strip()
+                explicit_role = next((r for r in roles if r in candidate or candidate in r), None)
+            if m_scenario:
+                candidate = m_scenario.group(1).strip()
+                explicit_scenario = next((s for s in scenarios if s in candidate or candidate in s), None)
+            if explicit_role is None and roles and not m_scenario:
+                explicit_role = roles[0]
+            if explicit_scenario is None and scenarios and not m_role:
+                explicit_scenario = scenarios[0]
+
     if repo is not None:
         result = await _thread_call(
             "knowledge lookup",
             repo.get_context,
             question,
-            scenario_name=scenario_name,
-            role_name=role_name,
+            scenario_name=explicit_scenario if explicit_scenario is not None else (None if explicit_role else scenario_name),
+            role_name=explicit_role if explicit_role is not None else (None if explicit_scenario else role_name),
             limit=8,
             timeout=10.0,
         )
@@ -499,16 +526,17 @@ async def answer(message: Any, app: Any, question: str) -> None:
                     "broad knowledge lookup",
                     repo.get_context,
                     broad,
-                    scenario_name=scenario_name,
-                    role_name=role_name,
+                    scenario_name=explicit_scenario if explicit_scenario is not None else (None if explicit_role else scenario_name),
+                    role_name=explicit_role if explicit_role is not None else (None if explicit_scenario else role_name),
                     limit=8,
                     timeout=8.0,
                 )
                 if isinstance(result, list):
                     rows = result
 
+    # Explicit/internal knowledge must not be diluted with unrelated web results.
     web: list[dict[str, str]] = []
-    if len(rows) < 2:
+    if not rows:
         result = await _thread_call(
             "web search",
             _web_search,
@@ -641,11 +669,20 @@ def install(app: Any) -> bool:
         state="*",
         content_types=types.ContentTypes.TEXT,
     )
+    # Expose both handlers so the real production entry can re-arm their
+    # priority after later feature installers register generic text handlers.
+    app._knowledge_assistant_handler = handler
+    app._knowledge_assistant_auto_handler = auto_handler
     registry = getattr(getattr(app.dp, "message_handlers", None), "handlers", [])
     for i, item in enumerate(list(registry)):
         callback = getattr(item, "handler", None) or getattr(item, "callback", None)
         if callback is handler:
             registry.insert(0, registry.pop(i))
+            break
+    for i, item in enumerate(list(registry)):
+        callback = getattr(item, "handler", None) or getattr(item, "callback", None)
+        if callback is auto_handler:
+            registry.insert(1 if registry else 0, registry.pop(i))
             break
     logging.info("Mafia knowledge assistant installed")
     return True
