@@ -72,6 +72,17 @@ class LobbyService:
         resolved = self.repository.get_game(game_id)
         if not resolved:
             raise ValueError("بازی پیدا نشد")
+        # In a lobby, a player removed/replaced earlier is allowed to join again.
+        # During a running game, historical removal/kick/death must never become a silent re-entry.
+        rows = self.repository.list_players(resolved["id"])
+        current = next((row for row in rows if int(row.get("player_id") or 0) == int(player_id)), None)
+        if current and str(resolved.get("status") or "") == "lobby" and str(current.get("status") or "") in {"removed", "kicked", "finished", "dead"}:
+            ok = self.repository.reactivate_player(
+                resolved["id"], int(player_id), seat=seat,
+                is_substitute=is_substitute,
+            )
+            if ok:
+                return int(current.get("id"))
         return self.repository.add_player(game_id=resolved["id"], player_id=player_id, seat=seat, status="waiting" if seat is None else "active", is_substitute=is_substitute)
 
     def leave(self, game_id: str, player_id: int) -> bool:
