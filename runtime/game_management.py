@@ -255,6 +255,12 @@ class GameManagement:
         self.app.runtime.state.games.set_player_seat(game["id"], uid, None)
         self.app.runtime.state.games.set_player_status(game["id"], uid, "removed")
         if seat is not None and str(game.get("status")) == "lobby":
+            # Pre-start removal is a lobby operation, not a death. It must not
+            # leave a resurrection marker.
+            state = self._state(game)
+            rs = dict(state.get("birthday_return_seats") or {})
+            rs.pop(str(uid), None)
+            self._save(game, birthday_return_seats=rs)
             try: self.app.runtime.lobby.promote_waiting(game["id"], int(seat))
             except Exception: pass
         await callback.message.edit_text(f"✅ {html.escape(self._name(row))} از بازی حذف شد.", parse_mode="HTML", reply_markup=self.panel(game["id"]))
@@ -404,8 +410,17 @@ class GameManagement:
 
     async def birthday(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
-        rows = [] if not game else [r for r in self._rows(game) if str(r.get("status") or "") in {"dead", "removed"} or not bool(r.get("is_alive", True))]
-        await self._pick(callback, "birthday_pick", "🎂 <b>تولد بازیکن</b>\n\nبازیکن مرده/حذف‌شده را انتخاب کنید:", rows)
+        # «تولد» is a gameplay action, never a lobby action. A player removed
+        # before the game started must not become eligible for revival.
+        started = bool(game and (game.get("started_at") or str(game.get("status") or "") in {"running", "paused"}))
+        rows = [] if not started else [
+            r for r in self._rows(game)
+            if str(r.get("status") or "") == "dead" or (
+                str(r.get("status") or "") == "removed"
+                and bool((self._state(game).get("birthday_return_seats") or {}).get(str(int(r.get("player_id") or 0))))
+            ) or not bool(r.get("is_alive", True))
+        ]
+        await self._pick(callback, "birthday_pick", "🎂 <b>تولد بازیکن</b>\n\nبازیکن مرده/حذف‌شده بازی را انتخاب کنید:", rows)
 
     async def birthday_pick(self, callback):
         p = self._parts(callback, "birthday_pick", 4)
