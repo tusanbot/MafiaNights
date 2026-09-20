@@ -270,12 +270,25 @@ async def _ai_key(message: types.Message, app: Any) -> None:
     if not secret:
         await message.reply("❌ اتصال امن پایگاه‌داده برای رمزنگاری در دسترس نیست.")
         return
+    provider = "gemini" if key.startswith("AIza") else "openai"
+    default_model = (
+        os.getenv("MAFIA_AI_MODEL")
+        if provider == "openai"
+        else "gemini-2.5-flash"
+    )
     with KnowledgeRepository().SessionLocal() as session:
         session.execute(text("""
             insert into public.mafia_ai_settings(group_id,provider,model,enabled,web_search_enabled,api_key_ciphertext,updated_at)
-            values(:gid,'openai',:model,false,true,pgp_sym_encrypt(:key,:secret),now())
-            on conflict(group_id) do update set api_key_ciphertext=pgp_sym_encrypt(:key,:secret), updated_at=now()
-        """), {"gid": gid, "model": os.getenv("MAFIA_AI_MODEL") or None, "key": key, "secret": secret})
+            values(:gid,:provider,:model,false,true,pgp_sym_encrypt(:key,:secret),now())
+            on conflict(group_id) do update set
+                provider=:provider,
+                model=:model,
+                api_key_ciphertext=pgp_sym_encrypt(:key,:secret),
+                updated_at=now()
+        """), {
+            "gid": gid, "provider": provider, "model": default_model,
+            "key": key, "secret": secret
+        })
         session.commit()
     try:
         await message.delete()
