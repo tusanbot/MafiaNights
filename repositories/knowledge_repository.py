@@ -136,9 +136,16 @@ class KnowledgeRepository(DatabaseRepository):
                   and (:role is null or d.scope = 'global'
                        or d.role_name = :role)
                 order by
-                  case when d.scope='role' and :role is not null and d.role_name=:role then 0
-                       when d.scope='scenario' and :scenario is not null and d.scenario_name=:scenario then 1
-                       when d.scope='global' then 2 else 3 end,
+                  case
+                    when d.source_type like '%internal%' and d.scope='role'
+                         and :role is not null and d.role_name=:role then 0
+                    when d.source_type like '%internal%' and d.scope='scenario'
+                         and :scenario is not null and d.scenario_name=:scenario then 1
+                    when d.source_type like '%internal%' and d.scope='global' then 2
+                    when d.scope='role' and :role is not null and d.role_name=:role then 3
+                    when d.scope='scenario' and :scenario is not null and d.scenario_name=:scenario then 4
+                    else 5
+                  end,
                   d.updated_at desc
                 limit :limit
             """), {
