@@ -67,7 +67,31 @@ def _web_search(query: str, limit: int = 4) -> list[dict[str, str]]:
     return results
 
 
+def _ai_config(app: Any, message: Any) -> tuple[bool, str | None]:
+    try:
+        gid = int(message.chat.id)
+        with KnowledgeRepository().SessionLocal() as session:
+            from sqlalchemy import text
+            row = session.execute(
+                text("""select enabled,
+                               case when api_key_ciphertext is null then null
+                                    else pgp_sym_decrypt(api_key_ciphertext, :secret)
+                               end as api_key
+                        from public.mafia_ai_settings where group_id=:gid"""),
+                {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
+            ).mappings().first()
+        if not row:
+            return False, os.getenv("MAFIA_AI_API_KEY")
+        return bool(row["enabled"]), (str(row["api_key"]) if row["api_key"] else os.getenv("MAFIA_AI_API_KEY"))
+    except Exception:
+        logging.exception("knowledge assistant: AI config lookup failed")
+        return False, os.getenv("MAFIA_AI_API_KEY")
+
+
 def _ai_enabled(app: Any, message: Any) -> bool:
+    return _ai_config(app, message)[0]
+
+
     try:
         gid = int(message.chat.id)
         with KnowledgeRepository().SessionLocal() as session:
@@ -81,8 +105,8 @@ def _ai_enabled(app: Any, message: Any) -> bool:
         return False
 
 
-def _call_ai(prompt: str, context: list[dict[str, Any]], web: list[dict[str, str]]) -> str | None:
-    api_key = os.getenv("MAFIA_AI_API_KEY")
+def _call_ai(prompt: str, context: list[dict[str, Any]], web: list[dict[str, str]], api_key: str | None = None) -> str | None:
+    api_key = api_key or os.getenv("MAFIA_AI_API_KEY")
     if not api_key:
         return None
     model = os.getenv("MAFIA_AI_MODEL", "gpt-5.6-mini")
@@ -136,7 +160,7 @@ async def answer(message: Any, app: Any, question: str) -> None:
     web = [] if len(rows) >= 2 else _web_search(
         (f"مافیا {scenario_name or ''} {role_name or ''} {question}").strip()
     )
-    response = _call_ai(question, rows, web) if _ai_enabled(app, message) else None
+    ai_enabled, api_key = _ai_config(app, message)\n    response = _call_ai(question, rows, web, api_key) if ai_enabled else None
 
     if response is None:
         if rows:
