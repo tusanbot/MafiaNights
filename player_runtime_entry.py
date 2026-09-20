@@ -133,6 +133,8 @@ from runtime.profile_db_compat import install as install_profile_db_compat
 install_profile_db_compat(profile_enhancements)
 from runtime.progress_schema_compat import install as install_progress_schema_compat
 install_progress_schema_compat(main)
+from runtime.knowledge_assistant import install as install_knowledge_assistant
+install_knowledge_assistant(main)
 from commands import register_commands as register_text_commands
 register_text_commands(main)
 from runtime.telegram_commands import install as install_telegram_commands
