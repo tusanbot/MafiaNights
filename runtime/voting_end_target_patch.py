@@ -24,6 +24,15 @@ def install(main):
         target_name = await _resolve_name(app, target, rows.get(target, {}).get("seat"))
         voter_text = voting_runtime._voter_lines(app, v, target)
 
+        # Advance the durable cursor BEFORE Telegram calls. If Vercel/Telegram
+        # interrupts the request, the scheduler tick can resume safely.
+        last = idx + 1 >= len(targets)
+        v["target_index"] = idx + 1
+        v["started_at"] = None
+        v["deadline"] = None
+        v["phase"] = "round_finished_pending" if last else "next_target_pending"
+        voting_runtime._put(app, v)
+
         message_id = v.get("vote_message_id")
         if message_id:
             try:
@@ -35,21 +44,20 @@ def install(main):
             except Exception:
                 pass
 
-        await app.bot.send_message(
-            voting_runtime._gid(app),
-            f"📊 <b>نتیجه رأی‌گیری برای {html.escape(target_name)}</b>\n\n"
-            f"🗳 تعداد رأی: <b>{len(voted)}</b>\n"
-            f"👥 رأی‌دهندگان:\n{voter_text}",
-            parse_mode="HTML",
-        )
+        try:
+            await app.bot.send_message(
+                voting_runtime._gid(app),
+                f"📊 <b>نتیجه رأی‌گیری برای {html.escape(target_name)}</b>\n\n"
+                f"🗳 تعداد رأی: <b>{len(voted)}</b>\n"
+                f"👥 رأی‌دهندگان:\n{voter_text}",
+                parse_mode="HTML",
+            )
+        except Exception:
+            # The persistent cursor above is already advanced; tick will finish
+            # the next state on the next scheduler invocation.
+            pass
 
-        v["target_index"] = idx + 1
-        v["started_at"] = None
-        v["deadline"] = None
-        v["phase"] = "round_finished" if idx + 1 >= len(targets) else "next_target"
-        voting_runtime._put(app, v)
-
-        if idx + 1 >= len(targets):
+        if last:
             await voting_runtime._finish_round(app)
         else:
             await voting_runtime._start_target(app)
