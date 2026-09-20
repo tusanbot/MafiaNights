@@ -32,6 +32,35 @@ class AssistantAdminPanel:
         KnowledgeRepository.ensure_schema()
         repo=KnowledgeRepository()
         with repo.SessionLocal() as session:
+            session.execute(text("""
+                create extension if not exists pgcrypto
+            """))
+            session.execute(text("""
+                create table if not exists public.mafia_ai_settings (
+                    group_id bigint primary key,
+                    provider text not null default 'openai',
+                    model text,
+                    api_key_ciphertext bytea,
+                    web_search_enabled boolean not null default true,
+                    enabled boolean not null default false,
+                    updated_at timestamptz not null default now(),
+                    private_enabled boolean not null default false,
+                    private_provider text not null default 'gemini',
+                    private_model text,
+                    private_api_key_ciphertext bytea,
+                    private_web_search_enabled boolean not null default true,
+                    private_updated_at timestamptz
+                )
+            """))
+            session.execute(text("""
+                alter table public.mafia_ai_settings
+                  add column if not exists private_enabled boolean not null default false,
+                  add column if not exists private_provider text not null default 'gemini',
+                  add column if not exists private_model text,
+                  add column if not exists private_api_key_ciphertext bytea,
+                  add column if not exists private_web_search_enabled boolean not null default true,
+                  add column if not exists private_updated_at timestamptz
+            """))
             session.execute(text("""create table if not exists public.mafia_ai_user_preferences(
                 user_id bigint primary key, group_id bigint not null, updated_at timestamptz not null default now()
             )"""))
@@ -322,7 +351,6 @@ class AssistantAdminPanel:
                 select enabled,provider,model,web_search_enabled,
                        private_enabled,private_provider,private_model,
                        private_web_search_enabled,
-                       (api_key_ciphertext is not null) as has_group_key,
                        (api_key_ciphertext is not null) as has_group_key
                 from public.mafia_ai_settings where group_id=:gid
             """), {"gid": self._selected_group_id(user_id)}).mappings().first()
@@ -402,7 +430,7 @@ class AssistantAdminPanel:
     async def pv(self, callback):
         if not await self._guard(callback):
             await callback.answer(); return
-        row = self._settings_row()
+        row = self._settings_row(callback.from_user.id)
         enabled = bool(row and row["private_enabled"])
         has_key = bool(row and row["has_group_key"])
         kb = InlineKeyboardMarkup(row_width=1)
@@ -426,7 +454,7 @@ class AssistantAdminPanel:
                 insert into public.mafia_ai_settings(group_id,private_enabled,private_web_search_enabled,updated_at)
                 values(:gid,true,true,now())
                 on conflict(group_id) do update set private_enabled=not public.mafia_ai_settings.private_enabled,updated_at=now()
-            """), {"gid": self._group_id()})
+            """), {"gid": self._selected_group_id(callback.from_user.id)})
             session.commit()
         await callback.answer("وضعیت AI پیوی تغییر کرد.")
         await self.pv(callback)
