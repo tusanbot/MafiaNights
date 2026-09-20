@@ -92,24 +92,26 @@ def _ai_config(app: Any, message: Any) -> tuple[bool, str | None, str, str | Non
         if not row:
             # The assistant is also available in private chat. AI settings are
             # registered by the moderator in the game group, so a private-chat
-            # message has a different Telegram chat_id. If there is no setting
-            # for the current chat, use the most recently updated enabled
-            # setting. This keeps the PV assistant connected to the configured
-            # group AI instead of silently falling back to "API inactive".
-            row = session.execute(
-                text(
-                    """select enabled, provider, model,
-                              case when api_key_ciphertext is null then null
-                                   else pgp_sym_decrypt(api_key_ciphertext, :secret)
-                              end as api_key
-                       from public.mafia_ai_settings
-                       where enabled = true
-                         and api_key_ciphertext is not null
-                       order by updated_at desc
-                       limit 1"""
-                ),
-                {"secret": os.getenv("DATABASE_URL") or ""},
-            ).mappings().first()
+            # message has a different Telegram chat_id. Query the fallback
+            # setting while the DB session is still open. The previous version
+            # queried after leaving the SessionLocal context, which raised
+            # "session is closed" and made every PV request look like AI was
+            # disabled.
+            with KnowledgeRepository().SessionLocal() as fallback_session:
+                row = fallback_session.execute(
+                    text(
+                        """select enabled, provider, model,
+                                  case when api_key_ciphertext is null then null
+                                       else pgp_sym_decrypt(api_key_ciphertext, :secret)
+                                  end as api_key
+                           from public.mafia_ai_settings
+                           where enabled = true
+                             and api_key_ciphertext is not null
+                           order by updated_at desc
+                           limit 1"""
+                    ),
+                    {"secret": os.getenv("DATABASE_URL") or ""},
+                ).mappings().first()
         if not row:
             key = os.getenv("MAFIA_AI_API_KEY")
             provider = "gemini" if str(key or "").startswith("AIza") else "openai"
