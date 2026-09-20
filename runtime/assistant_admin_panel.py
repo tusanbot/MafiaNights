@@ -48,7 +48,7 @@ class AssistantAdminPanel:
         if group_raw:
             try:
                 member = await self.app.bot.get_chat_member(int(group_raw), int(user_id))
-                return str(getattr(member, "status", "")) == "creator"
+                return str(getattr(member, "status", "")) in {"creator", "administrator"}
             except Exception:
                 logging.exception("assistant admin: creator authorization check failed")
         return False
@@ -58,7 +58,7 @@ class AssistantAdminPanel:
         if await self._authorized(uid):
             return True
         target = getattr(message_or_callback, "message", message_or_callback)
-        await target.answer("⛔ این پنل فقط برای مدیر اصلی ربات فعال است.")
+        await target.answer("⛔ این پنل فقط برای مدیر/گرداننده مجاز گروه فعال است.")
         return False
 
     def _repo(self):
@@ -74,6 +74,7 @@ class AssistantAdminPanel:
             InlineKeyboardButton("🤖 تنظیمات AI", callback_data="aip:ai"),
             InlineKeyboardButton("🔐 کلید AI پیوی", callback_data="aip:pv"),
             InlineKeyboardButton("📊 وضعیت", callback_data="aip:status"),
+            InlineKeyboardButton("❓ راهنمای افزودن مطلب", callback_data="aip:guide"),
         )
         return kb
 
@@ -187,6 +188,26 @@ class AssistantAdminPanel:
             session.commit()
         await callback.answer("🗑 مطلب غیرفعال شد.")
         await self.kb(callback)
+
+    async def guide(self, callback: types.CallbackQuery):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        kb = InlineKeyboardMarkup(row_width=1)
+        kb.add(InlineKeyboardButton("➕ شروع افزودن مطلب", callback_data="aip:add"))
+        kb.add(InlineKeyboardButton("⬅️ پنل دستیار", callback_data="aip:menu"))
+        await callback.message.edit_text(
+            "❓ <b>راهنمای افزودن مطلب</b>\n\n"
+            "• <b>عمومی:</b> اطلاعات و قوانین مشترک\n"
+            "• <b>سناریو:</b> مطلب مخصوص یک سناریو\n"
+            "• <b>نقش:</b> مطلب مربوط به یک نقش\n"
+            "• <b>آموزش:</b> راهنمای انجام یک کار\n"
+            "• <b>FAQ:</b> پرسش و پاسخ پرتکرار\n\n"
+            "مراحل: ۱) عنوان ۲) متن کامل ۳) سناریو/نقش در صورت نیاز ۴) منبع.\n"
+            "اگر منبع ندارید فقط «ندارد» بنویسید.\n"
+            "مطلب ابتدا پیش‌نویس است و برای استفاده باید منتشر شود.",
+            reply_markup=kb, parse_mode="HTML"
+        )
+        await callback.answer()
 
     async def add_start(self, callback: types.CallbackQuery, state: FSMContext):
         if not await self._guard(callback):
@@ -439,7 +460,7 @@ class AssistantAdminPanel:
         for action, fn in {
             "menu": self.menu, "kb": self.kb, "doc": self.doc,
             "publish": self.publish, "disable": self.disable,
-            "add": self.add_start, "scope": self.scope,
+            "add": self.add_start, "guide": self.guide, "scope": self.scope,
             "status": self.status, "ai": self.ai, "toggle_group": self.toggle_group,
             "pv": self.pv, "pvkey": self.pvkey, "pvtoggle": self.pv_toggle,
         }.items():
