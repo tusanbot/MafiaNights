@@ -500,22 +500,19 @@ class AssistantAdminPanel:
             )
 
         # Put all assistant callbacks ahead of generic/legacy callback routers.
-        # Otherwise an older catch-all handler can consume aip:* before these
-        # handlers get a chance to run.
         try:
             handlers = getattr(dp.callback_query_handlers, "handlers", [])
-            prefixes = tuple(f"aip:{a}" for a in {
-                "select","menu","kb","doc","publish","disable","add","guide",
-                "scope","status","ai","toggle_group","pv","groupkey","pvtoggle"
-            })
+            names = {
+                "select_group", "menu", "kb", "doc", "publish", "disable",
+                "add_start", "guide", "scope", "status", "ai", "toggle_group",
+                "pv", "group_key", "pv_toggle",
+            }
             mine, rest = [], []
             for item in list(handlers):
                 cb = getattr(item, "callback", None) or getattr(item, "handler", None)
-                if any(str(getattr(cb, "__name__", "")).startswith(x.replace("aip:", "")) for x in ()):
-                    pass
-                filters = getattr(item, "filters", []) or []
-                text_filters = " ".join(str(x) for x in filters)
-                if "aip:" in text_filters:
+                owner = getattr(cb, "__self__", None)
+                name = getattr(cb, "__name__", "")
+                if owner is self and name in names:
                     mine.append(item)
                 else:
                     rest.append(item)
@@ -523,6 +520,7 @@ class AssistantAdminPanel:
                 handlers[:] = mine + rest
         except Exception:
             logging.exception("assistant admin: failed to prioritize callback handlers")
+
 
 
 def install(app: Any):
