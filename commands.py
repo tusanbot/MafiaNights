@@ -20,7 +20,54 @@ CommandHandler = Callable[[types.Message], Awaitable[None]]
 # commands are owned by runtime.command_surface_v2 and are listed below in the
 # shared command reference.
 COMMANDS = {
+    # Private / personal
+    "pv": {"پیوی", "پی وی", "/pv"},
+    "role": {"نقش من", "/role", "/myrole"},
+    "panel": {"پنل", "/panel"},
+    # Group / moderator
+    "start_round": {"شروع دور", "/start_round"},
+    "end_game": {"اتمام بازی", "پایان بازی", "/end"},
+    "night": {"فاز شب", "شروع فاز شب", "/night"},
+    "day": {"فاز روز", "شروع روز", "شروع فاز روز", "/day"},
+    "warning": {"تذکر", "/warning"},
+    "warning_remove": {"حذف تذکر", "تذکر منفی", "/warning_remove"},
+    "kick": {"کیک", "/kick"},
+    "mute": {"سکوت", "/mute"},
+    "unmute": {"حذف سکوت", "/unmute"},
+    "extra": {"ترن اضافه", "/extra"},
+    "birthday": {"تولد", "/birthday"},
+    "remove": {"حذف بازیکن", "/remove"},
+    "cancel_game": {"لغو بازی", "/لغو_بازی", "/cancel_game", "/cancelgame"},
+    "challenge_limited": {"چالش محدود", "/challenge_limited"},
+    "challenge_free": {"چالش آزاد", "/challenge_free"},
+    "chatlock": {"قفل چت", "/chatlock"},
+    "chatunlock": {"بازکردن چت", "باز کردن چت", "/chatunlock"},
+    "nightlock": {"قفل شب", "/nightlock"},
+    "nightunlock": {"بازکردن شب", "باز کردن شب", "/nightunlock"},
+    "turnlock": {"قفل نوبت", "/turnlock"},
+    "turnunlock": {"بازکردن نوبت", "باز کردن نوبت", "/turnunlock"},
+    # Group manager
+    "newgame": {"بازی جدید", "/newgame"},
+    # Public group
+    "sub": {"جایگزین", "/sub"},
+    "attendance": {"حاضری", "/attendance"},
+    "management": {"مدیریت", "مدیریت بازی", "/management"},
+    "join": {"ورود", "/join"},
+    "leave": {"خروج", "/leave"},
+    "challenge": {"چالش", "/challenge"},
+    "reserve": {"رزرو", "/reserve"},
+    "unreserve": {"لغو رزرو", "/unreserve"},
+    "seat": {"صندلی", "/seat"},
+    # Turn owner / moderator
+    "next": {"نکست", "/next"},
+    # Existing non-game command surface
     "commands": {"commands", "دستورات", "دستورها"},
+    "help": {"راهنما", "کمک", "/help"},
+    "profile": {"پروفایل", "profile", "/profile"},
+    "ranking": {"رتبه", "رتبه بندی", "رتبه‌بندی", "ranking", "rank", "/rank"},
+    "stats": {"آمار", "امار", "آمار من", "امار من", "stats", "statistics", "امتیاز", "امتیاز من", "/stats"},
+    "seats": {"لیست صندلی", "لیست صندلی‌ها", "صندلی ها", "صندلی‌ها"},
+    "players": {"لیست بازیکنان", "بازیکنان"},
     "ask": {"ask", "mafia", "سوال", "سؤال"},
     "ai_on": {"ai_on", "فعال کردن هوش مصنوعی"},
     "ai_off": {"ai_off", "غیرفعال کردن هوش مصنوعی"},
@@ -30,19 +77,11 @@ COMMANDS = {
     "kb_list": {"kb_list", "لیست دانش"},
     "kb_add": {"kb_add", "افزودن دانش"},
     "kb_publish": {"kb_publish", "انتشار دانش"},
-    "newgame": {"newgame", "بازی جدید"},
-    "join": {"join", "ورود"},
-    "leave": {"leave", "خروج"},
-    "chatlock": {"chatlock", "قفل چت"},
-    "chatunlock": {"chatunlock", "بازکردن چت", "باز کردن چت"},
-    "nightlock": {"nightlock", "قفل شب"},
-    "nightunlock": {"nightunlock", "بازکردن شب", "باز کردن شب"},
-    "turnlock": {"turnlock", "قفل نوبت"},
-    "turnunlock": {"turnunlock", "بازکردن نوبت", "باز کردن نوبت"},
     "tag_all": {"tagall", "تگ همه", "tag all"},
     "tag_admins": {"tagadmins", "تگ ادمین", "tag admins"},
     "tag_list": {"taglist", "تگ لیست", "tag list"},
 }
+
 
 
 def normalize_text(value: str | None) -> str:
@@ -106,68 +145,72 @@ def _mention(uid: int, name: str) -> str:
 
 
 COMMAND_REFERENCE = (
-    ("🎮 بازی و لابی", (
-        ("/newgame", "بازی جدید"),
-        ("/join", "ورود"),
-        ("/leave", "خروج"),
-        ("/sub", "افزودن بازیکن جایگزین"),
-        ("/sub_list", "لیست جایگزین‌ها"),
-        ("/sub_del", "حذف جایگزین"),
+    ("🔒 پیوی و شخصی", (
+        ("پیوی", "پنل و امکانات پیوی"),
+        ("نقش من", "نمایش نقش فعلی در پیوی"),
+        ("پنل", "پنل متناسب با چت و سطح دسترسی"),
     )),
-    ("🛠 مدیریت بازی", (
-        ("/stats", "آمار"),
-        ("/vote", "رأی‌گیری"),
-        ("/end", "اتمام بازی"),
-        ("/night", "فاز شب"),
-        ("/day", "شروع روز"),
-        ("/chief", "تغییر سردست"),
-        ("/remove", "حذف بازیکن"),
-        ("/start_round", "شروع دور"),
-        ("/next", "نکست"),
-        ("/next_settings", "تنظیم نکست"),
-        ("/challenge_settings", "تنظیم چالش"),
-        ("/mute", "سکوت"),
-        ("/unmute", "حذف سکوت"),
-        ("/extra", "ترن اضافه"),
+    ("🎩 گروه — گرداننده", (
+        ("شروع دور", "شروع دور"),
+        ("اتمام بازی", "اتمام دستی بازی"),
+        ("فاز شب", "انتقال به فاز شب"),
+        ("فاز روز", "انتقال به فاز روز"),
+        ("تذکر", "ثبت تذکر با ریپلای"),
+        ("حذف تذکر", "کاهش یک تذکر با ریپلای"),
+        ("کیک", "حذف اجباری بازیکن با ریپلای"),
+        ("سکوت", "ساکت‌کردن بازیکن با ریپلای"),
+        ("حذف سکوت", "رفع سکوت با ریپلای"),
+        ("ترن اضافه", "ثبت ترن اضافه با ریپلای"),
+        ("تولد", "بازگردانی بازیکن حذف/مرده با ریپلای"),
+        ("حذف بازیکن", "حذف بازیکن با ریپلای"),
+        ("لغو بازی", "لغو بازی فعلی"),
+        ("چالش محدود", "فعال‌سازی محدودیت چالش"),
+        ("چالش آزاد", "آزادسازی چالش"),
+        ("قفل چت", "قفل پیام برای غیر بازیکنان"),
+        ("قفل شب", "فقط گرداننده اجازه صحبت دارد"),
+        ("قفل نوبت", "فقط صاحب نوبت یا گرداننده؛ دیگران فقط نماد/ایموجی"),
     )),
-    ("🔒 امنیت و قفل‌ها", (
-        ("/chatlock", "قفل چت"),
-        ("/chatunlock", "باز کردن چت"),
-        ("/nightlock", "قفل شب"),
-        ("/nightunlock", "باز کردن شب"),
-        ("/turnlock", "قفل نوبت"),
-        ("/turnunlock", "باز کردن نوبت"),
+    ("🛡 گروه — مدیر", (
+        ("بازی جدید", "ایجاد بازی جدید"),
     )),
-    ("👤 نام مستعار", (
-        ("/nickname_set", "تنظیم مستعار"),
-        ("/nickname_get", "نام مستعار"),
-        ("/nickname_del", "حذف مستعار"),
-        ("/nickname_list", "لیست مستعار"),
+    ("👥 گروه — عمومی", (
+        ("جایگزین", "افزودن بازیکن به لیست جایگزین با ریپلای اختیاری"),
+        ("حاضری", "نمایش وضعیت آمادگی"),
+        ("مدیریت", "بازکردن پنل مدیریت"),
+        ("ورود", "ورود به لابی"),
+        ("خروج", "خروج از لابی"),
+        ("چالش", "درخواست چالش با ریپلای"),
+        ("رزرو", "رزرو پس از تکمیل ظرفیت"),
+        ("لغو رزرو", "لغو رزرو"),
+        ("صندلی عدد", "نمونه: صندلی 5"),
     )),
-    ("📣 تگ و مدیران", (
-        ("/tagall", "تگ همه بازیکنان"),
-        ("/tagadmins", "تگ مدیران"),
-        ("/taglist", "تگ لیست"),
-    )),
-    ("🤖 دستیار", (
-        ("/ask", "پرسش از دستیار مافیا"),
-        ("/mafia", "پرسش از دستیار مافیا"),
-        ("/ai_on", "فعال‌سازی هوش مصنوعی"),
-        ("/ai_off", "غیرفعال‌سازی هوش مصنوعی"),
-        ("/ai_status", "وضعیت هوش مصنوعی"),
-        ("/ai_key", "ثبت امن API Key"),
-        ("/ai_panel", "پنل مدیریت دستیار (پیوی مدیر اصلی)"),
-        ("/kb_list", "لیست پایگاه دانش"),
-        ("/kb_add", "افزودن مطلب به پایگاه دانش"),
-        ("/kb_publish", "انتشار مطلب پایگاه دانش"),
-        ("/ask", "پرسش از دستیار مافیا"),
-        ("/mafia", "پرسش از دستیار مافیا"),
+    ("🎯 صاحب ترن یا گرداننده", (
+        ("نکست", "رفتن به نوبت بعدی"),
     )),
     ("ℹ️ عمومی", (
         ("/start", "نمایش منوی اصلی"),
         ("/commands", "نمایش همه دستورات متنی"),
+        ("راهنما / کمک", "راهنمای دستورات"),
+        ("پروفایل", "پروفایل"),
+        ("رتبه", "رتبه‌بندی"),
+        ("آمار", "آمار"),
+        ("لیست بازیکنان", "لیست بازیکنان"),
+        ("لیست صندلی", "لیست صندلی‌ها"),
+    )),
+    ("🤖 دستیار", (
+        ("/ask", "پرسش از دستیار"),
+        ("/mafia", "پرسش از دستیار"),
+        ("/ai_panel", "پنل دستیار در پیوی مدیر اصلی"),
+        ("/ai_on", "فعال‌سازی AI"),
+        ("/ai_off", "غیرفعال‌سازی AI"),
+        ("/ai_status", "وضعیت AI"),
+        ("/ai_key", "ثبت امن API Key"),
+        ("/kb_list", "لیست پایگاه دانش"),
+        ("/kb_add", "افزودن مطلب"),
+        ("/kb_publish", "انتشار مطلب"),
     )),
 )
+
 
 
 async def cmd_commands(message: types.Message, app: Any) -> None:
@@ -490,34 +533,395 @@ async def _set_lock(message: types.Message, app: Any, key: str, enabled: bool, l
     await message.reply(f"✅ {label}: <b>{state}</b>", parse_mode="HTML")
 
 
+def _game(app, message):
+    if message.chat.type not in {"group", "supergroup"}:
+        return None
+    return app.runtime.state.active_game(int(message.chat.id))
+
+
+async def _manager(app, message, game=None) -> bool:
+    game = game or _game(app, message)
+    if game and int(message.from_user.id) == int(game.get("moderator_id") or 0):
+        return True
+    if message.chat.type not in {"group", "supergroup"}:
+        return False
+    try:
+        return (await app.bot.get_chat_member(message.chat.id, int(message.from_user.id))).status in {"creator", "administrator"}
+    except Exception:
+        return False
+
+
+async def _reply_target(message):
+    reply = getattr(message, "reply_to_message", None)
+    return getattr(reply, "from_user", None)
+
+
+async def _simple_phase(message, app, phase: str):
+    game = _game(app, message)
+    if not game or not await _manager(app, message, game):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند فاز را تغییر دهد.")
+        return
+    state = dict(game.get("state") or {})
+    state["phase"] = phase
+    state["phase_changed_by"] = int(message.from_user.id)
+    app.runtime.state.games.update_game(game["id"], state=state)
+    title = "🌙 فاز شب" if phase == "night" else "☀️ فاز روز"
+    await message.reply(f"✅ <b>{title}</b> فعال شد.", parse_mode="HTML")
+
+
+async def _start_round_text(message, app):
+    game = _game(app, message)
+    if not game or not await _manager(app, message, game):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند دور را شروع کند.")
+        return
+    handler = getattr(app, "_stable_round_start_handler", None)
+    if handler is None:
+        # The stable engine keeps the callback owner internal; reproduce its
+        # canonical entry state if the callback reference is unavailable.
+        state = dict(game.get("state") or {})
+        order = [int(r["seat"]) for r in app.runtime.state.games.list_players(game["id"])
+                 if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed","dead","finished","kicked"}]
+        if not order:
+            await message.reply("⚠️ بازیکن فعالی برای شروع دور وجود ندارد.")
+            return
+        app.turn_order = order
+        app.current_turn_index = 0
+        app._stable_day_active = True
+        app._stable_day_ended = False
+        state["turn_order"] = order
+        app.runtime.state.games.update_game(game["id"], state=state, current_turn_index=0)
+        await message.reply("✅ دور شروع شد.")
+        return
+    cb = SimpleNamespace(message=message, from_user=message.from_user, data="start_round", answer=message.answer)
+    await handler(cb)
+
+
+async def _next_text(message, app):
+    game = _game(app, message)
+    if not game:
+        await message.reply("❌ بازی فعالی وجود ندارد.")
+        return
+    order = list(getattr(app, "turn_order", []) or [])
+    if not order:
+        order = [int(r["seat"]) for r in app.runtime.state.games.list_players(game["id"])
+                 if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed","dead","finished","kicked"}]
+    if not order:
+        await message.reply("⚠️ نوبتی برای ادامه وجود ندارد.")
+        return
+    idx = int(getattr(app, "current_turn_index", 0) or 0)
+    seat = int(order[idx % len(order)])
+    handler = getattr(app, "_stable_next_handler", None)
+    if handler is None:
+        await message.reply("⚠️ موتور نوبت در دسترس نیست.")
+        return
+    cb = SimpleNamespace(message=message, from_user=message.from_user, data=f"next_{seat}", answer=message.answer)
+    await handler(cb)
+
+
+async def _end_game_text(message, app):
+    game = _game(app, message)
+    if not game or not await _manager(app, message, game):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند بازی را تمام کند.")
+        return
+    if str(game.get("status") or "") not in {"running","paused","turn"}:
+        await message.reply("❌ فقط بازی در حال اجرا قابل اتمام است.")
+        return
+    from runtime.game_end import _summary_text, _main_markup
+    state = dict(game.get("state") or {})
+    await message.reply(_summary_text(game), parse_mode="HTML",
+                        reply_markup=_main_markup(int(game["id"]), state.get("game_result"),
+                                                  bool((state.get("game_events") or {}).get("enabled"))))
+
+
+async def _cancel_game_text(message, app):
+    game = _game(app, message)
+    if not game or not await _manager(app, message, game):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند بازی را لغو کند.")
+        return
+    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+    state = dict(game.get("state") or {})
+    state.update({"cancelled": True, "cancel_reason": "text_command", "cancelled_at": now.isoformat()})
+    ok = app.runtime.state.games.update_game(game["id"], status="cancelled", event_number=0, state=state, finished_at=now)
+    if ok:
+        try:
+            app.runtime.state.games.clear_game_players(game["id"])
+        except Exception:
+            pass
+        await message.reply("🚫 <b>بازی لغو شد.</b>", parse_mode="HTML")
+    else:
+        await message.reply("❌ لغو بازی انجام نشد.")
+
+
+async def _player_state_action(message, app, action: str):
+    game = _game(app, message)
+    if not game or not await _manager(app, message, game):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه.")
+        return
+    target = await _reply_target(message)
+    if not target:
+        await message.reply("❗ این دستور باید با ریپلای روی بازیکن استفاده شود.")
+        return
+    rows = app.runtime.state.games.list_players(game["id"])
+    row = next((r for r in rows if int(r.get("player_id") or 0) == int(target.id)), None)
+    if not row:
+        await message.reply("❌ بازیکن پیدا نشد.")
+        return
+    state = dict(game.get("state") or {})
+    uid = int(target.id)
+    name = str(row.get("nickname") or row.get("first_name") or target.full_name or uid)
+    if action == "warning":
+        values = dict(state.get("warnings") or {}); values[str(uid)] = int(values.get(str(uid), 0)) + 1; state["warnings"] = values
+        text = f"⚠️ تذکر ثبت شد: <b>{html.escape(name)}</b> — {values[str(uid)]}"
+    elif action == "warning_remove":
+        values = dict(state.get("warnings") or {}); values[str(uid)] = max(0, int(values.get(str(uid), 0)) - 1)
+        if not values[str(uid)]: values.pop(str(uid), None)
+        state["warnings"] = values; text = f"🗑 یک تذکر از {html.escape(name)} حذف شد."
+    elif action == "kick":
+        app.runtime.state.games.set_player_seat(game["id"], uid, None)
+        app.runtime.state.games.set_player_status(game["id"], uid, "kicked")
+        alive = getattr(app.runtime.state.games, "set_player_alive", None)
+        if alive: alive(game["id"], uid, False)
+        text = f"🦵 <b>{html.escape(name)}</b> از بازی حذف شد."
+    elif action == "birthday":
+        app.runtime.state.games.set_player_status(game["id"], uid, "active")
+        alive = getattr(app.runtime.state.games, "set_player_alive", None)
+        if alive: alive(game["id"], uid, True)
+        text = f"🎂 <b>{html.escape(name)}</b> بازگردانده شد."
+    elif action == "remove":
+        app.runtime.state.games.set_player_seat(game["id"], uid, None)
+        app.runtime.state.games.set_player_status(game["id"], uid, "removed")
+        text = f"🗑 <b>{html.escape(name)}</b> از بازی حذف شد."
+    elif action == "extra":
+        seats = set(int(x) for x in (getattr(app, "_gm_extra_next_round", set()) or set()))
+        if row.get("seat") is None: await message.reply("❌ بازیکن صندلی فعال ندارد."); return
+        seats.add(int(row["seat"])); app._gm_extra_next_round = seats; state["extra_turn_seats"] = sorted(seats)
+        text = f"➕ ترن اضافه برای <b>{html.escape(name)}</b> ثبت شد."
+    elif action in {"mute","unmute"}:
+        seats = set(int(x) for x in (getattr(app, "_gm_muted_next_round", set()) or set()))
+        if row.get("seat") is None: await message.reply("❌ بازیکن صندلی فعال ندارد."); return
+        seat = int(row["seat"])
+        if action == "mute":
+            seats.add(seat); app._gm_muted_active = set(getattr(app, "_gm_muted_active", set()) or set()) | {seat}
+            text = f"🔇 <b>{html.escape(name)}</b> ساکت شد."
+        else:
+            seats.discard(seat); app._gm_muted_active = set(getattr(app, "_gm_muted_active", set()) or set()); app._gm_muted_active.discard(seat)
+            text = f"🔊 سکوت <b>{html.escape(name)}</b> حذف شد."
+        app._gm_muted_next_round = seats; state["muted_next_round_seats"] = sorted(seats)
+    else:
+        return
+    app.runtime.state.games.update_game(game["id"], state=state)
+    await message.reply(text, parse_mode="HTML")
+
+
+async def _challenge_toggle_text(message, app, enabled: bool):
+    game = _game(app, message)
+    if not game or not await _manager(app, message, game):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه.")
+        return
+    if not hasattr(app, "challenge_enabled"): app.challenge_enabled = {}
+    app.challenge_enabled[int(message.chat.id)] = bool(enabled)
+    state = dict(game.get("state") or {}); state["challenge_enabled"] = bool(enabled)
+    app.runtime.state.games.update_game(game["id"], state=state)
+    await message.reply("⚔️ چالش آزاد شد." if enabled else "⚔️ چالش محدود شد.")
+
+
+async def _attendance_text(message, app):
+    game = _game(app, message)
+    if not game or str(game.get("status") or "") != "lobby":
+        await message.reply("❌ لابی فعالی وجود ندارد."); return
+    rows = [r for r in app.runtime.state.games.list_players(game["id"])
+            if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed","dead","finished","kicked"}]
+    ready = {int(x) for x in (dict(game.get("state") or {}).get("ready_players") or [])}
+    lines = ["📢 <b>حاضری بازیکنان</b>", ""]
+    for r in sorted(rows, key=lambda x:int(x.get("seat") or 999)):
+        uid=int(r["player_id"]); name=str(r.get("nickname") or r.get("first_name") or r.get("username") or uid)
+        lines.append(f"{int(r['seat']):02d}. {'🟢' if uid in ready else '⚪'} <a href='tg://user?id={uid}'>{html.escape(name)}</a>")
+    lines.append(""); lines.append("🙋‍♂️ روی «آماده‌ام» بزنید.")
+    kb = __import__("aiogram").types.InlineKeyboardMarkup(row_width=1).add(
+        __import__("aiogram").types.InlineKeyboardButton("🙋‍♂️ آماده‌ام", callback_data=f"mgmt:{int(game['id'])}:attendance_ready")
+    )
+    await message.reply("\n".join(lines), parse_mode="HTML", reply_markup=kb)
+
+
+async def _role_text(message, app):
+    if message.chat.type not in {"private"}:
+        await message.reply("ℹ️ «نقش من» را در پیوی ربات ارسال کنید."); return
+    gid = int(getattr(app, "ALLOWED_GROUP_ID", 0) or 0)
+    game = app.runtime.state.active_game(gid) if gid else None
+    if not game:
+        await message.reply("ℹ️ بازی فعالی پیدا نشد."); return
+    rows = app.runtime.state.games.list_players(game["id"])
+    row = next((r for r in rows if int(r.get("player_id") or 0) == int(message.from_user.id)), None)
+    if not row or not row.get("role"):
+        await message.reply("ℹ️ هنوز نقشی برای شما ثبت نشده است."); return
+    await message.reply(f"🎭 <b>نقش شما</b>\n\n💺 صندلی: <b>{int(row.get('seat') or 0)}</b>\n🎭 نقش: <b>{html.escape(str(row.get('role')))}</b>", parse_mode="HTML")
+
+
+async def _pv_text(message, app):
+    if message.chat.type != "private":
+        await message.reply("ℹ️ «پیوی» را در چت خصوصی ربات ارسال کنید."); return
+    kb = __import__("aiogram").types.InlineKeyboardMarkup(row_width=2).add(
+        __import__("aiogram").types.InlineKeyboardButton("🎭 نقش من", callback_data="pv:role"),
+        __import__("aiogram").types.InlineKeyboardButton("📊 آمار", callback_data="pv:stats"),
+        __import__("aiogram").types.InlineKeyboardButton("📚 دستورات", callback_data="pv:commands"),
+    )
+    await message.reply("👤 <b>پنل پیوی Mafia Nights</b>\n\nیکی از گزینه‌ها را انتخاب کنید:", parse_mode="HTML", reply_markup=kb)
+
+
+async def _panel_text(message, app):
+    if message.chat.type == "private":
+        await _pv_text(message, app); return
+    game = _game(app, message)
+    if not game:
+        await message.reply("ℹ️ بازی فعالی وجود ندارد."); return
+    if not await _manager(app, message, game):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند پنل را باز کند."); return
+    from runtime.game_management import GameManagement
+    await message.reply("⚙️ <b>مدیریت بازی</b>", parse_mode="HTML",
+                        reply_markup=GameManagement(app).panel(int(game["id"])))
+
+
+async def _seat_text(message, app):
+    if message.chat.type not in {"group","supergroup"}:
+        await message.reply("ℹ️ این دستور فقط در گروه بازی است."); return
+    raw=(message.text or "").strip().replace("‌"," ")
+    parts=raw.split()
+    if len(parts)!=2 or not parts[1].isdigit():
+        await message.reply("❗ نمونه صحیح: <code>صندلی 5</code>", parse_mode="HTML"); return
+    game=_game(app,message)
+    if not game or str(game.get("status") or "")!="lobby":
+        await message.reply("❌ لابی فعالی وجود ندارد."); return
+    uid=int(message.from_user.id); target=int(parts[1])
+    from repositories.scenario_repository import ScenarioRepository
+    scenario=ScenarioRepository().get_by_id(int(game.get("scenario_id") or 0))
+    cap=len((scenario or {}).get("roles") or [])
+    if target<1 or target>cap:
+        await message.reply("❌ شماره صندلی نامعتبر است."); return
+    rows=app.runtime.state.games.list_players(game["id"])
+    current=next((r for r in rows if int(r.get("player_id") or 0)==uid and str(r.get("status") or "") not in {"removed","finished","kicked"}),None)
+    if not current:
+        await message.reply("❗ ابتدا «ورود» را بزنید."); return
+    occupied={int(r["seat"]):int(r["player_id"]) for r in rows if r.get("seat") is not None and str(r.get("status") or "") not in {"removed","finished","kicked"}}
+    if target in occupied and occupied[target]!=uid:
+        await message.reply("❌ این صندلی قبلاً گرفته شده است."); return
+    app.runtime.state.lobby.assign_seat(game["id"],uid,target)
+    await message.reply(f"✅ صندلی شما به <b>{target}</b> تغییر کرد.",parse_mode="HTML")
+
+
+async def _reserve_text(message, app, cancel=False):
+    game=_game(app,message)
+    if not game or str(game.get("status") or "")!="lobby":
+        await message.reply("❌ لابی فعالی وجود ندارد."); return
+    uid=int(message.from_user.id); rows=app.runtime.state.games.list_players(game["id"])
+    current=next((r for r in rows if int(r.get("player_id") or 0)==uid and str(r.get("status") or "") not in {"removed","finished"}),None)
+    if cancel:
+        if current and current.get("seat") is None:
+            app.runtime.state.lobby.leave(game["id"],uid); await message.reply("✅ رزرو شما لغو شد."); return
+        await message.reply("ℹ️ رزرو فعالی برای شما ثبت نشده است."); return
+    from repositories.scenario_repository import ScenarioRepository
+    scenario=ScenarioRepository().get_by_id(int(game.get("scenario_id") or 0)); cap=len((scenario or {}).get("roles") or [])
+    active=[r for r in rows if r.get("seat") is not None and str(r.get("status") or "") not in {"removed","dead","finished","kicked"}]
+    if len(active)<cap:
+        await message.reply("ℹ️ رزرو پس از تکمیل ظرفیت فعال می‌شود."); return
+    if current:
+        await message.reply("ℹ️ شما قبلاً در بازی یا لیست رزرو هستید."); return
+    await app._ensure_player(message.from_user)
+    app.runtime.state.lobby.join(game["id"],uid,None,is_substitute=True)
+    await message.reply("🎟 رزرو شما ثبت شد.")
+
+
+async def _sub_text(message, app):
+    game=_game(app,message)
+    if not game or str(game.get("status") or "")!="lobby":
+        await message.reply("❌ لابی فعالی وجود ندارد."); return
+    target=(await _reply_target(message)) or message.from_user
+    rows=app.runtime.state.games.list_players(game["id"])
+    if any(int(r.get("player_id") or 0)==int(target.id) and r.get("seat") is None and str(r.get("status") or "")=="waiting" for r in rows):
+        await message.reply("ℹ️ این کاربر قبلاً در لیست جایگزین است."); return
+    await app._ensure_player(target)
+    app.runtime.state.lobby.join(game["id"],int(target.id),None,is_substitute=True)
+    await message.reply(f"🔄 <b>{html.escape(target.full_name)}</b> به لیست جایگزین اضافه شد.",parse_mode="HTML")
+
+
+async def _challenge_text(message, app):
+    game=_game(app,message)
+    if not game:
+        await message.reply("❌ بازی فعالی وجود ندارد."); return
+    if not getattr(app,"challenge_enabled",{}).get(int(message.chat.id),True):
+        await message.reply("⚔️ چالش در حال حاضر محدود است."); return
+    target=await _reply_target(message)
+    if not target:
+        await message.reply("❗ برای چالش روی پیام بازیکن ریپلای کنید."); return
+    rows=app.runtime.state.games.list_players(game["id"])
+    a=next((r for r in rows if int(r.get("player_id") or 0)==int(message.from_user.id) and r.get("seat") is not None),None)
+    b=next((r for r in rows if int(r.get("player_id") or 0)==int(target.id) and r.get("seat") is not None),None)
+    if not a or not b or int(a["player_id"])==int(b["player_id"]):
+        await message.reply("❌ هر دو نفر باید بازیکن فعال باشند."); return
+    state=dict(game.get("state") or {}); pending=dict(state.get("challenge_requests") or {})
+    bucket=dict(pending.get(str(b["seat"])) or {}); bucket[str(message.from_user.id)]="pending"; pending[str(b["seat"])]=bucket
+    state["challenge_requests"]=pending; app.runtime.state.games.update_game(game["id"],state=state)
+    await message.reply(f"⚔️ <b>{html.escape(str(a.get('nickname') or message.from_user.full_name))}</b> برای <b>{html.escape(str(b.get('nickname') or target.full_name))}</b> درخواست چالش داد.",parse_mode="HTML")
+
+
+async def _legacy_command_adapter(name, message, app):
+    # Keep the already-working assistant/tag surfaces available without
+    # creating a second text-command registration surface.
+    await run_command(name, message, app)
+
 async def run_command(name: str, message: types.Message, app: Any) -> None:
-    handlers = {
-        "commands": cmd_commands,
-        "ask": lambda m, a: __import__("runtime.knowledge_assistant", fromlist=["answer"]).answer(m, a, (m.text or "").split(" ", 1)[1] if " " in (m.text or "") else ""),
-        "ai_on": lambda m, a: _ai_control(m, a, "on"),
-        "ai_off": lambda m, a: _ai_control(m, a, "off"),
-        "ai_status": lambda m, a: _ai_control(m, a, "status"),
-        "ai_key": _ai_key,
-        "ai_panel": lambda m, a: a.assistant_admin_panel.open(m),
-        "kb_list": lambda m, a: _kb_control(m, a, "list"),
-        "kb_add": lambda m, a: _kb_control(m, a, "add"),
-        "kb_publish": lambda m, a: _kb_control(m, a, "publish"),
+    direct = {
+        "pv": _pv_text, "role": _role_text, "panel": _panel_text,
+        "start_round": _start_round_text, "end_game": _end_game_text,
+        "night": lambda m,a: _simple_phase(m,a,"night"), "day": lambda m,a: _simple_phase(m,a,"day"),
+        "warning": lambda m,a: _player_state_action(m,a,"warning"),
+        "warning_remove": lambda m,a: _player_state_action(m,a,"warning_remove"),
+        "kick": lambda m,a: _player_state_action(m,a,"kick"),
+        "mute": lambda m,a: _player_state_action(m,a,"mute"),
+        "unmute": lambda m,a: _player_state_action(m,a,"unmute"),
+        "extra": lambda m,a: _player_state_action(m,a,"extra"),
+        "birthday": lambda m,a: _player_state_action(m,a,"birthday"),
+        "remove": lambda m,a: _player_state_action(m,a,"remove"),
+        "cancel_game": _cancel_game_text,
+        "challenge_limited": lambda m,a: _challenge_toggle_text(m,a,False),
+        "challenge_free": lambda m,a: _challenge_toggle_text(m,a,True),
+        "attendance": _attendance_text,
+        "seat": _seat_text,
+        "reserve": _reserve_text,
+        "unreserve": lambda m,a: _reserve_text(m,a,True),
+        "sub": _sub_text,
+        "challenge": _challenge_text,
+        "next": _next_text,
         "newgame": _newgame,
         "join": _join,
         "leave": _leave,
-        "chatlock": lambda m, a: _set_lock(m, a, "chat_lock", True, "قفل چت"),
-        "chatunlock": lambda m, a: _set_lock(m, a, "chat_lock", False, "قفل چت"),
-        "nightlock": lambda m, a: _set_lock(m, a, "night_lock", True, "قفل شب"),
-        "nightunlock": lambda m, a: _set_lock(m, a, "night_lock", False, "قفل شب"),
-        "turnlock": lambda m, a: _set_lock(m, a, "turn_lock", True, "قفل نوبت"),
-        "turnunlock": lambda m, a: _set_lock(m, a, "turn_lock", False, "قفل نوبت"),
-        "tag_all": cmd_tag_all,
-        "tag_admins": cmd_tag_admins,
-        "tag_list": cmd_tag_players,
+        "chatlock": lambda m,a: _set_lock(m,a,"chat_lock",True,"قفل چت"),
+        "chatunlock": lambda m,a: _set_lock(m,a,"chat_lock",False,"قفل چت"),
+        "nightlock": lambda m,a: _set_lock(m,a,"night_lock",True,"قفل شب"),
+        "nightunlock": lambda m,a: _set_lock(m,a,"night_lock",False,"قفل شب"),
+        "turnlock": lambda m,a: _set_lock(m,a,"turn_lock",True,"قفل نوبت"),
+        "turnunlock": lambda m,a: _set_lock(m,a,"turn_lock",False,"قفل نوبت"),
+        "commands": cmd_commands, "help": cmd_commands,
+        "ask": lambda m,a: __import__("runtime.knowledge_assistant", fromlist=["answer"]).answer(m,a,(m.text or "").split(" ",1)[1] if " " in (m.text or "") else ""),
+        "ai_on": lambda m,a: _ai_control(m,a,"on"), "ai_off": lambda m,a: _ai_control(m,a,"off"),
+        "ai_status": lambda m,a: _ai_control(m,a,"status"), "ai_key": _ai_key,
+        "ai_panel": lambda m,a: a.assistant_admin_panel.open(m),
+        "kb_list": lambda m,a: _kb_control(m,a,"list"), "kb_add": lambda m,a: _kb_control(m,a,"add"),
+        "kb_publish": lambda m,a: _kb_control(m,a,"publish"),
+        "tag_all": cmd_tag_all, "tag_admins": cmd_tag_admins, "tag_list": cmd_tag_players,
     }
-    handler = handlers.get(name)
+    if name in {"profile","ranking","stats"}:
+        stats = getattr(app,"_user_stats_instance",None)
+        if stats is not None:
+            uid=int(message.reply_to_message.from_user.id if message.reply_to_message else message.from_user.id)
+            gid=int(message.chat.id) if message.chat.type in {"group","supergroup"} else None
+            if name=="profile": await stats.show_profile(message,uid,gid)
+            elif name=="ranking": await stats.show_ranking(message,gid)
+            else: await stats.show_stats(message,uid,gid)
+        else: await message.reply("⚠️ بخش آمار در دسترس نیست.")
+        return
+    handler=direct.get(name)
     if handler:
-        await handler(message, app)
+        await handler(message,app)
 
 
 def register_commands(app: Any) -> bool:
@@ -534,5 +938,6 @@ def register_commands(app: Any) -> bool:
         raise CancelHandler()
 
     app._canonical_text_commands_installed = True
-    logging.info("Canonical text-command registry installed")
+    logging.info("CANONICAL TEXT COMMAND AUTHORITY installed: single registry")
     return True
+
