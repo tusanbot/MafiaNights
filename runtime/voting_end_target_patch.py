@@ -17,23 +17,23 @@ def install(main):
         idx = int(v.get("target_index") or 0)
         if idx >= len(targets):
             return await voting_runtime._finish_round(app)
-
         target = targets[idx]
-        voted = {int(x) for x in (v.get("votes") or {}).get(str(target), [])}
+        records = voting_runtime._vote_records(v, target)
+        voted = {int(x["user_id"]) for x in records}
         rows = _row_map(app)
         target_name = await _resolve_name(app, target, rows.get(target, {}).get("seat"))
-        voter_names = [
-            await _resolve_name(app, uid, rows.get(uid, {}).get("seat"))
-            for uid in sorted(voted)
-        ]
-        voter_text = "\n".join(f"• {html.escape(name)}" for name in voter_names) or "• هیچ‌کس"
+        voter_text = voting_runtime._voter_lines(app, v, target)
 
-        next_index = idx + 1
-        v["target_index"] = next_index
-        v["started_at"] = None
-        v["deadline"] = None
-        v["phase"] = "round_finished_pending" if next_index >= len(targets) else "next_target_pending"
-        voting_runtime._put(app, v)
+        message_id = v.get("vote_message_id")
+        if message_id:
+            try:
+                await app.bot.edit_message_reply_markup(
+                    chat_id=voting_runtime._gid(app),
+                    message_id=int(message_id),
+                    reply_markup=voting_runtime._disabled_vote_kb(),
+                )
+            except Exception:
+                pass
 
         await app.bot.send_message(
             voting_runtime._gid(app),
@@ -42,6 +42,18 @@ def install(main):
             f"👥 رأی‌دهندگان:\n{voter_text}",
             parse_mode="HTML",
         )
+
+        v["target_index"] = idx + 1
+        v["started_at"] = None
+        v["deadline"] = None
+        v["phase"] = "round_finished" if idx + 1 >= len(targets) else "next_target"
+        voting_runtime._put(app, v)
+
+        if idx + 1 >= len(targets):
+            await voting_runtime._finish_round(app)
+        else:
+            await voting_runtime._start_target(app)
+
 
     voting_runtime._end_target = end_target
     main._voting_end_target_patch_installed = True
