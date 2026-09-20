@@ -252,6 +252,58 @@ async def _ai_key(message: types.Message, app: Any) -> None:
         pass
     await message.answer("✅ API Key با موفقیت و به‌صورت رمزنگاری‌شده ثبت شد. برای فعال‌سازی از /ai_on استفاده کنید.")
 
+async def _kb_control(message: types.Message, app: Any, action: str) -> None:
+    if message.chat.type not in {"group", "supergroup"}:
+        await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
+        return
+    try:
+        status = (await app.bot.get_chat_member(message.chat.id, int(message.from_user.id))).status
+    except Exception:
+        status = "left"
+    if status not in {"creator", "administrator"} and int(message.from_user.id) != int(getattr(app, "moderator_id", 0) or 0):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه.")
+        return
+    from repositories.knowledge_repository import KnowledgeRepository
+    from sqlalchemy import text
+    repo = KnowledgeRepository()
+    if action == "list":
+        with repo.SessionLocal() as session:
+            rows = session.execute(text("select id,title,scope,status,scenario_name,role_name from public.mafia_knowledge_documents where is_active=true order by updated_at desc limit 20")).mappings().all()
+        if not rows:
+            await message.reply("📚 پایگاه دانش خالی است.")
+            return
+        lines = ["📚 <b>آخرین مطالب پایگاه دانش</b>", ""]
+        lines += [f"<code>{r['id']}</code> — {html.escape(str(r['title']))} — {r['status']}" for r in rows]
+        await message.reply("\n".join(lines), parse_mode="HTML")
+        return
+    parts = (message.text or "").split("|")
+    if action == "add":
+        if len(parts) < 7:
+            await message.reply("فرمت: <code>/kb_add|scope|عنوان|متن|نام سناریو|نام نقش|آدرس منبع</code>", parse_mode="HTML")
+            return
+        scope, title, content, scenario, role, url = (x.strip() for x in parts[1:7])
+        if scope not in {"global", "scenario", "role", "tutorial", "faq"}:
+            await message.reply("❌ scope باید global یا scenario یا role یا tutorial یا faq باشد.")
+            return
+        doc_id = repo.add_document(
+            title=title, content=content, scope=scope,
+            scenario_name=scenario or None, role_name=role or None,
+            status="draft", source_type="web" if url else "internal",
+            source_url=url or None, confidence="unverified",
+        )
+        await message.reply(f"✅ مطلب با شناسه <code>{doc_id}</code> به‌صورت پیش‌نویس ثبت شد.", parse_mode="HTML")
+        return
+    try:
+        doc_id = int((message.text or "").split(None, 1)[1].strip())
+    except Exception:
+        await message.reply("❗ شناسه مطلب را وارد کنید.")
+        return
+    if action == "publish":
+        with repo.SessionLocal() as session:
+            session.execute(text("update public.mafia_knowledge_documents set status='published',updated_at=now() where id=:id"), {"id": doc_id})
+            session.commit()
+        await message.reply("✅ مطلب منتشر شد و در پاسخ‌گویی داخلی قابل استفاده است.")
+
 async def cmd_tag_all(message: types.Message, app: Any) -> None:
     if message.chat.type not in {"group", "supergroup"}:
         await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
