@@ -94,6 +94,7 @@ def start_keyboard():
     kb.add(InlineKeyboardButton("⚙️ مدیریت سناریو", callback_data="final:scenarios"))
     kb.add(InlineKeyboardButton("⚙️ امکانات اضافه", callback_data="addons_menu"))
     kb.add(InlineKeyboardButton("👤 پروفایل", callback_data="up:menu"))
+    kb.add(InlineKeyboardButton("🤖 دستیار مافیا", callback_data="final:assistant"))
     kb.add(InlineKeyboardButton("📚 راهنما", callback_data="final:help"))
     return kb
 
@@ -284,6 +285,22 @@ async def install(app):
         except Exception: logging.exception("private substitute list failed"); await callback.answer("❌ اجرای عملیات ناموفق بود.", show_alert=True)
         raise CancelHandler()
 
+    async def assistant_handler(callback):
+        await allowed(callback)
+        await callback.message.edit_text(
+            "🤖 <b>دستیار Mafia Nights</b>\n\n"
+            "برای پرسیدن سؤال، همین‌جا بنویسید:\n"
+            "<code>سوال</code> و بعد سؤال خودتان را بنویسید.\n\n"
+            "مثال:\n"
+            "<code>سوال\nنقش لئون در پدرخوانده چه ابیلیتی دارد؟</code>",
+            reply_markup=InlineKeyboardMarkup().add(
+                InlineKeyboardButton("⬅️ بازگشت", callback_data="final:start")
+            ),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        raise CancelHandler()
+
     async def help_handler(callback):
         await allowed(callback); fn = getattr(app, "help_handler", None)
         if fn: await fn(callback.message)
@@ -298,7 +315,7 @@ async def install(app):
         (lambda c: next_toggle(c, "players"), lambda c: c.data == "finalgm:next:players"), (lambda c: player_menu(c, "mute"), lambda c: c.data == "finalgm:mute"),
         (lambda c: player_toggle(c, "mute"), lambda c: str(c.data or "").startswith("finalgm:mute:")), (lambda c: player_menu(c, "extra"), lambda c: c.data == "finalgm:extra"),
         (lambda c: player_toggle(c, "extra"), lambda c: str(c.data or "").startswith("finalgm:extra:")), (cancel_game, lambda c: c.data == "finalgm:cancel"),
-        (back, lambda c: c.data == "finalgm:back"), (start_callback, lambda c: c.data == "final:start"), (help_handler, lambda c: c.data == "final:help"),
+        (back, lambda c: c.data == "finalgm:back"), (start_callback, lambda c: c.data == "final:start"), (assistant_handler, lambda c: c.data == "final:assistant"), (help_handler, lambda c: c.data == "final:help"),
     ]
     for fn, filt in regs: dp.register_callback_query_handler(fn, filt, state="*")
 
