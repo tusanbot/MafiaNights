@@ -26,6 +26,7 @@ from runtime.progress_features_v4 import install as install_progress_features
 from runtime.end_game_control import install as install_end_game_control
 from runtime.production_consistency_loader import install as install_production_consistency
 from runtime.dual_winner_support import install as install_dual_winner_support
+from runtime.assistant_admin_panel import install as install_assistant_admin_panel
 
 TOKEN=os.getenv("API_TOKEN")
 if not TOKEN:raise ValueError("API_TOKEN environment variable is not set!")
@@ -44,7 +45,7 @@ for _item in list(getattr(dp.message_handlers,"handlers",[])):
     if getattr(_callback,"__name__","")=="group_command":
         dp.message_handlers.handlers.remove(_item);dp.message_handlers.handlers.insert(0,_item);break
 
-install_end_game_control(app);install_production_consistency(app);install_dual_winner_support(app)
+install_end_game_control(app);install_production_consistency(app);install_dual_winner_support(app);install_assistant_admin_panel(app)
 logging.info("PRODUCTION_RUNTIME_ACTIVE lobby=runtime.lobby_ui_final management=game_management+management_surface_final progress=achievements+tags+events+incidents")
 
 async def on_startup(dp):
