@@ -39,6 +39,18 @@ def _game_context(app: Any, message: Any) -> tuple[str | None, str | None]:
         return None, None
 
 
+def _looks_like_question(text: str) -> bool:
+    """Recognize natural-language questions without hijacking ordinary game commands."""
+    value = (text or "").strip()
+    if not value or value.startswith("/"):
+        return False
+    lowered = value.casefold()
+    if any(lowered.startswith(prefix) for prefix in ("سوال", "سؤال", "دستیار", "هوش مصنوعی", "ai ")):
+        return True
+    if "؟" in value or "?" in value:
+        return True
+    return lowered.startswith(("چی ", "چیه", "چه ", "چطور", "چگونه", "چرا ", "آیا ", "کی ", "کجا ", "میشه ", "می‌شه ", "میتونه ", "می‌تونه "))
+
 def _web_search(query: str, limit: int = 4) -> list[dict[str, str]]:
     """Optional no-key fallback using DuckDuckGo HTML search.
 
@@ -178,13 +190,12 @@ def _call_ai(
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
             + urllib.parse.quote(model, safe="")
-            + ":generateContent?key="
-            + urllib.parse.quote(api_key, safe="")
+            + ":generateContent"
         )
         req = urllib.request.Request(
             url,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
             method="POST",
         )
         try:
@@ -215,36 +226,51 @@ def _call_ai(
                             available.append(name.split("/", 1)[1])
                     preferred = [
                         "gemini-3.8-flash",
+                        "gemini-3.7-flash",
+                        "gemini-3.6-flash",
                         "gemini-3.5-flash",
+                        "gemini-3.5-flash-lite",
                         "gemini-3.1-flash-lite",
-                        "gemini-2.5-flash-lite",
                         "gemini-2.5-flash",
+                        "gemini-2.5-flash-lite",
+                        "gemini-2.0-flash",
                     ]
-                    fallback_model = next((m for m in preferred if m in available), None)
-                    if fallback_model and fallback_model != model:
-                        logging.warning(
-                            "knowledge assistant: Gemini model %s unavailable; retrying with %s",
-                            model, fallback_model,
-                        )
-                        retry_url = (
-                            "https://generativelanguage.googleapis.com/v1beta/models/"
-                            + urllib.parse.quote(fallback_model, safe="")
-                            + ":generateContent"
-                        )
-                        retry_req = urllib.request.Request(
-                            retry_url,
-                            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                            headers={
-                                "Content-Type": "application/json",
-                                "x-goog-api-key": api_key,
-                            },
-                            method="POST",
-                        )
-                        with urllib.request.urlopen(retry_req, timeout=25) as retry_response:
-                            retry_obj = json.loads(retry_response.read().decode("utf-8"))
-                        retry_parts = retry_obj.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-                        retry_text = [str(p.get("text", "")) for p in retry_parts if p.get("text")]
-                        return "".join(retry_text).strip() or None
+                    candidates = [m for m in preferred if m in available]
+                    candidates += [m for m in available if m not in candidates and "flash" in m.lower()]
+                    for fallback_model in candidates:
+                        if fallback_model == model:
+                            continue
+                        try:
+                            logging.warning(
+                                "knowledge assistant: Gemini model %s unavailable; trying %s",
+                                model, fallback_model,
+                            )
+                            retry_url = (
+                                "https://generativelanguage.googleapis.com/v1beta/models/"
+                                + urllib.parse.quote(fallback_model, safe="")
+                                + ":generateContent"
+                            )
+                            retry_req = urllib.request.Request(
+                                retry_url,
+                                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                                headers={
+                                    "Content-Type": "application/json",
+                                    "x-goog-api-key": api_key,
+                                },
+                                method="POST",
+                            )
+                            with urllib.request.urlopen(retry_req, timeout=20) as retry_response:
+                                retry_obj = json.loads(retry_response.read().decode("utf-8"))
+                            retry_parts = retry_obj.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                            retry_text = [str(p.get("text", "")) for p in retry_parts if p.get("text")]
+                            generated = "".join(retry_text).strip()
+                            if generated:
+                                logging.info("knowledge assistant: Gemini fallback succeeded with %s", fallback_model)
+                                return generated
+                        except urllib.error.HTTPError as retry_exc:
+                            logging.warning("knowledge assistant: Gemini fallback %s returned HTTP %s", fallback_model, retry_exc.code)
+                        except Exception:
+                            logging.exception("knowledge assistant: Gemini fallback %s failed")
                 except Exception:
                     logging.exception("knowledge assistant: Gemini model discovery/retry failed")
             logging.error("knowledge assistant: Gemini HTTP %s", exc.code)
@@ -418,6 +444,23 @@ async def answer(message: Any, app: Any, question: str) -> None:
         )
         if isinstance(result, list):
             rows = result
+        if not rows:
+            broad = " ".join(
+                token for token in question.replace("؟", " ").replace("?", " ").split()
+                if len(token.strip()) >= 3
+            )
+            if broad and broad != question:
+                result = await _thread_call(
+                    "broad knowledge lookup",
+                    repo.get_context,
+                    broad,
+                    scenario_name=scenario_name,
+                    role_name=role_name,
+                    limit=8,
+                    timeout=8.0,
+                )
+                if isinstance(result, list):
+                    rows = result
 
     web: list[dict[str, str]] = []
     if len(rows) < 2:
@@ -536,9 +579,27 @@ def install(app: Any) -> bool:
         state="*",
         content_types=types.ContentTypes.TEXT,
     )
+    async def auto_handler(message: Any):
+        text = str(getattr(message, "text", "") or "").strip()
+        if not _looks_like_question(text):
+            return
+        enabled, _api_key, _provider, _model = await _thread_call(
+            "AI auto-route settings", _ai_config, app, message, timeout=5.0
+        )
+        if not enabled:
+            return
+        await answer(message, app, text)
+
+    app.dp.register_message_handler(
+        auto_handler,
+        lambda m: _looks_like_question(str(getattr(m, "text", "") or "")),
+        state="*",
+        content_types=types.ContentTypes.TEXT,
+    )
     registry = getattr(getattr(app.dp, "message_handlers", None), "handlers", [])
     for i, item in enumerate(list(registry)):
-        if getattr(item, "handler", None) is handler:
+        callback = getattr(item, "handler", None) or getattr(item, "callback", None)
+        if callback is handler:
             registry.insert(0, registry.pop(i))
             break
     logging.info("Mafia knowledge assistant installed")
