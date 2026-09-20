@@ -67,6 +67,20 @@ def _web_search(query: str, limit: int = 4) -> list[dict[str, str]]:
     return results
 
 
+def _ai_enabled(app: Any, message: Any) -> bool:
+    try:
+        gid = int(message.chat.id)
+        with KnowledgeRepository().SessionLocal() as session:
+            from sqlalchemy import text
+            row = session.execute(
+                text("select enabled from public.mafia_ai_settings where group_id=:gid"),
+                {"gid": gid},
+            ).scalar()
+        return bool(row)
+    except Exception:
+        return False
+
+
 def _call_ai(prompt: str, context: list[dict[str, Any]], web: list[dict[str, str]]) -> str | None:
     api_key = os.getenv("MAFIA_AI_API_KEY")
     if not api_key:
@@ -122,7 +136,7 @@ async def answer(message: Any, app: Any, question: str) -> None:
     web = [] if len(rows) >= 2 else _web_search(
         (f"مافیا {scenario_name or ''} {role_name or ''} {question}").strip()
     )
-    response = _call_ai(question, rows, web)
+    response = _call_ai(question, rows, web) if _ai_enabled(app, message) else None
 
     if response is None:
         if rows:
