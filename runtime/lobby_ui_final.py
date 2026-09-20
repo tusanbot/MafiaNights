@@ -317,13 +317,34 @@ def install(main):
         await c.answer(f"✅ صندلی {target} برای شما ثبت شد.")
 
     async def reserve(c):
-        g=game(c.message.chat.id); r=scenario(g); uid=int(c.from_user.id)
-        if not g or not r: await c.answer("❌ لابی معتبر نیست.",show_alert=True); return
-        ps=players(g); cur=next((p for p in ps if int(p["player_id"])==uid),None); active=[p for p in ps if p.get("seat") is not None and str(p.get("status") or "active") not in {"removed","dead"}]; cap=len(r.get("roles") or [])
-        if cur and cur.get("seat") is None and str(cur.get("status") or "")=="waiting": main.runtime.state.lobby.leave(g["id"],uid); await render(c); await c.answer("❌ رزرو شما لغو شد"); return
-        if cur and cur.get("seat") is not None: await c.answer("ℹ️ شما داخل بازی هستید.",show_alert=True); return
-        if len(active)<cap: await c.answer("ℹ️ تا قبل از تکمیل ظرفیت، رزرو فعال نیست.",show_alert=True); return
-        main.runtime.state.lobby.join(g["id"],uid,None,is_substitute=True); await render(c); await c.answer("🎟 رزرو شما ثبت شد")
+        g = game(c.message.chat.id); r = scenario(g); uid = int(c.from_user.id)
+        if not g or not r:
+            await c.answer("❌ لابی معتبر نیست.", show_alert=True); return
+        ps = players(g)
+        cur = next((p for p in ps if int(p.get("player_id") or 0) == uid and str(p.get("status") or "") not in {"removed","finished","kicked"}), None)
+        active = [p for p in ps if p.get("seat") is not None and str(p.get("status") or "active") not in {"removed","dead","finished","kicked"}]
+        cap = len(r.get("roles") or [])
+
+        if cur and cur.get("seat") is None and str(cur.get("status") or "") in {"waiting", "substitute"}:
+            main.runtime.state.lobby.leave(g["id"], uid)
+            await render(c); await c.answer("❌ رزرو شما لغو شد"); return
+        if cur and cur.get("seat") is not None:
+            await c.answer("ℹ️ شما داخل بازی هستید.", show_alert=True); return
+        if len(active) < cap:
+            await c.answer("ℹ️ تا قبل از تکمیل ظرفیت، رزرو فعال نیست.", show_alert=True); return
+
+        try:
+            await main._ensure_player(c.from_user)
+        except Exception:
+            pass
+        try:
+            main.runtime.state.lobby.join(g["id"], uid, None, is_substitute=True)
+        except Exception as exc:
+            logging.exception("reserve failed")
+            await c.answer("❌ ثبت رزرو انجام نشد. احتمالاً رزرو شما از قبل ثبت شده یا اطلاعات بازیکن تکراری است.", show_alert=True)
+            return
+        await render(c); await c.answer("🎟 رزرو شما ثبت شد")
+
 
     async def manage(c):
         g=game(c.message.chat.id)
