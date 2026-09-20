@@ -40,32 +40,28 @@ def _game_context(app: Any, message: Any) -> tuple[str | None, str | None]:
 
 
 def _looks_like_question(text: str) -> bool:
-    """Recognize natural-language questions without hijacking ordinary game commands."""
+    """Recognize deliberate natural-language questions without hijacking chat."""
     value = (text or "").strip()
     if not value or value.startswith("/"):
         return False
     lowered = value.casefold()
-    if any(lowered.startswith(prefix) for prefix in ("سوال", "سؤال", "دستیار", "هوش مصنوعی", "ai ")):
+    if lowered.startswith(("سوال", "سؤال", "دستیار", "هوش مصنوعی", "ai ")):
         return True
     if "؟" in value or "?" in value:
         return True
-    # Natural questions in Persian do not always start with the interrogative
-    # word (e.g. «نقش بازپرس چیست؟»). Detect interrogative terms anywhere in
-    # the sentence so the production auto-route can actually reach the AI.
-    question_terms = (
-        "چی", "چه", "چطور", "چگونه", "چرا", "آیا", "کی", "کجا",
-        "میشه", "می‌شه", "میتونه", "می‌تونه", "چند", "کدام", "کدوم",
-        "چیه", "چیست", "هست", "است", "داره", "دارم", "دارد",
-        "توضیح", "توضیح بده", "توضیح دهید", "درباره", "تعریف", "معنی",
-        "بگو", "بگید", "بده", "بدید",
+    normalized = (
+        lowered.replace("ي", "ی").replace("ى", "ی").replace("ك", "ک").replace("ۀ", "ه")
     )
-    words = lowered.replace("،", " ").replace(",", " ").replace(".", " ").split()
-    if any(
-        word in question_terms or any(word.startswith(term) for term in question_terms if len(term) >= 3)
-        for word in words
-    ):
-        return True
-    return False
+    strong_phrases = (
+        "چیست", "چیه", "چه کسی", "چه نقشی", "چه توانایی",
+        "چطور", "چگونه", "چرا", "آیا", "کدام", "کدوم",
+        "چند نفر", "چه تعداد", "کی می", "کجا",
+        "میشه توضیح", "می‌شه توضیح", "توضیح بده", "توضیح دهید",
+        "توضیح بدهید", "درباره", "در مورد", "تعریف کن", "تعریف کنید",
+        "معنی", "بگو", "بگید", "را توضیح", "رو توضیح",
+        "چه کار می", "چه کاری", "چه می‌کند", "چه میکنه",
+    )
+    return any(phrase in normalized for phrase in strong_phrases)
 
 def _web_search(query: str, limit: int = 4) -> list[dict[str, str]]:
     """Optional no-key fallback using DuckDuckGo HTML search.
@@ -120,33 +116,11 @@ def _ai_config(app: Any, message: Any, resolved_gid: int | None = None) -> tuple
         if not key:
             return False, None, "gemini", None
 
-        # Provider is explicit configuration. For private requests use the
-        # private provider/model fields because the PV shares the group's key
-        # but may have its own provider metadata.
-        provider = str(
-            (row["private_provider"] if is_private else row["provider"]) or ""
-        ).lower()
-        model = (
-            row["private_model"] if is_private else row["model"]
-        )
-        model = str(model) if model else None
-
-        # Backward compatibility for rows written by the legacy /ai_key route:
-        # that route used provider=openai while leaving private_provider=gemini.
-        # The current product uses Gemini, so treat that exact stale combination
-        # as Gemini rather than sending the Gemini credential to OpenAI.
-        if (
-            provider == "openai"
-            and str(row["private_provider"] or "").lower() == "gemini"
-            and str(row["model"] or "").lower().startswith(("gpt-", "o1", "o3", "o4"))
-        ):
-            provider = "gemini"
-            model = "gemini-2.5-flash"
-
-        if provider not in {"gemini", "openai"}:
-            provider = "gemini"
-        if provider == "gemini" and (not model or model.startswith(("gpt-", "o1", "o3", "o4"))):
-            model = "gemini-2.5-flash"
+        # The configured assistant credential in this deployment is Gemini.
+        # Legacy rows can still contain provider=openai / gpt-* metadata; never
+        # send this credential to OpenAI.
+        provider = "gemini"
+        model = "gemini-2.5-flash"
         enabled = bool(row["private_enabled"]) if is_private else bool(row["enabled"])
         return enabled, key, provider, model
     except Exception:
