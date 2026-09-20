@@ -143,6 +143,25 @@ def _call_ai(
         return None
 
 
+def _ensure_ai_settings_table() -> None:
+    """Ensure the legacy production database has the AI settings table."""
+    with KnowledgeRepository().SessionLocal() as session:
+        from sqlalchemy import text
+        session.execute(text("create extension if not exists pgcrypto"))
+        session.execute(text("""
+            create table if not exists public.mafia_ai_settings (
+                group_id bigint primary key,
+                provider text not null default 'openai',
+                model text,
+                api_key_ciphertext bytea,
+                web_search_enabled boolean not null default true,
+                enabled boolean not null default false,
+                updated_at timestamptz not null default now()
+            )
+        """))
+        session.commit()
+
+
 async def answer(message: Any, app: Any, question: str) -> None:
     question = (question or "").strip()
     if not question:
