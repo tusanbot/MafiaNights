@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import text
@@ -63,6 +64,51 @@ class KnowledgeRepository(DatabaseRepository):
                 on conflict(slug) do nothing
             """))
             session.commit()
+
+            # Legacy production may have the KB tables but no seed data. Bundle
+            # the canonical 118 documents so the runtime DB gets the same
+            # verified/published knowledge that was collected in the main DB.
+            count = session.execute(
+                text("select count(*) from public.mafia_knowledge_documents")
+            ).scalar_one()
+            if int(count) == 0:
+                seed_path = Path(__file__).resolve().parents[1] / "runtime" / "knowledge_seed.json"
+                if seed_path.exists():
+                    try:
+                        seed_rows = json.loads(seed_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        seed_rows = []
+                    for item in seed_rows:
+                        session.execute(text("""
+                            insert into public.mafia_knowledge_documents
+                            (category_id,title,content,scope,scenario_name,role_name,status,
+                             source_type,source_url,source_title,confidence,metadata)
+                            values (
+                              (select id from public.mafia_knowledge_categories
+                               where slug = case
+                                 when :scope='scenario' then 'scenarios'
+                                 when :scope='role' then 'roles'
+                                 when :scope='tutorial' then 'tutorials'
+                                 when :scope='faq' then 'faq'
+                                 else 'sources' end limit 1),
+                              :title,:content,:scope,:scenario_name,:role_name,:status,
+                              :source_type,:source_url,:source_title,:confidence,
+                              cast(:metadata as jsonb)
+                            )
+                        """), {
+                            "title": item.get("title") or "",
+                            "content": item.get("content") or "",
+                            "scope": item.get("scope") or "global",
+                            "scenario_name": item.get("scenario_name"),
+                            "role_name": item.get("role_name"),
+                            "status": item.get("status") or "draft",
+                            "source_type": item.get("source_type") or "internal",
+                            "source_url": item.get("source_url"),
+                            "source_title": item.get("source_title"),
+                            "confidence": item.get("confidence") or "unverified",
+                            "metadata": json.dumps(item.get("metadata") or {}, ensure_ascii=False),
+                        })
+                    session.commit()
 
     def _ensure_schema(self) -> None:
         self.ensure_schema()
