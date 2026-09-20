@@ -108,6 +108,46 @@ def _ai_config(app: Any, message: Any) -> tuple[bool, str | None, str, str | Non
                     {"secret": os.getenv("DATABASE_URL") or ""},
                 ).mappings().first()
             if not row:
+                # Migrate the newest legacy group-scoped key into the global row
+                # transparently. This is important for installations where the
+                # moderator registered the Gemini key before global settings
+                # were introduced.
+                with KnowledgeRepository().SessionLocal() as fallback_session:
+                    legacy = fallback_session.execute(
+                        text(
+                            """select enabled, provider, model, api_key_ciphertext
+                               from public.mafia_ai_settings
+                               where group_id <> 0
+                                 and api_key_ciphertext is not null
+                               order by updated_at desc
+                               limit 1"""
+                        )
+                    ).mappings().first()
+                    if legacy:
+                        fallback_session.execute(
+                            text(
+                                """insert into public.mafia_ai_settings
+                                   (group_id,provider,model,api_key_ciphertext,
+                                    web_search_enabled,enabled,updated_at)
+                                   values(0,:provider,:model,:ciphertext,true,:enabled,now())
+                                   on conflict(group_id) do nothing"""
+                            ),
+                            dict(legacy),
+                        )
+                        fallback_session.commit()
+                        row = fallback_session.execute(
+                            text(
+                                """select enabled, provider, model,
+                                          case when api_key_ciphertext is null then null
+                                               else pgp_sym_decrypt(api_key_ciphertext, :secret)
+                                          end as api_key
+                                   from public.mafia_ai_settings
+                                   where group_id = 0
+                                   limit 1"""
+                            ),
+                            {"secret": os.getenv("DATABASE_URL") or ""},
+                        ).mappings().first()
+            if not row:
                 with KnowledgeRepository().SessionLocal() as fallback_session:
                     row = fallback_session.execute(
                         text(
