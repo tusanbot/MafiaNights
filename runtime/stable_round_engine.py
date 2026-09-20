@@ -607,6 +607,9 @@ def install(main):
         await callback.answer("⚔️ چالش پذیرفته شد.")
         raise CancelHandler()
 
+    main._stable_round_start_handler = start_round
+    main._stable_next_handler = next_handler
+    main._stable_challenge_request_handler = challenge_request
     dp.register_callback_query_handler(start_round, lambda c: c.data == "start_round", state="*")
     dp.register_callback_query_handler(next_handler, lambda c: str(c.data).startswith(NEXT_PREFIX), state="*")
     dp.register_callback_query_handler(challenge_request, lambda c: str(c.data).startswith(CHALLENGE_REQUEST_PREFIX), state="*")
