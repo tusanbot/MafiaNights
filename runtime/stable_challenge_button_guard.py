@@ -69,10 +69,10 @@ def install(app):
             if target_seat in locked:
                 await callback.answer("⛔ برای این نوبت دیگر چالش پذیرفته نمی‌شود.", show_alert=True)
                 return
-            # Hide the stale action before the request is processed. The
-            # authoritative handler still performs all semantic validation and
-            # records _stable_challenge_used only after validation succeeds.
-            await _hide_challenge_button(app, target_seat)
+            # Do not remove the challenge button before semantic validation.
+            # The authoritative handler owns button locking only after a
+            # challenge is actually accepted; transient errors must leave the
+            # button available to the other players.
             return await original(callback)
 
         guarded.__name__ = "challenge_request"
