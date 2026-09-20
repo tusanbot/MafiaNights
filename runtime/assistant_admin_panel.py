@@ -38,7 +38,7 @@ class AssistantAdminPanel:
             session.execute(text("""
                 create table if not exists public.mafia_ai_settings (
                     group_id bigint primary key,
-                    provider text not null default 'openai',
+                    provider text not null default 'gemini',
                     model text,
                     api_key_ciphertext bytea,
                     web_search_enabled boolean not null default true,
@@ -403,50 +403,15 @@ class AssistantAdminPanel:
         if not await self._guard(callback):
             await callback.answer(); return
         await AssistantAdminStates.waiting_group_key.set()
-        kb = InlineKeyboardMarkup(row_width=2)
-        kb.add(
-            InlineKeyboardButton("✨ Gemini", callback_data="aip:provider_gemini"),
-            InlineKeyboardButton("🤖 OpenAI", callback_data="aip:provider_openai"),
-        )
+        kb = InlineKeyboardMarkup(row_width=1)
         kb.add(InlineKeyboardButton("⬅️ بازگشت", callback_data="aip:pv"))
         await callback.message.edit_text(
-            "🔑 <b>کلید AI گروه</b>\n\n"
-            "ابتدا سرویس کلید را انتخاب کنید. کلید فعلی حذف نمی‌شود و فقط سرویس استفاده‌کننده از آن تغییر می‌کند.\n"
-            "در حال حاضر برای کلید شما <b>Gemini</b> را انتخاب کنید.",
+            "🔑 <b>کلید Gemini گروه</b>\n\n"
+            "کلید Gemini گروه را ارسال کنید. این کلید به‌صورت رمزنگاری‌شده ذخیره می‌شود "
+            "و برای دستیار گروه و دستیار پیوی اعضای مجاز استفاده خواهد شد.",
             reply_markup=kb, parse_mode="HTML",
         )
         await callback.answer()
-
-    async def set_provider_gemini(self, callback):
-        await self.set_provider(callback, "gemini")
-
-    async def set_provider_openai(self, callback):
-        await self.set_provider(callback, "openai")
-
-    async def set_provider(self, callback, provider: str):
-        if not await self._guard(callback):
-            await callback.answer()
-            return
-        gid = self._selected_group_id(callback.from_user.id)
-        if not gid:
-            await callback.answer("ابتدا گروه را انتخاب کنید.", show_alert=True)
-            return
-        provider = "gemini" if provider == "gemini" else "openai"
-        model = "gemini-2.5-flash" if provider == "gemini" else (os.getenv("MAFIA_AI_MODEL") or "gpt-5.6-mini")
-        with self._repo().SessionLocal() as session:
-            session.execute(text("""
-                update public.mafia_ai_settings
-                   set provider=:provider,
-                       model=:model,
-                       private_provider=:provider,
-                       private_model=:model,
-                       updated_at=now(),
-                       private_updated_at=now()
-                 where group_id=:gid
-            """), {"provider": provider, "model": model, "gid": int(gid)})
-            session.commit()
-        await callback.answer("سرویس Gemini برای کلید گروه انتخاب شد." if provider == "gemini" else "سرویس OpenAI برای کلید گروه انتخاب شد.")
-        await self.pv(callback)
 
     async def save_group_key(self, message: types.Message, state: FSMContext):
         if message.chat.type != "private" or not await self._authorized(message.from_user.id):
@@ -463,24 +428,8 @@ class AssistantAdminPanel:
             await message.answer("❌ کلید، گروه انتخاب‌شده یا تنظیمات رمزنگاری ناقص است.", reply_markup=self._menu())
             return
 
-        # The provider is an explicit group setting. Never infer it from the
-        # API-key prefix: Gemini keys are credentials, not a reliable provider
-        # contract, and legacy /ai_key rows may have stale provider metadata.
-        with self._repo().SessionLocal() as settings_session:
-            provider_row = settings_session.execute(text("""
-                select provider, private_provider
-                from public.mafia_ai_settings
-                where group_id=:gid
-                limit 1
-            """), {"gid": int(gid)}).mappings().first()
-        provider = str(
-            (provider_row or {}).get("private_provider")
-            or (provider_row or {}).get("provider")
-            or "gemini"
-        ).lower()
-        if provider not in {"gemini", "openai"}:
-            provider = "gemini"
-        model = "gemini-2.5-flash" if provider == "gemini" else (os.getenv("MAFIA_AI_MODEL") or "gpt-5.6-mini")
+        provider = "gemini"
+        model = "gemini-2.5-flash"
 
         try:
             try:
@@ -496,7 +445,7 @@ class AssistantAdminPanel:
                 session.execute(text("""
                     create table if not exists public.mafia_ai_settings (
                         group_id bigint primary key,
-                        provider text not null default 'openai',
+                        provider text not null default 'gemini',
                         model text,
                         api_key_ciphertext bytea,
                         web_search_enabled boolean not null default true,
@@ -560,7 +509,7 @@ class AssistantAdminPanel:
 
             await state.finish()
             await message.answer(
-                "✅ کلید مشترک AI گروه ثبت شد؛ دستیار گروه و پیوی اعضای گروه فعال شدند.",
+                "✅ کلید Gemini گروه ثبت شد؛ دستیار گروه و پیوی اعضای گروه فعال شدند.",
                 reply_markup=self._menu(),
             )
         except Exception as exc:
@@ -665,8 +614,6 @@ class AssistantAdminPanel:
             "add": self.add_start, "guide": self.guide, "scope": self.scope,
             "status": self.status, "ai": self.ai, "toggle_group": self.toggle_group,
             "pv": self.pv, "groupkey": self.group_key,
-            "provider_gemini": self.set_provider_gemini,
-            "provider_openai": self.set_provider_openai,
             "pvtoggle": self.pv_toggle,
         }.items():
             dp.register_callback_query_handler(
@@ -679,7 +626,7 @@ class AssistantAdminPanel:
             names = {
                 "select_group", "menu", "kb", "doc", "publish", "disable",
                 "add_start", "guide", "scope", "status", "ai", "toggle_group",
-                "pv", "group_key", "set_provider", "set_provider_gemini", "set_provider_openai", "pv_toggle",
+                "pv", "group_key", "pv_toggle",
             }
             mine, rest = [], []
             for item in list(handlers):
