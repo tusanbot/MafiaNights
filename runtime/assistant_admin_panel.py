@@ -29,29 +29,23 @@ class AssistantAdminPanel:
         self.app = app
 
     @staticmethod
-    def _admin_ids() -> set[int]:
-        raw = os.getenv("MAFIA_ADMIN_IDS") or os.getenv("BOT_OWNER_ID") or ""
-        ids = set()
-        for value in raw.replace(";", ",").split(","):
-            value = value.strip()
-            if value.isdigit():
-                ids.add(int(value))
-        return ids
+    def _group_id() -> int | None:
+        raw = os.getenv("AI_PRIMARY_GROUP_ID") or os.getenv("ALLOWED_GROUP_ID") or ""
+        try:
+            return int(raw)
+        except Exception:
+            return None
 
     async def _authorized(self, user_id: int) -> bool:
-        if int(user_id) in self._admin_ids():
-            return True
-        # Secure fallback: the Telegram creator of the configured main group
-        # can manage the assistant from a private chat without exposing an ID
-        # in source code or database.
-        group_raw = os.getenv("ALLOWED_GROUP_ID")
-        if group_raw:
-            try:
-                member = await self.app.bot.get_chat_member(int(group_raw), int(user_id))
-                return str(getattr(member, "status", "")) in {"creator", "administrator"}
-            except Exception:
-                logging.exception("assistant admin: creator authorization check failed")
-        return False
+        group_id = self._group_id()
+        if not group_id:
+            return False
+        try:
+            member = await self.app.bot.get_chat_member(group_id, int(user_id))
+            return str(getattr(member, "status", "")) in {"creator", "administrator"}
+        except Exception:
+            logging.exception("assistant admin: group-admin authorization check failed")
+            return False
 
     async def _guard(self, message_or_callback: Any) -> bool:
         uid = int(message_or_callback.from_user.id)
@@ -86,13 +80,13 @@ class AssistantAdminPanel:
 
     async def open(self, message: types.Message):
         if message.chat.type != "private":
-            await message.reply("⚠️ پنل مدیریت دستیار فقط در پیوی مدیر اصلی قابل استفاده است.")
+            await message.reply("⚠️ پنل مدیریت دستیار فقط در پیوی مدیران گروه قابل استفاده است.")
             return
         if not await self._guard(message):
             return
         await message.answer(
             "🤖 <b>پنل مدیریت دستیار Mafia Nights</b>\n\n"
-            "از این بخش می‌توانید پایگاه دانش، تنظیمات هوش مصنوعی و کلید مخصوص درخواست‌های پیوی را مدیریت کنید.",
+            "از این بخش می‌توانید پایگاه دانش، تنظیمات هوش مصنوعی و کلید مشترک گروه برای درخواست‌های پیوی را مدیریت کنید.",
             reply_markup=self._menu(), parse_mode="HTML",
         )
 
@@ -297,8 +291,8 @@ class AssistantAdminPanel:
                        private_web_search_enabled,
                        (api_key_ciphertext is not null) as has_group_key,
                        (private_api_key_ciphertext is not null) as has_private_key
-                from public.mafia_ai_settings where group_id=0
-            """)).mappings().first()
+                from public.mafia_ai_settings where group_id=:gid
+            """), {"gid": self._group_id()}).mappings().first()
 
     async def status(self, callback):
         if not await self._guard(callback):
@@ -337,7 +331,7 @@ class AssistantAdminPanel:
         with repo.SessionLocal() as session:
             session.execute(text("""
                 insert into public.mafia_ai_settings(group_id,enabled,web_search_enabled,updated_at)
-                values(0,true,true,now())
+                values(:gid,true,true,now())
                 on conflict(group_id) do update set enabled=not public.mafia_ai_settings.enabled,updated_at=now()
             """))
             session.commit()
@@ -369,7 +363,7 @@ class AssistantAdminPanel:
         await AssistantAdminStates.waiting_private_key.set()
         await callback.message.edit_text(
             "🔑 <b>ثبت کلید API برای درخواست‌های پیوی</b>\n\n"
-            "کلید Gemini یا OpenAI را ارسال کنید. پیام شما بلافاصله پس از دریافت حذف می‌شود.",
+            "کلید Gemini یا OpenAI گروه را ارسال کنید. این کلید برای درخواست‌های پیوی اعضای همین گروه استفاده می‌شود و پیام شما بلافاصله پس از دریافت حذف می‌شود.",
             parse_mode="HTML",
         )
         await callback.answer()
@@ -398,7 +392,7 @@ class AssistantAdminPanel:
                     insert into public.mafia_ai_settings
                     (group_id,private_enabled,private_provider,private_model,
                      private_api_key_ciphertext,private_web_search_enabled,private_updated_at,updated_at)
-                    values(0,true,:provider,:model,pgp_sym_encrypt(:key,:secret),true,now(),now())
+                    values(:gid,true,:provider,:model,pgp_sym_encrypt(:key,:secret),true,now(),now())
                     on conflict(group_id) do update set
                       private_enabled=true,
                       private_provider=:provider,
@@ -406,7 +400,7 @@ class AssistantAdminPanel:
                       private_api_key_ciphertext=pgp_sym_encrypt(:key,:secret),
                       private_updated_at=now(),
                       updated_at=now()
-                """), {"provider":provider,"model":model,"key":key,"secret":secret})
+                """), {"gid": self._group_id(), "provider":provider,"model":model,"key":key,"secret":secret})
                 session.commit()
             await state.finish()
             await message.answer("✅ کلید API درخواست‌های پیوی با موفقیت ثبت و رمزنگاری شد.")
