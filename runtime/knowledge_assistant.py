@@ -160,7 +160,8 @@ async def answer(message: Any, app: Any, question: str) -> None:
     web = [] if len(rows) >= 2 else _web_search(
         (f"مافیا {scenario_name or ''} {role_name or ''} {question}").strip()
     )
-    ai_enabled, api_key = _ai_config(app, message)\n    response = _call_ai(question, rows, web, api_key) if ai_enabled else None
+    ai_enabled, api_key = _ai_config(app, message)
+    response = _call_ai(question, rows, web, api_key) if ai_enabled else None
 
     if response is None:
         if rows:
