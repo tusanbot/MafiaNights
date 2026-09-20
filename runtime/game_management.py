@@ -69,7 +69,7 @@ class GameManagement:
             ("🔢 شماره بازی", "event"), ("📝 تغییر سناریو", "scenario"), ("🗑 حذف بازیکن", "remove"),
             ("🎟 لغو رزرو", "unreserve"), ("🔄 جایگزین بازیکن", "replace"), ("✅ حاضری", "attendance"),
             ("🎂 تولد بازیکن", "birthday"), ("⚔ وضعیت چالش", "challenge"), ("⏭ مدیریت نکست", "next"),
-            ("🚫 لغو بازی", "cancel"), ("🔄 بازسازی لابی", "refresh"), ("✖️ بستن", "close"),
+            ("🚫 لغو بازی", "cancel"), ("⬅️ بازگشت به لابی", "back_lobby"),
         ]
         for i in range(0, len(items), 3):
             kb.row(*(InlineKeyboardButton(t, callback_data=f"mgmt:{game_id}:{a}") for t, a in items[i:i + 3]))
@@ -562,7 +562,7 @@ class GameManagement:
             "birthday": self.birthday, "birthday_pick": self.birthday_pick,
             "challenge": self.challenge, "challenge_toggle": self.challenge_toggle,
             "next": self.next, "next_toggle": self.next_toggle,
-            "cancel": self.cancel, "refresh": self.refresh, "close": self.close,
+            "cancel": self.cancel,
         }
         for action, fn in handlers.items():
             dp.register_callback_query_handler(
