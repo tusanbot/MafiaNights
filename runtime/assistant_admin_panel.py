@@ -417,6 +417,12 @@ class AssistantAdminPanel:
         )
         await callback.answer()
 
+    async def set_provider_gemini(self, callback):
+        await self.set_provider(callback, "gemini")
+
+    async def set_provider_openai(self, callback):
+        await self.set_provider(callback, "openai")
+
     async def set_provider(self, callback, provider: str):
         if not await self._guard(callback):
             await callback.answer()
@@ -457,7 +463,23 @@ class AssistantAdminPanel:
             await message.answer("❌ کلید، گروه انتخاب‌شده یا تنظیمات رمزنگاری ناقص است.", reply_markup=self._menu())
             return
 
-        provider = "gemini" if key.startswith("AIza") else "openai"
+        # The provider is an explicit group setting. Never infer it from the
+        # API-key prefix: Gemini keys are credentials, not a reliable provider
+        # contract, and legacy /ai_key rows may have stale provider metadata.
+        with self._repo().SessionLocal() as settings_session:
+            provider_row = settings_session.execute(text("""
+                select provider, private_provider
+                from public.mafia_ai_settings
+                where group_id=:gid
+                limit 1
+            """), {"gid": int(gid)}).mappings().first()
+        provider = str(
+            (provider_row or {}).get("private_provider")
+            or (provider_row or {}).get("provider")
+            or "gemini"
+        ).lower()
+        if provider not in {"gemini", "openai"}:
+            provider = "gemini"
         model = "gemini-2.5-flash" if provider == "gemini" else (os.getenv("MAFIA_AI_MODEL") or "gpt-5.6-mini")
 
         try:
@@ -643,8 +665,8 @@ class AssistantAdminPanel:
             "add": self.add_start, "guide": self.guide, "scope": self.scope,
             "status": self.status, "ai": self.ai, "toggle_group": self.toggle_group,
             "pv": self.pv, "groupkey": self.group_key,
-            "provider_gemini": lambda c: self.set_provider(c, "gemini"),
-            "provider_openai": lambda c: self.set_provider(c, "openai"),
+            "provider_gemini": self.set_provider_gemini,
+            "provider_openai": self.set_provider_openai,
             "pvtoggle": self.pv_toggle,
         }.items():
             dp.register_callback_query_handler(
@@ -657,7 +679,7 @@ class AssistantAdminPanel:
             names = {
                 "select_group", "menu", "kb", "doc", "publish", "disable",
                 "add_start", "guide", "scope", "status", "ai", "toggle_group",
-                "pv", "group_key", "set_provider", "pv_toggle",
+                "pv", "group_key", "set_provider", "set_provider_gemini", "set_provider_openai", "pv_toggle",
             }
             mine, rest = [], []
             for item in list(handlers):
