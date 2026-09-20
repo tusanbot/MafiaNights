@@ -135,6 +135,10 @@ from runtime.progress_schema_compat import install as install_progress_schema_co
 install_progress_schema_compat(main)
 from runtime.knowledge_assistant import install as install_knowledge_assistant
 install_knowledge_assistant(main)
+# The production webhook uses player_runtime_entry -> main1, not main.py.
+# Keep the assistant admin panel attached to this real production runtime.
+from runtime.assistant_admin_panel import install as install_assistant_admin_panel
+main.assistant_admin_panel = install_assistant_admin_panel(main)
 from commands import register_commands as register_text_commands
 register_text_commands(main)
 from runtime.telegram_commands import install as install_telegram_commands
@@ -264,5 +268,12 @@ async def on_startup(dp):
 
     from runtime.faceoff import install as install_faceoff
     await install_faceoff(main)
+
+    # Final assistant callback authority. Private UI recovery layers above may
+    # promote generic callback handlers, so install the deterministic aip:* router
+    # only after every startup-time callback installer has finished.
+    from runtime.assistant_callback_router import install as install_assistant_callback_router
+    install_assistant_callback_router(main)
+    logging.info("ASSISTANT ADMIN PANEL + CALLBACK ROUTER ACTIVE in player_runtime_entry")
 
 main.on_startup = on_startup
