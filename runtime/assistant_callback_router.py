@@ -46,8 +46,8 @@ async def dispatch_assistant_callback(
         raise CancelHandler()
 
     try:
-        # scope/add need FSMContext; all other panel callbacks accept only callback.
-        if action in {"scope", "add"}:
+        # scope/add/groupkey need FSMContext; all other panel callbacks accept only callback.
+        if action in {"scope", "add", "groupkey"}:
             await handler(callback, state)
         else:
             await handler(callback)
