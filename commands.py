@@ -575,10 +575,22 @@ async def _simple_phase(message, app, phase: str):
     if not game or not await _manager(app, message, game):
         await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند فاز را تغییر دهد.")
         return
-    state = dict(game.get("state") or {})
-    state["phase"] = phase
-    state["phase_changed_by"] = int(message.from_user.id)
-    app.runtime.state.games.update_game(game["id"], state=state)
+    try:
+        if phase == "night":
+            snapshot = app.runtime.days.start_night(int(message.chat.id), extra={"phase_changed_by": int(message.from_user.id)})
+        else:
+            snapshot = app.runtime.days.start_new_day(int(message.chat.id), extra={
+                "phase_changed_by": int(message.from_user.id),
+                "turn_order": [],
+                "current_turn_index": 0,
+            })
+        app._stable_day_active = False
+        app._stable_day_ended = False
+        app._stable_phase = "ended" if phase == "night" else "normal"
+    except Exception as exc:
+        logging.exception("text phase transition failed")
+        await message.reply(f"❌ تغییر فاز انجام نشد: {type(exc).__name__}: {exc}")
+        return
     title = "🌙 فاز شب" if phase == "night" else "☀️ فاز روز"
     await message.reply(f"✅ <b>{title}</b> فعال شد.", parse_mode="HTML")
 
