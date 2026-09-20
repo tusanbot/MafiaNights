@@ -21,7 +21,7 @@ class AssistantAdminStates(StatesGroup):
     waiting_scenario = State()
     waiting_role = State()
     waiting_source = State()
-    waiting_private_key = State()
+    waiting_group_key = State()
 
 
 class AssistantAdminPanel:
@@ -66,7 +66,7 @@ class AssistantAdminPanel:
             InlineKeyboardButton("📚 پایگاه دانش", callback_data="aip:kb"),
             InlineKeyboardButton("➕ افزودن اطلاعات", callback_data="aip:add"),
             InlineKeyboardButton("🤖 تنظیمات AI", callback_data="aip:ai"),
-            InlineKeyboardButton("🔐 کلید AI پیوی", callback_data="aip:pv"),
+            InlineKeyboardButton("🔑 کلید AI گروه", callback_data="aip:groupkey"),
             InlineKeyboardButton("📊 وضعیت", callback_data="aip:status"),
             InlineKeyboardButton("❓ راهنمای افزودن مطلب", callback_data="aip:guide"),
         )
@@ -308,7 +308,7 @@ class AssistantAdminPanel:
                 f"🔑 کلید گروه: <b>{'ثبت شده' if row['has_group_key'] else 'ثبت نشده'}</b>\n"
                 f"🔐 AI پیوی: <b>{'فعال' if row['private_enabled'] else 'غیرفعال'}</b>\n"
                 f"🧠 مدل پیوی: <code>{html.escape(str(row['private_model'] or 'پیش‌فرض'))}</code>\n"
-                f"🔑 کلید پیوی: <b>{'ثبت شده و رمزنگاری‌شده' if row['has_private_key'] else 'ثبت نشده'}</b>"
+                f"🔑 کلید مشترک گروه: <b>{'ثبت شده و رمزنگاری‌شده' if row['has_group_key'] else 'ثبت نشده'}</b>"
             )
         await callback.message.edit_text(body, reply_markup=self._back(), parse_mode="HTML")
         await callback.answer()
@@ -338,6 +338,34 @@ class AssistantAdminPanel:
         await callback.answer("وضعیت AI گروه تغییر کرد.")
         await self.ai(callback)
 
+    async def group_key(self, callback: types.CallbackQuery, state: FSMContext):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        await AssistantAdminStates.waiting_group_key.set()
+        await callback.message.edit_text("🔑 <b>ثبت کلید AI گروه</b>\n\nاین کلید مشترک برای دستیار گروه و درخواست‌های پیوی اعضای همین گروه است.\nکلید Gemini یا OpenAI را ارسال کنید؛ پیام حاوی کلید بلافاصله حذف می‌شود.", parse_mode="HTML")
+        await callback.answer()
+
+    async def save_group_key(self, message: types.Message, state: FSMContext):
+        if message.chat.type != "private" or not await self._authorized(message.from_user.id):
+            await state.finish(); return
+        key=(message.text or "").strip(); gid=self._group_id(); secret=os.getenv("DATABASE_URL") or ""
+        if not key or not gid or not secret:
+            await message.answer("❌ کلید، گروه اصلی یا تنظیمات رمزنگاری ناقص است."); return
+        provider="gemini" if key.startswith("AIza") else "openai"
+        model="gemini-2.5-flash" if provider=="gemini" else (os.getenv("MAFIA_AI_MODEL") or "gpt-5.6-mini")
+        try:
+            try: await message.delete()
+            except Exception: pass
+            with self._repo().SessionLocal() as session:
+                session.execute(text("insert into public.mafia_ai_settings (group_id,provider,model,enabled,web_search_enabled,api_key_ciphertext,private_enabled,private_web_search_enabled,updated_at,private_updated_at) values(:gid,:provider,:model,true,true,pgp_sym_encrypt(:key,:secret),true,true,now(),now()) on conflict(group_id) do update set provider=:provider,model=:model,enabled=true,api_key_ciphertext=pgp_sym_encrypt(:key,:secret),private_enabled=true,updated_at=now(),private_updated_at=now()"), {"gid":gid,"provider":provider,"model":model,"key":key,"secret":secret})
+                session.commit()
+            await state.finish()
+            await message.answer("✅ کلید مشترک AI گروه ثبت شد؛ دستیار گروه و پیوی اعضای گروه فعال شدند.", reply_markup=self._menu())
+        except Exception:
+            logging.exception("assistant admin: group key save failed")
+            await state.finish()
+            await message.answer("❌ ثبت کلید انجام نشد.", reply_markup=self._menu())
+
     async def pv(self, callback):
         if not await self._guard(callback):
             await callback.answer(); return
@@ -357,65 +385,13 @@ class AssistantAdminPanel:
         )
         await callback.answer()
 
-    async def pvkey(self, callback: types.CallbackQuery, state: FSMContext):
-        if not await self._guard(callback):
-            await callback.answer(); return
-        await AssistantAdminStates.waiting_private_key.set()
-        await callback.message.edit_text(
-            "🔑 <b>ثبت کلید API برای درخواست‌های پیوی</b>\n\n"
-            "کلید Gemini یا OpenAI گروه را ارسال کنید. این کلید برای درخواست‌های پیوی اعضای همین گروه استفاده می‌شود و پیام شما بلافاصله پس از دریافت حذف می‌شود.",
-            parse_mode="HTML",
-        )
-        await callback.answer()
-
-    async def save_pvkey(self, message: types.Message, state: FSMContext):
-        if message.chat.type != "private" or not await self._authorized(message.from_user.id):
-            await state.finish()
-            return
-        key = (message.text or "").strip()
-        if not key:
-            await message.answer("❌ کلید خالی است.")
-            return
-        secret = os.getenv("DATABASE_URL") or ""
-        if not secret:
-            await message.answer("❌ کلید رمزنگاری پایگاه‌داده در دسترس نیست.")
-            return
-        provider = "gemini" if key.startswith("AIza") else "openai"
-        model = "gemini-2.5-flash" if provider == "gemini" else (os.getenv("MAFIA_AI_MODEL") or "gpt-5.6-mini")
-        try:
-            try:
-                await message.delete()
-            except Exception:
-                pass
-            with self._repo().SessionLocal() as session:
-                session.execute(text("""
-                    insert into public.mafia_ai_settings
-                    (group_id,private_enabled,private_provider,private_model,
-                     private_api_key_ciphertext,private_web_search_enabled,private_updated_at,updated_at)
-                    values(:gid,true,:provider,:model,pgp_sym_encrypt(:key,:secret),true,now(),now())
-                    on conflict(group_id) do update set
-                      private_enabled=true,
-                      private_provider=:provider,
-                      private_model=:model,
-                      private_api_key_ciphertext=pgp_sym_encrypt(:key,:secret),
-                      private_updated_at=now(),
-                      updated_at=now()
-                """), {"gid": self._group_id(), "provider":provider,"model":model,"key":key,"secret":secret})
-                session.commit()
-            await state.finish()
-            await message.answer("✅ کلید API درخواست‌های پیوی با موفقیت ثبت و رمزنگاری شد.")
-        except Exception:
-            logging.exception("assistant admin: private key save failed")
-            await state.finish()
-            await message.answer("❌ ثبت کلید انجام نشد.")
-
     async def pv_toggle(self, callback):
         if not await self._guard(callback):
             await callback.answer(); return
         with self._repo().SessionLocal() as session:
             session.execute(text("""
                 insert into public.mafia_ai_settings(group_id,private_enabled,private_web_search_enabled,updated_at)
-                values(0,true,true,now())
+                values(:gid,true,true,now())
                 on conflict(group_id) do update set private_enabled=not public.mafia_ai_settings.private_enabled,updated_at=now()
             """))
             session.commit()
@@ -450,13 +426,13 @@ class AssistantAdminPanel:
         dp.register_message_handler(self.scenario, state=AssistantAdminStates.waiting_scenario)
         dp.register_message_handler(self.role, state=AssistantAdminStates.waiting_role)
         dp.register_message_handler(self.source, state=AssistantAdminStates.waiting_source)
-        dp.register_message_handler(self.save_pvkey, state=AssistantAdminStates.waiting_private_key)
+        dp.register_message_handler(self.save_group_key, state=AssistantAdminStates.waiting_group_key)
         for action, fn in {
             "menu": self.menu, "kb": self.kb, "doc": self.doc,
             "publish": self.publish, "disable": self.disable,
             "add": self.add_start, "guide": self.guide, "scope": self.scope,
             "status": self.status, "ai": self.ai, "toggle_group": self.toggle_group,
-            "pv": self.pv, "pvkey": self.pvkey, "pvtoggle": self.pv_toggle,
+            "pv": self.pv, "groupkey": self.group_key, "pvtoggle": self.pv_toggle,
         }.items():
             dp.register_callback_query_handler(
                 fn, lambda c, a=action: str(c.data or "").startswith(f"aip:{a}"), state="*"
