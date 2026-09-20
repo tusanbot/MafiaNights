@@ -73,42 +73,35 @@ def _ai_config(app: Any, message: Any) -> tuple[bool, str | None]:
         with KnowledgeRepository().SessionLocal() as session:
             from sqlalchemy import text
             row = session.execute(
-                text("""select enabled,
-                               case when api_key_ciphertext is null then null
-                                    else pgp_sym_decrypt(api_key_ciphertext, :secret)
-                               end as api_key
-                        from public.mafia_ai_settings where group_id=:gid"""),
+                text(
+                    """select enabled,
+                              case when api_key_ciphertext is null then null
+                                   else pgp_sym_decrypt(api_key_ciphertext, :secret)
+                              end as api_key
+                       from public.mafia_ai_settings where group_id=:gid"""
+                ),
                 {"gid": gid, "secret": os.getenv("DATABASE_URL") or ""},
             ).mappings().first()
         if not row:
             return False, os.getenv("MAFIA_AI_API_KEY")
-        return bool(row["enabled"]), (str(row["api_key"]) if row["api_key"] else os.getenv("MAFIA_AI_API_KEY"))
+        return bool(row["enabled"]), (
+            str(row["api_key"]) if row["api_key"] else os.getenv("MAFIA_AI_API_KEY")
+        )
     except Exception:
         logging.exception("knowledge assistant: AI config lookup failed")
         return False, os.getenv("MAFIA_AI_API_KEY")
 
 
-def _ai_enabled(app: Any, message: Any) -> bool:
-    return _ai_config(app, message)[0]
-
-
-    try:
-        gid = int(message.chat.id)
-        with KnowledgeRepository().SessionLocal() as session:
-            from sqlalchemy import text
-            row = session.execute(
-                text("select enabled from public.mafia_ai_settings where group_id=:gid"),
-                {"gid": gid},
-            ).scalar()
-        return bool(row)
-    except Exception:
-        return False
-
-
-def _call_ai(prompt: str, context: list[dict[str, Any]], web: list[dict[str, str]], api_key: str | None = None) -> str | None:
+def _call_ai(
+    prompt: str,
+    context: list[dict[str, Any]],
+    web: list[dict[str, str]],
+    api_key: str | None = None,
+) -> str | None:
     api_key = api_key or os.getenv("MAFIA_AI_API_KEY")
     if not api_key:
         return None
+
     model = os.getenv("MAFIA_AI_MODEL", "gpt-5.6-mini")
     base = os.getenv("MAFIA_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     system = (
@@ -123,10 +116,13 @@ def _call_ai(prompt: str, context: list[dict[str, Any]], web: list[dict[str, str
         "model": model,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": json.dumps(
-                {"question": prompt, "knowledge": context, "web_sources": web},
-                ensure_ascii=False,
-            )},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {"question": prompt, "knowledge": context, "web_sources": web},
+                    ensure_ascii=False,
+                ),
+            },
         ],
         "temperature": 0.2,
     }
@@ -154,7 +150,12 @@ async def answer(message: Any, app: Any, question: str) -> None:
 
     scenario_name, role_name = _game_context(app, message)
     repo = KnowledgeRepository()
-    rows = repo.get_context(question, scenario_name=scenario_name, role_name=role_name, limit=8)
+    rows = repo.get_context(
+        question,
+        scenario_name=scenario_name,
+        role_name=role_name,
+        limit=8,
+    )
 
     # Only query the web when internal knowledge is absent or clearly insufficient.
     web = [] if len(rows) >= 2 else _web_search(
@@ -169,12 +170,15 @@ async def answer(message: Any, app: Any, question: str) -> None:
             suffix = "\n\n<i>منبع: پایگاه دانش داخلی Mafia Nights</i>"
         elif web:
             response = "اطلاعات داخلی کافی نبود. منابع بیرونی مرتبط پیدا شد:\n" + "\n".join(
-                f"• <a href="{html.escape(x['url'], quote=True)}">{html.escape(x['title'])}</a>"
+                f'• <a href="{html.escape(x["url"], quote=True)}">{html.escape(x["title"])}</a>'
                 for x in web
             )
             suffix = "\n\n<i>منبع: جست‌وجوی وب؛ نیازمند بررسی</i>"
         else:
-            response = "در پایگاه دانش ربات اطلاعات کافی برای این سؤال پیدا نشد و جست‌وجوی وب هم نتیجه قابل اتکایی نداد."
+            response = (
+                "در پایگاه دانش ربات اطلاعات کافی برای این سؤال پیدا نشد و "
+                "جست‌وجوی وب هم نتیجه قابل اتکایی نداد."
+            )
             suffix = ""
     else:
         suffix = ""
@@ -183,7 +187,11 @@ async def answer(message: Any, app: Any, question: str) -> None:
         elif web:
             suffix += "\n\n<i>پاسخ با کمک منابع بیرونی تهیه شده است.</i>"
 
-    await message.reply(response + suffix, parse_mode="HTML", disable_web_page_preview=True)
+    await message.reply(
+        response + suffix,
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
 
 
 def install(app: Any) -> bool:
@@ -203,16 +211,25 @@ def install(app: Any) -> bool:
             question = text[4:].strip()
         elif lowered.startswith("سؤال"):
             question = text[4:].strip()
+
         if not question:
-            await message.reply("🤖 <b>دستیار Mafia Nights</b>\n\nمثال:\n<code>/ask نقش زودیاک چه توانایی دارد؟</code>", parse_mode="HTML")
+            await message.reply(
+                "🤖 <b>دستیار Mafia Nights</b>\n\n"
+                "مثال:\n<code>/ask نقش زودیاک چه توانایی دارد؟</code>",
+                parse_mode="HTML",
+            )
             return
         await answer(message, app, question)
 
     from aiogram import types
-    from aiogram.dispatcher.handler import CancelHandler
+
     app.dp.register_message_handler(
         handler,
-        lambda m: (str(getattr(m, "text", "") or "").casefold().startswith(("/ask", "/mafia", "سوال", "سؤال"))),
+        lambda m: (
+            str(getattr(m, "text", "") or "")
+            .casefold()
+            .startswith(("/ask", "/mafia", "سوال", "سؤال"))
+        ),
         state="*",
         content_types=types.ContentTypes.TEXT,
     )
