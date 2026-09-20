@@ -774,6 +774,7 @@ async def _pv_text(message, app):
         __import__("aiogram").types.InlineKeyboardButton("🎭 نقش من", callback_data="pv:role"),
         __import__("aiogram").types.InlineKeyboardButton("📊 آمار", callback_data="pv:stats"),
         __import__("aiogram").types.InlineKeyboardButton("📚 دستورات", callback_data="pv:commands"),
+        __import__("aiogram").types.InlineKeyboardButton("🤖 پنل دستیار", callback_data="aip:menu"),
     )
     await message.reply("👤 <b>پنل پیوی Mafia Nights</b>\n\nیکی از گزینه‌ها را انتخاب کنید:", parse_mode="HTML", reply_markup=kb)
 
