@@ -206,22 +206,25 @@ def install(main):
 
     async def render(c):
         text, kb = lobby_view(c.message.chat.id)
-        # Callback queries edit the current lobby message. Text-command adapters
-        # must reply with the fully rendered canonical lobby instead.
+        # Callback queries must always be acknowledged even if Telegram rejects
+        # editing the old lobby message (stale/deleted message, unchanged text,
+        # or a message that is no longer editable). Otherwise the user sees an
+        # endless loading spinner although the database mutation succeeded.
         if getattr(c, "_from_text_command", False):
-            sent = await c.message.reply(
-                text,
-                parse_mode="HTML",
-                reply_markup=kb,
-            )
+            sent = await c.message.reply(text, parse_mode="HTML", reply_markup=kb)
             main.lobby_message_id = sent.message_id
         else:
-            await c.message.edit_text(
-                text,
-                parse_mode="HTML",
-                reply_markup=kb,
-            )
-        await c.answer()
+            try:
+                await c.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+                main.lobby_message_id = c.message.message_id
+            except Exception:
+                logging.exception("lobby render edit failed; sending a fresh lobby message")
+                sent = await c.message.answer(text, parse_mode="HTML", reply_markup=kb)
+                main.lobby_message_id = sent.message_id
+        try:
+            await c.answer()
+        except Exception:
+            logging.debug("lobby callback was already answered", exc_info=True)
 
     # Expose the canonical callback owner to the actual webhook entrypoint.
     # This prevents legacy text handlers from intercepting «بازی جدید».
