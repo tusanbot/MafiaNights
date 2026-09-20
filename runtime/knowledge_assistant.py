@@ -39,29 +39,23 @@ def _game_context(app: Any, message: Any) -> tuple[str | None, str | None]:
         return None, None
 
 
-def _looks_like_question(text: str) -> bool:
-    """Recognize deliberate natural-language questions without hijacking chat."""
+AI_TRIGGER = "دستیار"
+
+
+def _extract_triggered_question(text: str) -> str | None:
+    """Return a question only when the user explicitly addresses the assistant."""
     value = (text or "").strip()
     if not value or value.startswith("/"):
-        return False
-    lowered = value.casefold()
-    if lowered.startswith(("سوال", "سؤال", "دستیار", "هوش مصنوعی", "ai ")):
-        return True
-    if "؟" in value or "?" in value:
-        return True
-    normalized = (
-        lowered.replace("ي", "ی").replace("ى", "ی").replace("ك", "ک").replace("ۀ", "ه")
-    )
-    strong_phrases = (
-        "چیست", "چیه", "چه کسی", "چه نقشی", "چه توانایی",
-        "چطور", "چگونه", "چرا", "آیا", "کدام", "کدوم",
-        "چند نفر", "چه تعداد", "کی می", "کجا",
-        "میشه توضیح", "می‌شه توضیح", "توضیح بده", "توضیح دهید",
-        "توضیح بدهید", "درباره", "در مورد", "تعریف کن", "تعریف کنید",
-        "معنی", "بگو", "بگید", "را توضیح", "رو توضیح",
-        "چه کار می", "چه کاری", "چه می‌کند", "چه میکنه",
-    )
-    return any(phrase in normalized for phrase in strong_phrases)
+        return None
+    normalized = value.replace("ي", "ی").replace("ى", "ی").replace("ك", "ک").replace("ۀ", "ه")
+    trigger = AI_TRIGGER
+    if not normalized.casefold().startswith(trigger.casefold()):
+        return None
+    rest = normalized[len(trigger):]
+    if rest and not (rest[0].isspace() or rest[0] in ":،,-—"):
+        return None
+    question = rest.lstrip(" :،,-—").strip()
+    return question or None
 
 def _web_search(query: str, limit: int = 4) -> list[dict[str, str]]:
     """Optional no-key fallback using DuckDuckGo HTML search.
@@ -253,45 +247,6 @@ def _call_ai(
         except Exception:
             logging.exception("knowledge assistant: Gemini request failed")
             return None
-
-    model = model or os.getenv("MAFIA_AI_MODEL", "gpt-5.6-mini")
-    base = os.getenv("MAFIA_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-    system = (
-        "تو دستیار رسمی Mafia Nights هستی. "
-        "پاسخ را فارسی، دقیق و کوتاه بده. "
-        "قوانین داخلی تاییدشده ربات بر هر منبع وب اولویت دارند. "
-        "اطلاعات مخفی نقش، نقش سایر بازیکنان، هدف شبانه، رای یا استراتژی خصوصی بازیکنان را افشا نکن. "
-        "اگر منبع داخلی کافی نیست، صریحاً بگو که پاسخ بر پایه منبع بیرونی است. "
-        "برای سوال نامرتبط هم پاسخ مفید و عمومی بده، ولی خودت را مرجع قطعی اطلاعات بیرونی معرفی نکن."
-    )
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {
-                "role": "user",
-                "content": json.dumps(
-                    {"question": prompt, "knowledge": context, "web_sources": web},
-                    ensure_ascii=False,
-                ),
-            },
-        ],
-        "temperature": 0.2,
-    }
-    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    req = urllib.request.Request(
-        base + "/chat/completions",
-        data=data,
-        headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=25) as response:
-            obj = json.loads(response.read().decode("utf-8"))
-        return str(obj["choices"][0]["message"]["content"]).strip()
-    except Exception:
-        logging.exception("knowledge assistant: AI request failed")
-        return None
 
 
 def _ensure_ai_settings_table() -> None:
@@ -658,7 +613,7 @@ def install(app: Any) -> bool:
         if not question:
             await message.reply(
                 "🤖 <b>دستیار Mafia Nights</b>\n\n"
-                "مثال:\n<code>/ask نقش زودیاک چه توانایی دارد؟</code>",
+                "مثال:\n<code>دستیار نقش زودیاک چه توانایی دارد؟</code>\n\nیا از دستور <code>/ask</code> استفاده کنید.",
                 parse_mode="HTML",
             )
             return
@@ -682,21 +637,29 @@ def install(app: Any) -> bool:
     )
     async def auto_handler(message: Any):
         text = str(getattr(message, "text", "") or "").strip()
-        if not _looks_like_question(text):
+        question = _extract_triggered_question(text)
+        if question is None:
             return
         enabled, _api_key, _provider, _model = await _thread_call(
-            "AI auto-route settings", _ai_config, app, message, None, timeout=5.0
+            "AI trigger-route settings", _ai_config, app, message, None, timeout=5.0
         )
         if not enabled:
             return
-        await answer(message, app, text)
+        if not question:
+            await _send_plain_reply(
+                message,
+                f"🤖 برای پرسیدن سؤال، بعد از کلمه «{AI_TRIGGER}» متن سؤال را بنویسید.\nمثال: «{AI_TRIGGER} نقش بازپرس چیست؟»",
+            )
+            return
+        await answer(message, app, question)
 
     app.dp.register_message_handler(
         auto_handler,
-        lambda m: _looks_like_question(str(getattr(m, "text", "") or "")),
+        lambda m: _extract_triggered_question(str(getattr(m, "text", "") or "")) is not None,
         state="*",
         content_types=types.ContentTypes.TEXT,
     )
+
     # Expose both handlers so the real production entry can re-arm their
     # priority after later feature installers register generic text handlers.
     app._knowledge_assistant_handler = handler
