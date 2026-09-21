@@ -126,6 +126,10 @@ def install(app):
                 rs=[r for r in rows(g) if r.get("is_substitute")]; await m.reply("🔄 <b>لیست جایگزین</b>\n\n"+"\n".join(f"• {pname(r)}" for r in rs) if rs else "🔄 لیست جایگزین خالی است.",parse_mode="HTML")
             elif c=="sub_del" and target: app.runtime.state.games.remove_player(g["id"],target.id); await m.reply("🗑 جایگزین حذف شد.")
         elif c in {"vote","end","chief","remove","start_round"}: await m.reply("ℹ️ این دستور در پنل مدیریت موجود است و باید با همان سطح دسترسی اجرا شود.")
+    # Expose the dispatcher to the canonical webhook command router. The
+    # router is the single execution path; this registration remains only for
+    # backward compatibility with non-webhook callers.
+    app._command_surface_v2_dispatch = command
     dp.register_message_handler(command,lambda m: resolve(getattr(m,"text",None)) is not None,content_types=types.ContentTypes.TEXT,state="*")
     reg=getattr(getattr(dp,"message_handlers",None),"handlers",[])
     for i,item in enumerate(reg):
