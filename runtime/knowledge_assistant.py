@@ -603,10 +603,6 @@ def install(app: Any) -> bool:
             question = text[4:].strip()
         elif lowered.startswith("/mafia"):
             question = text[6:].strip()
-        elif lowered.startswith("سوال"):
-            question = text[4:].strip()
-        elif lowered.startswith("سؤال"):
-            question = text[4:].strip()
 
         if not question:
             await message.reply(
