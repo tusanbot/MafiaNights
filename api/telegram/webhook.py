@@ -147,6 +147,44 @@ async def _dispatch_priority_message(message: Any, runtime_entry: Any) -> bool:
             return True
     return False
 
+async def _dispatch_registration_message(message: Any, runtime_entry: Any) -> bool:
+    """Own the registration name message before generic dispatcher handlers.
+
+    Registration runs across separate Vercel webhook invocations, so the name
+    step must not depend on handler ordering or an in-memory FSM surviving the
+    previous request. Prefer the persisted FSM state; if it is missing, an
+    unregistered private user may recover by sending a valid Persian name.
+    """
+    from runtime import registration
+    if getattr(getattr(message, "chat", None), "type", None) != "private":
+        return False
+    uid = getattr(getattr(message, "from_user", None), "id", None)
+    if uid is None or registration.is_registered(int(uid)):
+        return False
+    text_value = str(getattr(message, "text", "") or "").strip()
+    if not text_value or text_value.startswith("/"):
+        return False
+
+    try:
+        dp = runtime_entry.main.dp
+        state = dp.current_state(chat=message.chat.id, user=int(uid))
+        current = await state.get_state()
+        waiting = getattr(registration.RegistrationStates.waiting_name, "state", None)
+        if current == waiting:
+            await registration.save_name(message, state)
+            logging.info("WEBHOOK CANONICAL REGISTRATION NAME ROUTE user_id=%s mode=fsm", uid)
+            return True
+    except Exception:
+        logging.exception("registration FSM name route failed for %s", uid)
+
+    if registration.valid_persian_name(text_value):
+        state = runtime_entry.main.dp.current_state(chat=message.chat.id, user=int(uid))
+        await registration.save_name(message, state)
+        logging.info("WEBHOOK CANONICAL REGISTRATION NAME ROUTE user_id=%s mode=recovery", uid)
+        return True
+    return False
+
+
 async def _dispatch(payload: dict[str, Any]) -> None:
     from aiogram import Bot, Dispatcher, types
 
@@ -156,6 +194,8 @@ async def _dispatch(payload: dict[str, Any]) -> None:
     Bot.set_current(runtime_entry.main.bot)
     Dispatcher.set_current(runtime_entry.main.dp)
     if getattr(update, "message", None) is not None:
+        if await _dispatch_registration_message(update.message, runtime_entry):
+            return
         if await _registration_guard(update.message, runtime_entry):
             return
         if await _dispatch_priority_message(update.message, runtime_entry):
