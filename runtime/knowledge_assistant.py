@@ -137,6 +137,8 @@ def _call_ai(
         "تو دستیار رسمی Mafia Nights هستی. "
         "پاسخ را فارسی، دقیق و کوتاه بده. "
         "قوانین داخلی تاییدشده ربات بر هر منبع وب اولویت دارند. "
+        "اگر یک نقش در چند سناریو وجود دارد، قوانین آن را بین سناریوها مخلوط نکن؛ در بازی فعال فقط قوانین همان سناریو را معتبر بدان. "
+        "اگر سناریوی فعال مشخص نیست و برای یک نقش چند نسخه وجود دارد، تفاوت نسخه‌ها را صریح بگو و یک نسخه را به‌جای دیگری حدس نزن. "
         "اطلاعات مخفی نقش، نقش سایر بازیکنان، هدف شبانه، رای یا استراتژی خصوصی بازیکنان را افشا نکن. "
         "اگر منبع داخلی کافی نیست، صریحاً بگو که پاسخ بر پایه منبع بیرونی است. "
         "برای سوال نامرتبط هم پاسخ مفید و عمومی بده."
@@ -473,7 +475,11 @@ async def answer(message: Any, app: Any, question: str) -> None:
             "knowledge lookup",
             repo.get_context,
             question,
-            scenario_name=explicit_scenario if explicit_scenario is not None else (None if explicit_role else scenario_name),
+            scenario_name=(
+                explicit_scenario
+                if explicit_scenario is not None
+                else (scenario_name if explicit_role and scenario_name else None if explicit_role else scenario_name)
+            ),
             role_name=explicit_role if explicit_role is not None else (None if explicit_scenario else role_name),
             limit=8,
             timeout=10.0,
@@ -490,7 +496,11 @@ async def answer(message: Any, app: Any, question: str) -> None:
                     "broad knowledge lookup",
                     repo.get_context,
                     broad,
-                    scenario_name=explicit_scenario if explicit_scenario is not None else (None if explicit_role else scenario_name),
+                    scenario_name=(
+                explicit_scenario
+                if explicit_scenario is not None
+                else (scenario_name if explicit_role and scenario_name else None if explicit_role else scenario_name)
+            ),
                     role_name=explicit_role if explicit_role is not None else (None if explicit_scenario else role_name),
                     limit=8,
                     timeout=8.0,
