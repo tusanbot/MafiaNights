@@ -156,9 +156,9 @@ async def _dispatch(payload: dict[str, Any]) -> None:
     Bot.set_current(runtime_entry.main.bot)
     Dispatcher.set_current(runtime_entry.main.dp)
     if getattr(update, "message", None) is not None:
-        if await _dispatch_priority_message(update.message, runtime_entry):
-            return
         if await _registration_guard(update.message, runtime_entry):
+            return
+        if await _dispatch_priority_message(update.message, runtime_entry):
             return
     callback = getattr(update, "callback_query", None)
     if callback is not None:
