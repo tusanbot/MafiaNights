@@ -1225,7 +1225,14 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
         if stats is not None:
             uid=int(message.reply_to_message.from_user.id if message.reply_to_message else message.from_user.id)
             gid=int(message.chat.id) if message.chat.type in {"group","supergroup"} else None
-            if name=="profile": await stats.show_profile(message,uid,gid)
+            if name=="profile":
+                try:
+                    from player_service import ensure_player
+                    if ensure_player(message.from_user) is None:
+                        logging.warning("profile command: player registration returned no result for %s", message.from_user.id)
+                except Exception:
+                    logging.exception("profile command: player registration failed for %s", message.from_user.id)
+                await stats.show_profile(message,uid,gid)
             elif name=="ranking": await stats.show_ranking(message,gid)
             else: await stats.show_stats(message,uid,gid)
         else: await message.reply("⚠️ بخش آمار در دسترس نیست.")
