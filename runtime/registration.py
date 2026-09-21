@@ -122,7 +122,14 @@ async def start(app: Any, message: types.Message) -> bool:
     return True
 
 
-async def begin(callback: types.CallbackQuery, state: FSMContext) -> None:
+async def begin(callback: types.CallbackQuery, state: FSMContext | None = None, **kwargs: Any) -> None:
+    # aiogram callback dispatchers may inject FSMContext by keyword depending on
+    # which compatibility wrapper owns the callback. Accept both forms so the
+    # registration button cannot fail before the FSM state is created.
+    if state is None:
+        state = kwargs.get("state")
+    if state is None:
+        raise RuntimeError("registration FSM state is unavailable")
     await state.set_state(RegistrationStates.waiting_name)
     await callback.message.answer(
         "✍️ <b>نام خود را وارد کنید:</b>\n\n"
