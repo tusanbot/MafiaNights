@@ -279,9 +279,10 @@ async def _end_day(main):
     if gid:
         await main.bot.send_message(
             gid,
-            "✅ همه بازیکنا صحبت کردن. فاز روز تموم شد.",
+            "✅ همه بازیکنا صحبت کردن. فاز روز تموم شد.\n\n🗳 نوع رای‌گیری را انتخاب کنید:",
             reply_markup=InlineKeyboardMarkup(row_width=1).add(
-                InlineKeyboardButton("🗳 رای‌گیری", callback_data="vote:settings"),
+                InlineKeyboardButton("🗳 انتخاب نوع رای‌گیری", callback_data="vote:mode"),
+                InlineKeyboardButton("⚙️ تنظیمات رای‌گیری", callback_data="vote:settings"),
                 InlineKeyboardButton("🌙 شروع فاز شب", callback_data="start_night"),
                 InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game")
             ),
