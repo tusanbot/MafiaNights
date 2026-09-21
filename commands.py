@@ -1096,6 +1096,89 @@ async def _legacy_command_adapter(name, message, app):
     # creating a second text-command registration surface.
     await run_command(name, message, app)
 
+async def _nickname_set_text(message: types.Message, app: Any) -> None:
+    if message.chat.type not in {"group", "supergroup"}:
+        await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
+        return
+    try:
+        status = (await app.bot.get_chat_member(message.chat.id, int(message.from_user.id))).status
+    except Exception:
+        status = "left"
+    if status not in {"creator", "administrator"} and int(message.from_user.id) != int(getattr(app, "moderator_id", 0) or 0):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند نام مستعار ثبت کند.")
+        return
+    target = message.reply_to_message.from_user if message.reply_to_message else None
+    if not target:
+        await message.reply("❗ برای ثبت مستعار باید روی پیام کاربر ریپلای کنید.\nمثال: «تنظیم مستعار علی» همراه با ریپلای")
+        return
+    raw = (message.text or "").strip().replace("‌", " ")
+    parts = raw.split(None, 2)
+    nickname = parts[2].strip() if len(parts) >= 3 else ""
+    if not nickname:
+        await message.reply("❗ نام مستعار را بعد از دستور وارد کنید.\nمثال: تنظیم مستعار علی")
+        return
+    from player_repository import PlayerRepository
+    repo = PlayerRepository()
+    repo.upsert(target.id, target.full_name, target.username)
+    if not repo.set_nickname(target.id, nickname):
+        await message.reply("❌ ثبت نام مستعار انجام نشد.")
+        return
+    await message.reply(
+        f"✅ نام مستعار <b>{html.escape(nickname)}</b> برای <a href='tg://user?id={int(target.id)}'>{html.escape(target.full_name or str(target.id))}</a> ثبت شد.",
+        parse_mode="HTML",
+    )
+
+
+async def _nickname_del_text(message: types.Message, app: Any) -> None:
+    if message.chat.type not in {"group", "supergroup"}:
+        await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
+        return
+    target = message.reply_to_message.from_user if message.reply_to_message else None
+    if not target:
+        await message.reply("❗ روی پیام کاربر ریپلای کنید.")
+        return
+    from player_repository import PlayerRepository
+    if not PlayerRepository().delete_nickname(target.id):
+        await message.reply("ℹ️ نام مستعاری برای این کاربر ثبت نشده است.")
+        return
+    await message.reply("🗑 نام مستعار حذف شد.")
+
+
+async def _nickname_get_text(message: types.Message, app: Any) -> None:
+    if message.chat.type not in {"group", "supergroup"}:
+        await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
+        return
+    target = message.reply_to_message.from_user if message.reply_to_message else message.from_user
+    from player_repository import PlayerRepository
+    row = PlayerRepository().get(target.id)
+    nickname = (row or {}).get("nickname")
+    await message.reply(
+        f"📛 نام مستعار: <b>{html.escape(str(nickname))}</b>" if nickname else "ℹ️ نام مستعاری برای این کاربر ثبت نشده است.",
+        parse_mode="HTML",
+    )
+
+
+async def _nickname_list_text(message: types.Message, app: Any) -> None:
+    if message.chat.type not in {"group", "supergroup"}:
+        await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
+        return
+    try:
+        status = (await app.bot.get_chat_member(message.chat.id, int(message.from_user.id))).status
+    except Exception:
+        status = "left"
+    if status not in {"creator", "administrator"} and int(message.from_user.id) != int(getattr(app, "moderator_id", 0) or 0):
+        await message.reply("⛔ فقط مدیر گروه.")
+        return
+    from player_repository import PlayerRepository
+    rows = PlayerRepository().all_nicknames()
+    if not rows:
+        await message.reply("📛 نام مستعاری ثبت نشده است.")
+        return
+    lines = ["📛 <b>لیست نام‌های مستعار</b>", ""]
+    lines.extend(f"• <a href='tg://user?id={uid}'>{html.escape(str(nickname))}</a> — <code>{uid}</code>" for uid, nickname in rows.items())
+    await message.reply("\n".join(lines), parse_mode="HTML")
+
+
 async def run_command(name: str, message: types.Message, app: Any) -> None:
     direct = {
         "pv": _pv_text, "role": _role_text, "panel": _panel_text,
@@ -1132,7 +1215,7 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
         "ask": lambda m,a: __import__("runtime.knowledge_assistant", fromlist=["answer"]).answer(m,a,(m.text or "").split(" ",1)[1] if " " in (m.text or "") else ""),
         "ai_on": lambda m,a: _ai_control(m,a,"on"), "ai_off": lambda m,a: _ai_control(m,a,"off"),
         "ai_status": lambda m,a: _ai_control(m,a,"status"), "ai_key": _ai_key,
-        "ai_panel": _ai_panel_text,
+        "ai_panel": _ai_panel_text,\n        "nickname_set": _nickname_set_text, "nickname_del": _nickname_del_text, "nickname_get": _nickname_get_text, "nickname_list": _nickname_list_text,
         "kb_list": lambda m,a: _kb_control(m,a,"list"), "kb_add": lambda m,a: _kb_control(m,a,"add"),
         "kb_publish": lambda m,a: _kb_control(m,a,"publish"),
         "tag_all": cmd_tag_all, "tag_admins": cmd_tag_admins, "tag_list": cmd_tag_players,
