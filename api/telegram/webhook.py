@@ -85,6 +85,25 @@ async def _dispatch_priority_message(message: Any, runtime_entry: Any) -> bool:
     text = str(getattr(message, "text", "") or "").strip().replace("\u200c", " ")
     normalized = " ".join(text.split())
     if normalized:
+        # /start is an entry-point command, not registration input. It must
+        # always win over an active registration FSM, because Telegram deep
+        # links can deliver /start while a stale waiting_name state still
+        # exists. Previously the FSM guard ran first and save_name could
+        # consume "/start" as the user's nickname.
+        first = normalized.split(" ", 1)[0].casefold()
+        if first.startswith("/start"):
+            command = first[1:]
+            if command == "start" or command.startswith("start@"):
+                handler = getattr(runtime_entry, "_production_start", None)
+                if handler is not None:
+                    await handler(message)
+                    logging.info(
+                        "WEBHOOK CANONICAL /START ROUTE chat_type=%s user_id=%s",
+                        getattr(getattr(message, "chat", None), "type", None),
+                        getattr(getattr(message, "from_user", None), "id", None),
+                    )
+                    return True
+
         # An active aiogram FSM owns the next user message. Do not let the
         # global canonical command router consume profile/setup input.
         try:
@@ -97,21 +116,6 @@ async def _dispatch_priority_message(message: Any, runtime_entry: Any) -> bool:
                     return False
         except Exception:
             logging.exception("webhook FSM state check failed; continuing canonical routing")
-
-        first = normalized.split(" ", 1)[0].casefold()
-        if first.startswith("/start"):
-            command = first[1:]
-            if command == "start" or command.startswith("start@"):
-                handler = getattr(runtime_entry, "_production_start", None)
-                if handler is not None:
-                    await handler(message)
-                    import logging
-                    logging.info(
-                        "WEBHOOK CANONICAL /START ROUTE chat_type=%s user_id=%s",
-                        getattr(getattr(message, "chat", None), "type", None),
-                        getattr(getattr(message, "from_user", None), "id", None),
-                    )
-                    return True
 
         # Canonical production text-command routing happens here rather than
         # through mutable aiogram handler ordering. Legacy/feature installers
