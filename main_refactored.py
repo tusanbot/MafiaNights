@@ -70,9 +70,16 @@ class MafiaApplication:
     def _max_players(self, scenario: Optional[str]) -> int:
         return len(self._scenario_roles(scenario)) if scenario else 0
 
-    async def _ensure_player(self, user: types.User) -> None:
-        try: player_service.ensure_player(user)
-        except Exception: logging.exception("player profile sync failed for %s", user.id)
+    async def _ensure_player(self, user: types.User) -> bool:
+        try:
+            result = player_service.ensure_player(user)
+            if result is None:
+                logging.error("player profile sync returned no result for %s", user.id)
+                return False
+            return True
+        except Exception:
+            logging.exception("player profile sync failed for %s", user.id)
+            return False
 
     def _name(self, user_id: int, fallback: str = "❓") -> str:
         try: return player_service.display_name(user_id, fallback)
@@ -149,7 +156,16 @@ class MafiaApplication:
         except Exception: logging.exception("failed to update event number for game %s", game.get("id")); await message.answer("❌ ثبت شماره بازی انجام نشد. خطا در لاگ ثبت شد.")
 
     async def join(self, callback):
-        group_id = int(callback.message.chat.id); user = callback.from_user; await self._ensure_player(user); game = self.runtime.state.active_game(group_id)
+        group_id = int(callback.message.chat.id); user = callback.from_user
+        if not await self._ensure_player(user):
+            try:
+                from player_repository import PlayerRepository
+                PlayerRepository().upsert(user.id, user.full_name, user.username)
+            except Exception:
+                logging.exception("join callback: player registration failed for %s", user.id)
+                await callback.answer("❌ ثبت بازیکن انجام نشد. لطفاً دوباره «ورود» را بزنید.", show_alert=True)
+                return
+        game = self.runtime.state.active_game(group_id)
         if not game or game.get("status") != Phase.LOBBY.value: await callback.answer("❌ لابی فعال نیست.", show_alert=True); return
         snapshot = self.runtime.lobby_snapshot(group_id)
         if any(int(r["player_id"]) == user.id for r in snapshot.get("players", [])): await callback.answer("⚠️ شما قبلاً وارد شده‌اید.", show_alert=True); return
