@@ -72,7 +72,7 @@ def install(app: Any) -> bool:
         if value is None:
             return None
         try:
-            return scenarios.get_by_id(int(value))
+            return scenarios.get_by_id(value)
         except (TypeError, ValueError):
             return scenarios.get_by_name(str(value))
 
