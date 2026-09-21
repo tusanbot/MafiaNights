@@ -514,7 +514,7 @@ def install(app: Any) -> bool:
             final_game = {**game, "state": state, "status": "finished", "finished_at": now}
             text = _final_text(final_game, rows)
             try:
-                await callback.message.edit_text(text, parse_mode="HTML", reply_markup=_final_markup(game_id))
+                await callback.message.edit_text(text, parse_mode="HTML", reply_markup=_final_markup(game_id, from_history=True))
             except Exception:
                 await callback.message.answer(text, parse_mode="HTML", reply_markup=_final_markup(game_id))
             events = _events_state(final_game)
