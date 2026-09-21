@@ -1,7 +1,9 @@
 """Canonical player registration flow for Mafia Nights.
 
 Registration is separate from game membership: a Telegram user must have a
-Persian nickname and a registered_at timestamp before using bot features.
+valid Persian nickname in mafia_players before using bot features.
+The nickname column is the compatibility source of truth because older
+production databases do not necessarily contain registration-only columns.
 """
 from __future__ import annotations
 
@@ -42,7 +44,11 @@ def valid_persian_name(value: str | None) -> bool:
 
 
 def is_registered(user_id: int) -> bool:
-    """Return True only for a fully registered player."""
+    """Return True when the player has a persisted nickname.
+
+    Deliberately uses only the long-standing nickname column so the
+    registration gate cannot be broken by an optional migration column.
+    """
     try:
         with PlayerRepository().SessionLocal() as session:
             from sqlalchemy import text
@@ -51,7 +57,6 @@ def is_registered(user_id: int) -> bool:
                     select 1
                     from public.mafia_players
                     where id=:id
-                      and registered_at is not null
                       and nickname is not null
                       and trim(nickname) <> ''
                     limit 1
