@@ -395,6 +395,33 @@ async def on_startup(dp):
     except Exception:
         logging.exception("assistant admin: final message authority rearm failed")
 
+    # Absolute last startup authority: private-UI recovery layers above can register
+    # generic text handlers after the module-level rearm. Re-arm the canonical
+    # commands.py dispatcher only after every startup installer has completed.
+    try:
+        _handlers = getattr(main.dp.message_handlers, "handlers", [])
+        _command_handlers, _lock_handlers, _other_handlers = [], [], []
+        for _item in list(_handlers):
+            _cb = getattr(_item, "callback", None) or getattr(_item, "handler", None)
+            _module = getattr(_cb, "__module__", "")
+            _name = getattr(_cb, "__name__", "")
+            if _module == "commands" and _name == "handle_text_commands":
+                _command_handlers.append(_item)
+            elif _name == "chat_lock_message_guard":
+                _lock_handlers.append(_item)
+            else:
+                _other_handlers.append(_item)
+        if _command_handlers:
+            _handlers[:] = _lock_handlers + _command_handlers + _other_handlers
+            logging.info(
+                "CANONICAL TEXT COMMAND AUTHORITY FINAL startup_lock=%s commands=%s total=%s",
+                len(_lock_handlers), len(_command_handlers), len(_handlers),
+            )
+        else:
+            logging.error("CANONICAL TEXT COMMAND AUTHORITY FINAL missing handle_text_commands")
+    except Exception:
+        logging.exception("Failed final startup rearm of canonical text commands")
+
     logging.info("ASSISTANT ADMIN PANEL + CALLBACK ROUTER ACTIVE in player_runtime_entry")
 
 main.on_startup = on_startup
