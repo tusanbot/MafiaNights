@@ -1,8 +1,7 @@
 """Final production runtime authorities.
 
 This module is deliberately not a lobby or management implementation.
-Lobby UI is owned by runtime.lobby_ui_final; management business logic by
-runtime.game_management; management UI by the canonical management UI surface.
+Lobby UI and management business logic are owned by their canonical runtime authorities; this module only reasserts the final authority chain.
 """
 from __future__ import annotations
 
