@@ -1260,7 +1260,6 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
         "management": _panel_text, "lobby": _lobby_text, "seats": _seats_list_text, "players": _players_list_text,
         "kb_list": lambda m,a: _kb_control(m,a,"list"), "kb_add": lambda m,a: _kb_control(m,a,"add"),
         "kb_publish": lambda m,a: _kb_control(m,a,"publish"),
-        "sub_list": lambda m,a: _legacy_command_adapter("sub_list",m,a), "sub_del": lambda m,a: _legacy_command_adapter("sub_del",m,a),
         "tag_all": cmd_tag_all, "tag_admins": cmd_tag_admins, "tag_list": cmd_tag_players,
     }
     if name in {"profile","ranking","stats"}:
