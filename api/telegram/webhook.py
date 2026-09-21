@@ -59,6 +59,19 @@ async def _dispatch_priority_message(message: Any, runtime_entry: Any) -> bool:
     text = str(getattr(message, "text", "") or "").strip().replace("\u200c", " ")
     normalized = " ".join(text.split())
     if normalized:
+        # An active aiogram FSM owns the next user message. Do not let the
+        # global canonical command router consume profile/setup input.
+        try:
+            dp = runtime_entry.main.dp
+            chat_id = getattr(getattr(message, "chat", None), "id", None)
+            user_id = getattr(getattr(message, "from_user", None), "id", None)
+            if chat_id is not None and user_id is not None:
+                fsm_state = dp.current_state(chat=chat_id, user=user_id)
+                if await fsm_state.get_state():
+                    return False
+        except Exception:
+            logging.exception("webhook FSM state check failed; continuing canonical routing")
+
         first = normalized.split(" ", 1)[0].casefold()
         if first.startswith("/start"):
             command = first[1:]
