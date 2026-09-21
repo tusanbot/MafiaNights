@@ -504,6 +504,13 @@ def install(main):
             main.paused_main_player = None
             main.paused_main_duration = None
             main.post_challenge_advance = False
+            try:
+                game = main.runtime.state.active_game(_gid(main))
+                state = dict((game or {}).get("state") or {})
+                state.pop("challenge_runtime", None)
+                main.runtime.state.games.update_game(game["id"], state=state)
+            except Exception:
+                logging.exception("stable challenge: failed to clear active challenge")
             if target is not None:
                 if after:
                     main.current_turn_index += 1
