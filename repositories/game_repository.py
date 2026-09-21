@@ -279,7 +279,7 @@ class GameRepository(DatabaseRepository):
             rows = session.execute(text("""
                 select gp.*, p.username, p.first_name, p.last_name, p.nickname
                 from public.mafia_game_players gp
-                left join public.mafia_players p on p.user_id=gp.player_id
+                left join public.mafia_players p on p.id=gp.player_id
                 where gp.game_id=:game_id
                 order by gp.seat nulls last, gp.joined_at
             """), {"game_id": resolved}).mappings().all()
