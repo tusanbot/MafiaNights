@@ -2,7 +2,7 @@
 
 This module is deliberately not a lobby or management implementation.
 Lobby UI is owned by runtime.lobby_ui_final; management business logic by
-runtime.game_management; management UI by runtime.management_surface_final.
+runtime.game_management; management UI by the canonical management UI surface.
 """
 from __future__ import annotations
 
