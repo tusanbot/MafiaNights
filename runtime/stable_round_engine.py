@@ -551,6 +551,15 @@ def install(main):
             raise CancelHandler()
         main._stable_challenge_requests[target_seat] = challenger_id
         main._stable_challenge_locked.add(target_seat)
+        try:
+            game = main.runtime.state.active_game(_gid(main))
+            state = dict((game or {}).get("state") or {})
+            requests = dict(state.get("challenge_requests") or {})
+            requests[str(target_seat)] = int(challenger_id)
+            state["challenge_requests"] = requests
+            main.runtime.state.games.update_game(game["id"], state=state)
+        except Exception:
+            logging.exception("stable challenge: failed to persist pending request")
         name = await _resolve_name(main, challenger_id, _stored_name(main, challenger_id))
         target_uid = _uid(main, target_seat)
         target_name = await _resolve_name(main, target_uid, _stored_name(main, target_uid))
@@ -580,6 +589,15 @@ def install(main):
             raise CancelHandler()
         challenger_id = main._stable_challenge_requests.get(target_seat)
         if not challenger_id:
+            try:
+                game = main.runtime.state.active_game(_gid(main))
+                persisted = dict((game or {}).get("state") or {}).get("challenge_requests") or {}
+                challenger_id = int(persisted.get(str(target_seat)) or 0)
+                if challenger_id:
+                    main._stable_challenge_requests[target_seat] = challenger_id
+            except Exception:
+                logging.exception("stable challenge: failed to restore pending request")
+        if not challenger_id:
             await callback.answer("⚠️ درخواست چالش پیدا نشد.", show_alert=True)
             raise CancelHandler()
         accept = str(callback.data).startswith("accept_")
@@ -587,6 +605,15 @@ def install(main):
         if not accept:
             main._stable_challenge_used.add(target_seat)
             main._stable_challenge_locked.add(target_seat)
+            try:
+                game = main.runtime.state.active_game(_gid(main))
+                state = dict((game or {}).get("state") or {})
+                requests = dict(state.get("challenge_requests") or {})
+                requests.pop(str(target_seat), None)
+                state["challenge_requests"] = requests
+                main.runtime.state.games.update_game(game["id"], state=state)
+            except Exception:
+                logging.exception("stable challenge: failed to clear rejected request")
             mid = main._stable_challenge_request_messages.pop(target_seat, None)
             if mid:
                 try:
@@ -597,6 +624,15 @@ def install(main):
             raise CancelHandler()
         main._stable_challenge_used.add(target_seat)
         main._stable_challenge_locked.add(target_seat)
+        try:
+            game = main.runtime.state.active_game(_gid(main))
+            state = dict((game or {}).get("state") or {})
+            requests = dict(state.get("challenge_requests") or {})
+            requests.pop(str(target_seat), None)
+            state["challenge_requests"] = requests
+            main.runtime.state.games.update_game(game["id"], state=state)
+        except Exception:
+            logging.exception("stable challenge: failed to clear accepted request")
         mid = main._stable_challenge_request_messages.pop(target_seat, None)
         if mid:
             try:
