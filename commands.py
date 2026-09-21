@@ -1132,6 +1132,8 @@ def register_commands(app: Any) -> bool:
                 BotCommand("stats", "آمار"),
                 BotCommand("rank", "رتبه"),
                 BotCommand("commands", "دستورات"),
+                BotCommand("ask", "سؤال از دستیار"),
+                BotCommand("mafia", "سؤال از دستیار"),
             ]
             gid = int(getattr(app, "ALLOWED_GROUP_ID", 0) or 0)
             if gid:
