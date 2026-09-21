@@ -1385,6 +1385,10 @@ def register_commands(app: Any) -> bool:
                 )
             except Exception:
                 logging.info("cancel_text_confirm: lobby message edit failed")
+        try:
+            app.runtime.state.games.clear_game_players(game["id"])
+        except Exception:
+            logging.exception("cancel_text_confirm: failed to clear cancelled game players")
         await callback.message.edit_text(
             "🚫 <b>بازی لغو شد.</b>\n\nاین بازی در تاریخچه بازی‌های انجام‌شده ثبت نمی‌شود و امتیاز و سابقه بازیکنان تغییر نمی‌کند.",
             parse_mode="HTML",
