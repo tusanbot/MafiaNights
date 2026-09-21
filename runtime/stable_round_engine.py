@@ -603,8 +603,24 @@ def install(main):
                 await main.bot.delete_message(_gid(main), mid)
             except Exception:
                 pass
-        main.pending_challenges[target_seat] = int(challenger_id)
+        # Acceptance immediately transfers control to the challenger. The old
+        # implementation only queued the challenge and waited for another
+        # "next" click, which made an accepted challenge appear stuck.
+        challenger_seat = _seat(main, int(challenger_id))
+        if challenger_seat is None:
+            await callback.answer("❌ صندلی چالش‌گر پیدا نشد.", show_alert=True)
+            raise CancelHandler()
+        main.paused_main_player = int(target_seat)
+        main.paused_main_duration = 120
+        main.post_challenge_advance = True
+        main.challenge_mode = True
+        main.active_challenger_seats = {int(challenger_seat)}
+        main._stable_phase = "challenge"
+        main.pending_challenges.pop(int(target_seat), None)
+        await _cancel_timer(main)
+        await _delete_turn_message(main)
         await callback.answer("⚔️ چالش پذیرفته شد.")
+        await _start_turn(main, int(challenger_seat), 60, True)
         raise CancelHandler()
 
     main._stable_round_start_handler = start_round
