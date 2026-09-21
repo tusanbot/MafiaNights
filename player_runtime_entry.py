@@ -237,14 +237,45 @@ try:
             _explicit.append(_item)
         else:
             _rest.append(_item)
-    if _fsm or _explicit or _auto:
-        _handlers[:] = _fsm + _explicit + _auto + _rest
+    if _fsm or _explicit:
+        _handlers[:] = _fsm + _explicit + _rest
     logging.info(
         "ASSISTANT PRODUCTION AUTHORITY ACTIVE fsm=%s explicit=%s",
         len(_fsm), len(_explicit),
     )
 except Exception:
     logging.exception("Failed to arm final assistant production authority")
+
+# Final canonical text-command authority for the REAL production runtime.
+# Generic feature handlers may be registered after commands.py; keep the
+# canonical text-command dispatcher immediately after the chat-lock guard.
+try:
+    _handlers = getattr(main.dp.message_handlers, "handlers", [])
+    _command_handlers = []
+    _lock_handlers = []
+    _other_handlers = []
+    for _item in list(_handlers):
+        _cb = getattr(_item, "handler", None) or getattr(_item, "callback", None)
+        _module = getattr(_cb, "__module__", "")
+        _name = getattr(_cb, "__name__", "")
+        if _module == "commands" and _name == "handle_text_commands":
+            _command_handlers.append(_item)
+        elif _name == "chat_lock_message_guard":
+            _lock_handlers.append(_item)
+        else:
+            _other_handlers.append(_item)
+    if _command_handlers:
+        # Never let a generic catch-all handler consume a Persian text command
+        # before commands.py gets it. The lock guard remains first.
+        _handlers[:] = _lock_handlers + _command_handlers + _other_handlers
+        logging.info(
+            "CANONICAL TEXT COMMAND AUTHORITY REARMED lock=%s commands=%s total=%s",
+            len(_lock_handlers), len(_command_handlers), len(_handlers),
+        )
+    else:
+        logging.error("CANONICAL TEXT COMMAND AUTHORITY missing handle_text_commands")
+except Exception:
+    logging.exception("Failed to rearm canonical text commands")
 
 _original_startup = main.on_startup
 
