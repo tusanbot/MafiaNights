@@ -488,6 +488,15 @@ def install(main):
         if getattr(main, "challenge_mode", False):
             target = getattr(main, "paused_main_player", None)
             after = bool(getattr(main, "post_challenge_advance", False))
+            try:
+                game = main.runtime.state.active_game(_gid(main))
+                runtime_state = dict((game or {}).get("state") or {}).get("challenge_runtime") or {}
+                if target is None:
+                    target = runtime_state.get("target_seat")
+                if not after:
+                    after = bool(runtime_state.get("post_challenge_advance", False))
+            except Exception:
+                logging.exception("stable challenge: failed to restore active challenge")
             main.challenge_mode = False
             main.active_challenger_seats = set()
             main._stable_phase = "normal"
@@ -653,6 +662,18 @@ def install(main):
         main.active_challenger_seats = {int(challenger_seat)}
         main._stable_phase = "challenge"
         main.pending_challenges.pop(int(target_seat), None)
+        try:
+            game = main.runtime.state.active_game(_gid(main))
+            state = dict((game or {}).get("state") or {})
+            state["challenge_runtime"] = {
+                "target_seat": int(target_seat),
+                "challenger_seat": int(challenger_seat),
+                "challenger_id": int(challenger_id),
+                "post_challenge_advance": True,
+            }
+            main.runtime.state.games.update_game(game["id"], state=state)
+        except Exception:
+            logging.exception("stable challenge: failed to persist active challenge")
         await _cancel_timer(main)
         await _delete_turn_message(main)
         await callback.answer("⚔️ چالش پذیرفته شد.")
