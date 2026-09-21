@@ -67,14 +67,18 @@ def _events_markup(game_id: int, group_id: int, enabled: bool) -> InlineKeyboard
     )
 
 
-def _final_markup(game_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(row_width=2).add(
+def _final_markup(game_id: int, from_history: bool = False) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=2).add(
         InlineKeyboardButton("📊 نتیجه بازی", callback_data=f"game_end:{int(game_id)}:result"),
         InlineKeyboardButton("ℹ️ اطلاعات بازی", callback_data=f"game_end:{int(game_id)}:info"),
         InlineKeyboardButton("📝 اتفاقات بازی", callback_data=f"game_end:{int(game_id)}:events"),
         InlineKeyboardButton("📚 بازی‌های گذشته", callback_data=f"game_history:list:{int(game_id)}"),
-        InlineKeyboardButton("✖️ بستن", callback_data=f"game_end:{int(game_id)}:close"),
     )
+    if from_history:
+        kb.add(InlineKeyboardButton("⬅️ بازگشت به بازی‌های گذشته", callback_data=f"game_history:list:{int(game_id)}"))
+    else:
+        kb.add(InlineKeyboardButton("✖️ بستن", callback_data=f"game_end:{int(game_id)}:close"))
+    return kb
 
 
 def _stop_transient_tasks(app: Any) -> None:
@@ -574,7 +578,7 @@ def install(app: Any) -> bool:
             if not game:
                 await callback.answer("❌ این بازی در آرشیو پیدا نشد.", show_alert=True); return
             rows = app.runtime.state.games.list_players(reference_id)
-            await callback.message.edit_text(_final_text(game, rows), parse_mode="HTML", reply_markup=_final_markup(reference_id))
+            await callback.message.edit_text(_final_text(game, rows), parse_mode="HTML", reply_markup=_final_markup(reference_id, from_history=True))
             await callback.answer(); return
 
     dp.register_callback_query_handler(finish_menu, lambda c: str(c.data or "").startswith("mgmt:") and str(c.data or "").split(":")[-1] == "finish", state="*")
