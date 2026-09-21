@@ -113,6 +113,8 @@ def install(app):
         await m.reply("ℹ️ این دستور به پنل مدیریت متصل است؛ از دکمه‌های مدیریت برای عملیات پیچیده استفاده کنید.")
     async def command(m):
         c=resolve(m.text)
+        if not c:
+            return
         if c=="stats": await stats(m)
         elif c.startswith("nickname_"): await nickname(m,{"nickname_set":"set","nickname_del":"del","nickname_get":"get","nickname_list":"list"}[c])
         elif c in {"mute","unmute","extra","night","day","challenge_settings","next_settings","next"}: await simple_game_action(m,c)
