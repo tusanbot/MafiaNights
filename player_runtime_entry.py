@@ -18,6 +18,12 @@ main.player_service = player_service
 install_latency(main.dp)
 logging.info("PERSISTENCE_OPTIMIZATION_ACTIVE pool=serverless-safe identity-cache=60s active-game-cache=0.75s")
 
+# Presentation authority for the REAL production runtime. This is opt-in and
+# never changes callbacks, handlers, state, or business logic.
+from runtime.emoji_runtime import install as install_custom_emoji_runtime
+if install_custom_emoji_runtime(main):
+    logging.info("CUSTOM EMOJI PRESENTATION ACTIVE")
+
 from runtime.postgres_fsm_storage import install as install_postgres_fsm_storage
 install_postgres_fsm_storage(main)
 from runtime.scenario_persistence_patch import install as install_scenario_persistence_patch
