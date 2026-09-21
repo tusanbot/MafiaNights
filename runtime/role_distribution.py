@@ -1,6 +1,7 @@
 """Role distribution for the canonical production lobby and first-day control UI."""
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import logging
@@ -151,10 +152,32 @@ def install(app: Any) -> bool:
         players.sort(key=lambda row: int(row.get("seat") or 999))
         if not players: await callback.answer("❌ بازیکنی در لابی نیست.", show_alert=True); return
         if len(players) != len(roles): await callback.answer(f"❌ تعداد بازیکنان ({len(players)}) با ظرفیت سناریو ({len(roles)}) برابر نیست.", show_alert=True); return
+
+        # Answer immediately so Telegram does not keep the callback spinner active
+        # while synchronous DB work and private-message delivery are running.
+        await callback.answer("⏳ پخش نقش در حال انجام است...")
         random.shuffle(roles); game_id = int(game["id"]); role_map: dict[str, str] = {}; save_failures: list[int] = []
+        logging.info("role distribution started: game=%s players=%d", game_id, len(players))
         for player, role in zip(players, roles):
             player_id = int(player["player_id"])
-            if not app.runtime.state.games.set_player_role(game_id, player_id, str(role), seat=int(player["seat"])): save_failures.append(player_id)
+            try:
+                ok = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        app.runtime.state.games.set_player_role,
+                        game_id,
+                        player_id,
+                        str(role),
+                        int(player["seat"]),
+                    ),
+                    timeout=8.0,
+                )
+            except asyncio.TimeoutError:
+                logging.error("role persistence timeout: game=%s player=%s seat=%s", game_id, player_id, player.get("seat"))
+                ok = False
+            except Exception:
+                logging.exception("role persistence exception: game=%s player=%s seat=%s", game_id, player_id, player.get("seat"))
+                ok = False
+            if not ok: save_failures.append(player_id)
             role_map[str(player_id)] = str(role)
         if save_failures:
             await callback.answer("❌ ذخیره نقش‌ها کامل نشد؛ بازی شروع نشد.", show_alert=True); logging.error("role distribution failed players=%s game=%s", save_failures, game_id); return
@@ -218,7 +241,6 @@ def install(app: Any) -> bool:
         else:
             await bot.send_message(group_id, f"🎭 <b>پخش نقش انجام شد</b>\n\n📨 تعداد نقش‌های ارسال‌شده: <b>{sent}/{len(players)}</b>", parse_mode="HTML")
 
-        await callback.answer(f"✅ نقش‌ها پخش شد ({sent}/{len(players)} ارسال موفق)")
         logging.info("roles distributed: game=%s players=%d sent=%d failed=%d", game_id, len(players), sent, len(delivery_failures))
 
     app._role_distribution_handler = distribute_roles
