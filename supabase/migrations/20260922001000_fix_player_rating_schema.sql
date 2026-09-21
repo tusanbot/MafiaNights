@@ -10,6 +10,6 @@ alter table public.mafia_ratings drop constraint if exists mafia_ratings_check;
 alter table public.mafia_ratings drop constraint if exists mafia_ratings_score_check;
 alter table public.mafia_ratings drop constraint if exists mafia_ratings_changes_check;
 
-create unique index if not exists mafia_ratings_user_game_unique
+create unique index if not exists uq_mafia_ratings_user_game
   on public.mafia_ratings (user_id, game_id)
   where user_id is not null and game_id is not null;
