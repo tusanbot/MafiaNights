@@ -9,9 +9,11 @@ import main1 as main
 from runtime.production_bridge import install as install_persistent_bridge, startup as persistent_startup
 from player_service import player_service
 from runtime.webhook_safety import install_latency, install_safe_callback_answer
+from runtime import registration as player_registration
 
 install_safe_callback_answer()
 _bridge = install_persistent_bridge(main)
+player_registration.install(main)
 main.player_service = player_service
 install_latency(main.dp)
 logging.info("PERSISTENCE_OPTIMIZATION_ACTIVE pool=serverless-safe identity-cache=60s active-game-cache=0.75s")
@@ -54,6 +56,9 @@ def _remove_conflicting_start_handlers():
 
 
 async def _production_start(message):
+    if message.chat.type == "private":
+        if await player_registration.start(main, message):
+            return
     if message.chat.type in {"group", "supergroup"}:
         kb = InlineKeyboardMarkup(row_width=1).add(
             InlineKeyboardButton("🎮 بازی جدید", callback_data="fl_new")
