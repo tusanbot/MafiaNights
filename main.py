@@ -31,6 +31,7 @@ from runtime.knowledge_assistant import install as install_knowledge_assistant
 from runtime.chat_locks import install as install_chat_locks
 from runtime.pv_menu_callbacks import install as install_pv_menu_callbacks
 from runtime.assistant_callback_router import install as install_assistant_callback_router
+from runtime.command_surface_v2 import install as install_extended_command_surface
 from commands import register_commands as register_canonical_commands
 
 TOKEN=os.getenv("API_TOKEN")
@@ -57,6 +58,9 @@ install_pv_menu_callbacks(app)
 # A single top-level aip:* router must be installed after the private-menu router
 # because the latter intentionally promotes its own callback handler to the front.
 install_assistant_callback_router(app)
+# Keep extended command implementations available to the canonical router.
+# Its message handler is removed below; only its dispatcher is retained.
+install_extended_command_surface(app)
 
 # Canonical text-command authority:
 # all game/user text commands are registered exactly once from commands.py.
