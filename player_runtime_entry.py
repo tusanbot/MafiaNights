@@ -175,6 +175,8 @@ from runtime.stable_round_policy import install as install_stable_round_policy
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
 from runtime.transition_ui_dedup import install as install_transition_ui_dedup
 from runtime.voting_runtime import install as install_voting_runtime
+from runtime.voting_timer_patch import install as install_voting_timer_patch
+from runtime.player_scoring import install as install_player_scoring
 install_stable_round_engine(main)
 install_live_controls_v2(main)
 install_lobby_challenge_v2(main)
@@ -182,6 +184,8 @@ install_stable_round_policy(main)
 install_stable_challenge_button_guard(main)
 install_transition_ui_dedup(main)
 install_voting_runtime(main)
+install_voting_timer_patch(main)
+install_player_scoring(main)
 
 from runtime.game_info_security_v2 import install as install_game_info_security_v2
 install_game_info_security_v2(main)
