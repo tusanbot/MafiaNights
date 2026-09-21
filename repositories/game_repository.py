@@ -287,13 +287,42 @@ class GameRepository(DatabaseRepository):
         self._players_cache[key] = (time.monotonic(), value)
         return [dict(row) for row in value]
 
-    def set_player_role(self, game_id, player_id, role):
+    def set_player_role(self, game_id, player_id, role, seat=None):
+        """Persist a role using the canonical player id, with a seat fallback.
+
+        Some older lobby rows were created before the player identity migration
+        and can expose a Telegram/user id through the lobby snapshot while the
+        game-player row is only reliably addressable by its seat. Role
+        distribution must not fail in that compatibility case.
+        """
         with self.SessionLocal() as session:
             resolved = self._resolve_id(session, game_id)
-            result=session.execute(text("update public.mafia_game_players set role=:role, updated_at=now() where game_id=:game_id and player_id=:player_id"), {"game_id":resolved,"player_id":int(player_id),"role":role})
+            result = session.execute(
+                text(
+                    "update public.mafia_game_players "
+                    "set role=:role, updated_at=now() "
+                    "where game_id=:game_id and player_id=:player_id"
+                ),
+                {"game_id": resolved, "player_id": int(player_id), "role": role},
+            )
+            if result.rowcount == 0 and seat is not None:
+                result = session.execute(
+                    text(
+                        "update public.mafia_game_players "
+                        "set role=:role, updated_at=now() "
+                        "where game_id=:game_id and seat=:seat"
+                    ),
+                    {"game_id": resolved, "seat": int(seat), "role": role},
+                )
+                if result.rowcount:
+                    logging.warning(
+                        "role persisted by seat fallback: game=%s seat=%s player=%s",
+                        game_id, seat, player_id,
+                    )
             session.commit()
+            ok = result.rowcount > 0
         self._invalidate(game_id=game_id)
-        return result.rowcount>0
+        return ok
 
     def remove_player(self, game_id, player_id):
         with self.SessionLocal() as session:
