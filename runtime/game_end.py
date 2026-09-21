@@ -529,7 +529,7 @@ def install(app: Any) -> bool:
             return
         if action == "result":
             rows = app.runtime.state.games.list_players(game_id)
-            await callback.message.edit_text(_final_text(game, rows), parse_mode="HTML", reply_markup=_final_markup(game_id))
+            await callback.message.edit_text(_final_text(game, rows), parse_mode="HTML", reply_markup=_final_markup(game_id, from_history=str(game.get("status") or "") == "finished"))
             await callback.answer(); return
         await callback.answer("❌ عملیات نامعتبر است.", show_alert=True)
 
