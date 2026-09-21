@@ -48,7 +48,7 @@ def install(app: Any) -> bool:
             ("🎂 تولد بازیکن", "birthday"), ("⚔ وضعیت چالش", "challenge"), ("⏭ مدیریت نکست", "next"),
             ("🚫 لغو بازی", "cancel"), ("ℹ️ اطلاعات بازی", "info"), ("🦵 کیک از بازی", "kick"),
             ("⚠️ تذکر به بازیکن", "warning"), ("➕ ترن اضافه", "extra"), ("🔇 سکوت بازیکن", "mute"),
-            ("🔊 حذف سکوت", "unmute"), ("🏁 اتمام بازی", "finish"), ("⬅️ بازگشت به لابی", "back_lobby"),
+            ("🔊 حذف سکوت", "unmute"), ("📝 اتفاقات بازی", "incidents"), ("🏁 اتمام بازی", "finish"), ("⬅️ بازگشت به لابی", "back_lobby"),
         ]
         kb = InlineKeyboardMarkup(row_width=3)
         for i in range(0, len(items), 3):
@@ -162,6 +162,18 @@ def install(app: Any) -> bool:
         management._save(game, muted_next_round_seats=sorted(int(x) for x in (getattr(app, "_gm_muted_next_round", set()) or set())))
         await callback.message.edit_text(f"🔊 <b>سکوت {html.escape(management._name(row))} حذف شد.</b>", parse_mode="HTML", reply_markup=management.panel(game["id"])); await callback.answer("🔊 سکوت حذف شد.")
 
+    async def incidents(callback):
+        gid = int(callback.message.chat.id)
+        game = management._game(gid)
+        if not game or not await management._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True)
+            return
+        runtime = getattr(app, "_progress_features_runtime", None)
+        if runtime is None:
+            await callback.answer("❌ سیستم ثبت اتفاقات در دسترس نیست.", show_alert=True)
+            return
+        await runtime.incidents(callback)
+
     async def cancel(callback):
         gid = int(callback.message.chat.id); game = management._game(gid)
         if not game or not await management._allowed(callback, gid, game):
@@ -196,7 +208,7 @@ def install(app: Any) -> bool:
     handlers = [
         (info, "info"), (kick, "kick"), (kick_pick, "kick_pick"), (warning, "warning"), (warning_pick, "warning_pick"),
         (extra, "extra"), (extra_pick, "extra_pick"), (mute, "mute"), (mute_pick, "mute_pick"),
-        (unmute, "unmute"), (unmute_pick, "unmute_pick"), (cancel, "cancel"),
+        (unmute, "unmute"), (unmute_pick, "unmute_pick"), (incidents, "incidents"), (cancel, "cancel"),
         (cancel_confirm, "cancel_confirm"), (cancel_back, "cancel_back"), (back_lobby, "back_lobby"),
     ]
     for fn, action in handlers:
