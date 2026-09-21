@@ -80,7 +80,7 @@ class RatingRepository(DatabaseRepository):
         metric = str(metric or "score").strip().lower()
         if metric not in {"score", "average", "win_rate", "best_game"}:
             metric = "score"
-        limit = max(1, min(int(limit), 100))
+        limit = max(1, min(int(limit), 10000))
         where = "where g.group_chat_id=:group_chat_id" if group_chat_id is not None else ""
         join = "join public.mafia_games g on g.id=r.game_id" if group_chat_id is not None else ""
         params = {"limit": limit}
