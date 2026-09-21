@@ -1158,6 +1158,11 @@ async def _nickname_set_text(message: types.Message, app: Any) -> None:
     if not nickname:
         await message.reply("❗ نام مستعار را بعد از دستور وارد کنید.\nمثال: تنظیم مستعار علی")
         return
+    from runtime.registration import normalize_name, valid_persian_name
+    nickname = normalize_name(nickname)
+    if not valid_persian_name(nickname):
+        await message.reply("❌ نام مستعار نامعتبر است. فقط حروف فارسی و فاصله مجاز است و حداکثر ۳۲ نویسه.")
+        return
     from player_repository import PlayerRepository
     repo = PlayerRepository()
     repo.upsert(target.id, target.full_name, target.username)
