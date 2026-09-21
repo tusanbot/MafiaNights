@@ -296,7 +296,11 @@ async def _cast(main, callback):
             await main.bot.edit_message_text(
                 voting_runtime._gid(main), int(message_id),
                 voting_runtime._vote_message_text(main, v, target), parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast"))
+                reply_markup=(
+                    voting_runtime._manual_next_kb(idx >= len(targets) - 1)
+                    if v.get("mode") == voting_runtime.MANUAL
+                    else InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast"))
+                )
             )
         except Exception: pass
     await callback.answer("✅ رأی شما ثبت شد.")
