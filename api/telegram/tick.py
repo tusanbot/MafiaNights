@@ -74,20 +74,37 @@ def app(environ, start_response):
         phase = str(voting.get("phase") or "")
         now = time.time()
 
-        if deadline and float(deadline) <= now and phase == "waiting":
-            asyncio.run(voting_runtime._start_target(app_obj))
-            result.update({"ok": True, "processed": True, "action": "start_target", "phase": phase})
-        elif deadline and float(deadline) <= now and phase == "voting":
-            asyncio.run(voting_runtime._end_target(app_obj))
-            after_game = app_obj.runtime.state.active_game(gid)
-            after = dict((after_game or {}).get("state", {}).get("voting") or {})
-            result.update({"ok": True, "processed": True, "action": "end_target", "phase": phase, "next_phase": str(after.get("phase") or ""), "target_index": int(after.get("target_index") or 0)})
-        elif phase == "next_target_pending":
-            asyncio.run(voting_runtime._start_target(app_obj))
-            result.update({"ok": True, "processed": True, "action": "next_target", "phase": phase})
-        elif phase == "round_finished_pending":
-            asyncio.run(voting_runtime._finish_round(app_obj))
-            result.update({"ok": True, "processed": True, "action": "finish_round", "phase": phase})
+        # Process every already-due persistent transition in this invocation.
+        # A serverless request must not stop after the first target; after ending
+        # one target, immediately continue while the persisted state is still due.
+        processed = []
+        for _ in range(32):
+            game = app_obj.runtime.state.active_game(gid)
+            voting = dict((game or {}).get("state", {}).get("voting") or {})
+            deadline = voting.get("deadline")
+            phase = str(voting.get("phase") or "")
+            now = time.time()
+            if deadline and float(deadline) <= now and phase == "waiting":
+                asyncio.run(voting_runtime._start_target(app_obj))
+                processed.append("start_target")
+                continue
+            if deadline and float(deadline) <= now and phase == "voting":
+                asyncio.run(voting_runtime._end_target(app_obj))
+                processed.append("end_target")
+                continue
+            if phase == "next_target_pending":
+                asyncio.run(voting_runtime._start_target(app_obj))
+                processed.append("next_target")
+                continue
+            if phase == "round_finished_pending":
+                asyncio.run(voting_runtime._finish_round(app_obj))
+                processed.append("finish_round")
+                continue
+            break
+        result.update({"ok": True, "processed": bool(processed), "actions": processed, "phase": phase})
+        if processed:
+            result["target_index"] = int(voting.get("target_index") or 0)
+        
         else:
             result.update({"ok": True, "processed": False, "phase": phase})
     except Exception as exc:
