@@ -190,6 +190,11 @@ def install(app: Any) -> bool:
         if not ok:
             await callback.answer("❌ لغو بازی انجام نشد.", show_alert=True)
             return
+        # A cancelled game must not leak its roster into the next lobby.
+        try:
+            app.runtime.state.games.clear_game_players(game["id"])
+        except Exception:
+            logging.exception("failed to clear cancelled game players game=%s", game.get("id"))
         _clear_runtime_flags(app)
         lid = state.get("lobby_message_id") or state.get("control_message_id")
         if lid:
