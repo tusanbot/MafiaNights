@@ -217,17 +217,16 @@ _rearm_canonical_new_game()
 
 # Final assistant authority for the REAL production runtime.
 # player_runtime_entry -> main1 is the webhook path; main.py is not imported here.
-# Re-arm both explicit /ask and natural-language AI handlers after every feature
-# installer so generic player/text handlers cannot consume assistant questions.
+# Re-arm the explicit slash-command AI handler after every feature
+# installer so generic player/text handlers cannot consume /ask or /mafia.
 try:
     _handlers = getattr(main.dp.message_handlers, "handlers", [])
     _panel = getattr(main, "assistant_admin_panel", None)
     _assistant_handler = getattr(main, "_knowledge_assistant_handler", None)
-    _assistant_auto = getattr(main, "_knowledge_assistant_auto_handler", None)
     _assistant_names = {
         "title", "content", "scenario", "role", "source", "save_group_key", "open",
     }
-    _fsm, _explicit, _auto, _rest = [], [], [], []
+    _fsm, _explicit, _rest = [], [], []
     for _item in list(_handlers):
         _cb = getattr(_item, "handler", None) or getattr(_item, "callback", None)
         _owner = getattr(_cb, "__self__", None)
@@ -236,15 +235,13 @@ try:
             _fsm.append(_item)
         elif _assistant_handler is not None and _cb is _assistant_handler:
             _explicit.append(_item)
-        elif _assistant_auto is not None and _cb is _assistant_auto:
-            _auto.append(_item)
         else:
             _rest.append(_item)
     if _fsm or _explicit or _auto:
         _handlers[:] = _fsm + _explicit + _auto + _rest
     logging.info(
-        "ASSISTANT PRODUCTION AUTHORITY ACTIVE fsm=%s explicit=%s auto=%s",
-        len(_fsm), len(_explicit), len(_auto),
+        "ASSISTANT PRODUCTION AUTHORITY ACTIVE fsm=%s explicit=%s",
+        len(_fsm), len(_explicit),
     )
 except Exception:
     logging.exception("Failed to arm final assistant production authority")
@@ -343,12 +340,11 @@ async def on_startup(dp):
     try:
         _handlers = getattr(main.dp.message_handlers, "handlers", [])
         _assistant_handler = getattr(main, "_knowledge_assistant_handler", None)
-        _assistant_auto = getattr(main, "_knowledge_assistant_auto_handler", None)
         _panel = getattr(main, "assistant_admin_panel", None)
         _assistant_names = {
             "title", "content", "scenario", "role", "source", "save_group_key", "open",
         }
-        _fsm, _explicit, _auto, _rest = [], [], [], []
+        _fsm, _explicit, _rest = [], [], []
         for _item in list(_handlers):
             _cb = getattr(_item, "callback", None) or getattr(_item, "handler", None)
             _owner = getattr(_cb, "__self__", None)
@@ -357,15 +353,13 @@ async def on_startup(dp):
                 _fsm.append(_item)
             elif _assistant_handler is not None and _cb is _assistant_handler:
                 _explicit.append(_item)
-            elif _assistant_auto is not None and _cb is _assistant_auto:
-                _auto.append(_item)
             else:
                 _rest.append(_item)
-        if _fsm or _explicit or _auto:
-            _handlers[:] = _fsm + _explicit + _auto + _rest
+        if _fsm or _explicit:
+            _handlers[:] = _fsm + _explicit + _rest
         logging.info(
-            "ASSISTANT FINAL MESSAGE AUTHORITY REARMED fsm=%s explicit=%s auto=%s total=%s",
-            len(_fsm), len(_explicit), len(_auto), len(_handlers),
+            "ASSISTANT FINAL MESSAGE AUTHORITY REARMED fsm=%s explicit=%s total=%s",
+            len(_fsm), len(_explicit), len(_handlers),
         )
     except Exception:
         logging.exception("assistant admin: final message authority rearm failed")
