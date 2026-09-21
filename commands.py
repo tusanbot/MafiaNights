@@ -1444,8 +1444,10 @@ def register_commands(app: Any) -> bool:
                 BotCommand("role", "نقش من"),
                 BotCommand("panel", "پنل"),
                 BotCommand("stats", "آمار"),
-                BotCommand("rank", "رتبه"),
+                BotCommand("rank", "رتبه‌بندی"),
+                BotCommand("ranking", "رتبه‌بندی"),
                 BotCommand("commands", "دستورات"),
+                BotCommand("help", "راهنمای استفاده"),
                 BotCommand("ask", "سؤال از دستیار"),
                 BotCommand("mafia", "سؤال از دستیار"),
             ]
@@ -1458,7 +1460,9 @@ def register_commands(app: Any) -> bool:
                 BotCommand("role", "نقش من"),
                 BotCommand("panel", "پنل"),
                 BotCommand("stats", "آمار"),
+                BotCommand("rank", "رتبه‌بندی"),
                 BotCommand("commands", "دستورات"),
+                BotCommand("help", "راهنمای استفاده"),
             ])
         except Exception:
             logging.exception("Canonical Telegram command menu registration failed")
