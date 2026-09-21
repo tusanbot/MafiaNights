@@ -1061,24 +1061,29 @@ async def _sub_text(message, app):
     await message.reply(f"🔄 <b>{html.escape(target.full_name)}</b> به لیست جایگزین اضافه شد.",parse_mode="HTML")
 
 
-async def _challenge_text(message, app):
-    game=_game(app,message)
+async def _challenge_text(message: types.Message, app: Any) -> None:
+    """Text «چالش» is an adapter to the exact canonical turn-button handler.
+
+    No reply target is accepted here: the current active speaker is the target,
+    exactly as when another player presses «درخواست چالش» on that turn's card.
+    All challenge restrictions therefore remain in one handler.
+    """
+    game = _game(app, message)
     if not game:
-        await message.reply("❌ بازی فعالی وجود ندارد."); return
-    if not getattr(app,"challenge_enabled",{}).get(int(message.chat.id),True):
-        await message.reply("⚔️ چالش در حال حاضر محدود است."); return
-    target=await _reply_target(message)
-    if not target:
-        await message.reply("❗ برای چالش روی پیام بازیکن ریپلای کنید."); return
-    rows=app.runtime.state.games.list_players(game["id"])
-    a=next((r for r in rows if int(r.get("player_id") or 0)==int(message.from_user.id) and r.get("seat") is not None),None)
-    b=next((r for r in rows if int(r.get("player_id") or 0)==int(target.id) and r.get("seat") is not None),None)
-    if not a or not b or int(a["player_id"])==int(b["player_id"]):
-        await message.reply("❌ هر دو نفر باید بازیکن فعال باشند."); return
-    state=dict(game.get("state") or {}); pending=dict(state.get("challenge_requests") or {})
-    bucket=dict(pending.get(str(b["seat"])) or {}); bucket[str(message.from_user.id)]="pending"; pending[str(b["seat"])]=bucket
-    state["challenge_requests"]=pending; app.runtime.state.games.update_game(game["id"],state=state)
-    await message.reply(f"⚔️ <b>{html.escape(str(a.get('nickname') or message.from_user.full_name))}</b> برای <b>{html.escape(str(b.get('nickname') or target.full_name))}</b> درخواست چالش داد.",parse_mode="HTML")
+        await message.reply("❌ بازی فعالی وجود ندارد.")
+        return
+    handler = getattr(app, "_stable_challenge_request_handler", None)
+    if handler is None:
+        await message.reply("❌ سیستم چالش در دسترس نیست.")
+        return
+    try:
+        active = int(app.turn_order[app.current_turn_index])
+    except Exception:
+        await message.reply("⚠️ نوبت فعال پیدا نشد.")
+        return
+    proxy = _callback_proxy(message, f"challenge_request_{active}")
+    proxy._from_text_command = True
+    await handler(proxy)
 
 
 async def _legacy_command_adapter(name, message, app):
