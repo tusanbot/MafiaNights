@@ -61,14 +61,6 @@ class RatingRepository(DatabaseRepository):
                 from r
             """),{"user_id":int(user_id)}).mappings().one();return dict(row)
 
-    def rank(self,user_id):
-        with self.SessionLocal() as session:
-            row=session.execute(text("""
-                with totals as (select p.id,(50+coalesce(sum(r.score),0)+(select coalesce(sum(ar.reward_points),0) from public.mafia_achievement_rewards ar where ar.player_id=p.id))::int score,count(r.id)::int games,count(r.id) filter(where r.result='win')::int wins from public.mafia_players p left join public.mafia_ratings r on r.user_id=p.id group by p.id)
-                select 1+count(*) filter(where t.score>me.score or (t.score=me.score and t.wins>me.wins) or (t.score=me.score and t.wins=me.wins and t.games>me.games))::int rank,me.score,me.games,me.wins,(select count(*)::int from totals) total_players
-                from totals me join totals t on true where me.user_id=:user_id group by me.score,me.games,me.wins
-            """),{"user_id":int(user_id)}).mappings().first();return dict(row) if row else {"rank":None,"score":BASE_SCORE,"games":0,"wins":0,"total_players":0}
-
     def top(self, limit=10, metric="score", group_chat_id=None):
         """Return leaderboard rows ordered by one documented metric.
 
