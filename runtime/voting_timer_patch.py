@@ -20,7 +20,7 @@ def _scenario(main):
     state = getattr(getattr(main, "runtime", None), "state", None)
     repo = getattr(state, "scenarios", None)
     try:
-        row = repo.get_by_id(int(scenario_id)) if repo and scenario_id else None
+        row = repo.get_by_id(scenario_id) if repo and scenario_id else None
         return dict(row or {})
     except Exception:
         return {}
