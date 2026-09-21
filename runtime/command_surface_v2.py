@@ -116,7 +116,7 @@ def install(app):
         if not c:
             return
         if c=="stats": await stats(m)
-        elif c.startswith("nickname_"): await nickname(m,{"nickname_set":"set","nickname_del":"del","nickname_get":"get","nickname_list":"list"}[c])
+        elif c in {"nickname_set","nickname_del","nickname_get","nickname_list"}: await nickname(m,{"nickname_set":"set","nickname_del":"del","nickname_get":"get","nickname_list":"list"}[c])
         elif c in {"mute","unmute","extra","night","day","challenge_settings","next_settings","next"}: await simple_game_action(m,c)
         elif c in {"sub","sub_list","sub_del"}:
             g=game(m.chat.id)
