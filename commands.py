@@ -52,6 +52,17 @@ COMMANDS = {
     "sub": {"جایگزین", "/sub"},
     "attendance": {"حاضری", "/attendance"},
     "management": {"مدیریت", "مدیریت بازی", "/management"},
+    "lobby": {"لابی", "بازگشت به لابی", "/lobby"},
+    "nickname_set": {"تنظیم مستعار", "تنظیم نام مستعار", "/nickname_set"},
+    "nickname_del": {"حذف مستعار", "حذف نام مستعار", "/nickname_del"},
+    "nickname_get": {"نام مستعار", "دیدن نام مستعار", "/nickname_get"},
+    "nickname_list": {"لیست مستعار", "لیست نامهای مستعار", "لیست نام‌های مستعار", "/nickname_list"},
+    "sub_list": {"لیست جایگزین", "لیست جایگزین‌ها", "/sub_list"},
+    "sub_del": {"حذف جایگزین", "/sub_del"},
+    "vote": {"رای گیری", "رأی گیری", "رای‌گیری", "رأی‌گیری", "/vote"},
+    "chief": {"سردست", "تغییر سردست", "/chief"},
+    "challenge_settings": {"تنظیم چالش", "/challenge_settings"},
+    "next_settings": {"تنظیم نکست", "/next_settings"},
     "join": {"ورود", "/join"},
     "leave": {"خروج", "/leave"},
     "challenge": {"چالش", "/challenge"},
@@ -68,7 +79,7 @@ COMMANDS = {
     "stats": {"آمار", "امار", "آمار من", "امار من", "stats", "statistics", "امتیاز", "امتیاز من", "/stats"},
     "seats": {"لیست صندلی", "لیست صندلی‌ها", "صندلی ها", "صندلی‌ها"},
     "players": {"لیست بازیکنان", "بازیکنان"},
-    "ask": {"ask", "mafia", "سوال", "سؤال"},
+    "ask": {"ask", "mafia", "/ask", "/mafia", "سوال", "سؤال"},
     "ai_on": {"ai_on", "فعال کردن هوش مصنوعی"},
     "ai_off": {"ai_off", "غیرفعال کردن هوش مصنوعی"},
     "ai_status": {"ai_status", "وضعیت هوش مصنوعی"},
@@ -177,6 +188,11 @@ COMMAND_REFERENCE = (
         ("جایگزین", "افزودن بازیکن به لیست جایگزین با ریپلای اختیاری"),
         ("حاضری", "نمایش وضعیت آمادگی"),
         ("مدیریت", "بازکردن پنل مدیریت"),
+        ("لابی", "نمایش و بازسازی لابی جاری"),
+        ("تنظیم مستعار", "ثبت نام مستعار با ریپلای"),
+        ("حذف مستعار", "حذف نام مستعار با ریپلای"),
+        ("نام مستعار", "نمایش نام مستعار با ریپلای"),
+        ("لیست مستعار", "لیست نام‌های مستعار"),
         ("ورود", "ورود به لابی"),
         ("خروج", "خروج از لابی"),
         ("چالش", "درخواست چالش با ریپلای"),
@@ -880,6 +896,32 @@ async def _role_text(message, app):
     await message.reply(body, parse_mode="HTML")
 
 
+async def _lobby_text(message, app):
+    if message.chat.type not in {"group", "supergroup"}:
+        await message.reply("ℹ️ «لابی» را داخل گروه بازی ارسال کنید.")
+        return
+    game = app.runtime.state.active_game(int(message.chat.id))
+    if not game or str(game.get("status") or "") != "lobby":
+        await message.reply("❌ لابی فعالی وجود ندارد.")
+        return
+    render = getattr(app, "_render_production_lobby", None) or getattr(app, "_production_lobby_render", None)
+    if not render:
+        await message.reply("❌ سیستم لابی در دسترس نیست.")
+        return
+    ok = await render(int(message.chat.id), game)
+    if not ok:
+        await message.reply("❌ نمایش لابی انجام نشد.")
+
+async def _nickname_direct(message, app, kind):
+    # Canonical router delegates the full nickname implementation to the
+    # existing command-surface v2 handler. Keeping one implementation avoids
+    # divergent permission rules (especially for group administrators).
+    dispatch = getattr(app, "_command_surface_v2_dispatch", None)
+    if dispatch:
+        await dispatch(message)
+        return
+    await message.reply("⚠️ بخش نام مستعار در دسترس نیست.")
+
 async def _pv_text(message, app):
     if message.chat.type != "private":
         await message.reply("ℹ️ «پیوی» را در چت خصوصی ربات ارسال کنید."); return
@@ -1079,6 +1121,13 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
     handler=direct.get(name)
     if handler:
         await handler(message,app)
+        return
+    # Legacy/extended command surface remains available through the same
+    # canonical webhook route. This is deliberately a fallback, not a second
+    # message-handler registration.
+    dispatch = getattr(app, "_command_surface_v2_dispatch", None)
+    if dispatch:
+        await dispatch(message)
 
 
 def register_commands(app: Any) -> bool:
@@ -1104,6 +1153,11 @@ def register_commands(app: Any) -> bool:
                 BotCommand("sub", "جایگزین"),
                 BotCommand("attendance", "حاضری"),
                 BotCommand("management", "مدیریت"),
+                BotCommand("lobby", "لابی"),
+                BotCommand("nickname_set", "تنظیم مستعار"),
+                BotCommand("nickname_del", "حذف مستعار"),
+                BotCommand("nickname_get", "نام مستعار"),
+                BotCommand("nickname_list", "لیست مستعار"),
                 BotCommand("reserve", "رزرو"),
                 BotCommand("unreserve", "لغو رزرو"),
                 BotCommand("seat", "صندلی عدد"),
