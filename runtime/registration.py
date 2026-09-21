@@ -42,12 +42,20 @@ def valid_persian_name(value: str | None) -> bool:
 
 
 def is_registered(user_id: int) -> bool:
+    """Return True only for a fully registered player."""
     try:
         with PlayerRepository().SessionLocal() as session:
+            from sqlalchemy import text
             row = session.execute(
-                __import__("sqlalchemy").text(
-                    "select registered_at from public.mafia_players where id=:id limit 1"
-                ),
+                text("""
+                    select 1
+                    from public.mafia_players
+                    where id=:id
+                      and registered_at is not null
+                      and nickname is not null
+                      and trim(nickname) <> ''
+                    limit 1
+                """),
                 {"id": int(user_id)},
             ).scalar()
             return row is not None
@@ -150,29 +158,13 @@ async def save_name(message: types.Message, state: FSMContext) -> None:
         )
         return
     try:
-        with PlayerRepository().SessionLocal() as session:
-            from sqlalchemy import text
-            session.execute(
-                text("""
-                    insert into public.mafia_players
-                        (id, username, first_name, last_name, nickname, registered_at, created_at, updated_at)
-                    values
-                        (:id, :username, :first_name, null, :nickname, now(), now(), now())
-                    on conflict (id) do update set
-                        username = coalesce(excluded.username, public.mafia_players.username),
-                        first_name = coalesce(excluded.first_name, public.mafia_players.first_name),
-                        nickname = excluded.nickname,
-                        registered_at = now(),
-                        updated_at = now()
-                """),
-                {
-                    "id": int(message.from_user.id),
-                    "username": message.from_user.username,
-                    "first_name": value,
-                    "nickname": value,
-                },
-            )
-            session.commit()
+        PlayerRepository().register(
+            user_id=int(message.from_user.id),
+            nickname=value,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name or value,
+            last_name=message.from_user.last_name,
+        )
         await state.finish()
         try:
             from player_service import player_service
