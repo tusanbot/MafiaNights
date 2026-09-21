@@ -69,14 +69,61 @@ class RatingRepository(DatabaseRepository):
                 from totals me join totals t on true where me.user_id=:user_id group by me.score,me.games,me.wins
             """),{"user_id":int(user_id)}).mappings().first();return dict(row) if row else {"rank":None,"score":BASE_SCORE,"games":0,"wins":0,"total_players":0}
 
-    def top(self,limit=10):
+    def top(self, limit=10, metric="score", group_chat_id=None):
+        """Return leaderboard rows ordered by one documented metric.
+
+        score: accumulated rating + achievement rewards.
+        average: arithmetic mean of per-game effective score (base + delta).
+        win_rate: wins / completed rating rows.
+        best_game: highest single-game score delta.
+        """
+        metric = str(metric or "score").strip().lower()
+        if metric not in {"score", "average", "win_rate", "best_game"}:
+            metric = "score"
+        limit = max(1, min(int(limit), 100))
+        where = "where g.group_chat_id=:group_chat_id" if group_chat_id is not None else ""
+        join = "join public.mafia_games g on g.id=r.game_id" if group_chat_id is not None else ""
+        params = {"limit": limit}
+        if group_chat_id is not None:
+            params["group_chat_id"] = int(group_chat_id)
+        order = {
+            "score": "score desc, wins desc, games desc, p.id",
+            "average": "avg_score desc, games desc, score desc, p.id",
+            "win_rate": "win_rate desc, games desc, score desc, p.id",
+            "best_game": "best_game desc, score desc, wins desc, p.id",
+        }[metric]
         with self.SessionLocal() as session:
-            rows=session.execute(text("""
-                select p.id,coalesce(p.nickname,p.first_name,p.username,p.id::text) name,count(r.id)::int games,
+            rows=session.execute(text(f"""
+                select p.id,coalesce(p.nickname,p.first_name,p.username,p.id::text) name,
+                       count(r.id)::int games,
                        (50+coalesce(sum(r.score),0)+(select coalesce(sum(ar.reward_points),0) from public.mafia_achievement_rewards ar where ar.player_id=p.id))::int score,
-                       (select coalesce(sum(ar.reward_points),0) from public.mafia_achievement_rewards ar where ar.player_id=p.id)::int achievement_points,count(r.id) filter(where r.result='win')::int wins
-                from public.mafia_players p left join public.mafia_ratings r on r.user_id=p.id group by p.id,p.nickname,p.first_name,p.username order by score desc,wins desc,games desc,p.id limit :limit
-            """),{"limit":max(1,min(int(limit),100))}).mappings().all();return [dict(row) for row in rows]
+                       (select coalesce(sum(ar.reward_points),0) from public.mafia_achievement_rewards ar where ar.player_id=p.id)::int achievement_points,
+                       count(r.id) filter(where r.result='win')::int wins,
+                       count(r.id) filter(where r.result='loss')::int losses,
+                       count(r.id) filter(where r.result='draw')::int draws,
+                       coalesce(avg(coalesce(r.base_score,50)+coalesce(r.score,0)),0)::numeric avg_score,
+                       coalesce(100.0 * count(r.id) filter(where r.result='win') / nullif(count(r.id),0),0)::numeric win_rate,
+                       coalesce(max(r.score),0)::int best_game
+                from public.mafia_players p
+                join public.mafia_ratings r on r.user_id=p.id
+                {join}
+                {where}
+                group by p.id,p.nickname,p.first_name,p.username
+                order by {order}
+                limit :limit
+            """),params).mappings().all()
+            return [dict(row) for row in rows]
+
+    def rank(self, user_id, metric="score"):
+        metric = str(metric or "score").strip().lower()
+        if metric not in {"score", "average", "win_rate", "best_game"}:
+            metric = "score"
+        rows = self.top(10000, metric)
+        uid = int(user_id)
+        for index, row in enumerate(rows, 1):
+            if int(row["id"]) == uid:
+                return {**row, "rank": index, "total_players": len(rows)}
+        return {"rank": None, "score": BASE_SCORE, "games": 0, "wins": 0, "total_players": len(rows)}
 
     def group_summary(self,user_id,group_chat_id):
         with self.SessionLocal() as session:
@@ -87,11 +134,5 @@ class RatingRepository(DatabaseRepository):
                 from public.mafia_ratings r join public.mafia_games g on g.id=r.game_id where r.user_id=:user_id and g.group_chat_id=:group_chat_id
             """),{"user_id":int(user_id),"group_chat_id":int(group_chat_id)}).mappings().one();return dict(row)
 
-    def group_top(self,group_chat_id,limit=10):
-        with self.SessionLocal() as session:
-            rows=session.execute(text("""
-                select p.id,coalesce(p.nickname,p.first_name,p.username,p.id::text) name,count(r.id)::int games,
-                       (50+coalesce(sum(r.score),0)+(select coalesce(sum(ar.reward_points),0) from public.mafia_achievement_rewards ar where ar.player_id=p.id))::int score,count(r.id) filter(where r.result='win')::int wins
-                from public.mafia_players p join public.mafia_ratings r on r.user_id=p.id join public.mafia_games g on g.id=r.game_id where g.group_chat_id=:group_chat_id
-                group by p.id,p.nickname,p.first_name,p.username order by score desc,wins desc,games desc,p.id limit :limit
-            """),{"group_chat_id":int(group_chat_id),"limit":max(1,min(int(limit),100))}).mappings().all();return [dict(row) for row in rows]
+    def group_top(self, group_chat_id, limit=10, metric="score"):
+        return self.top(limit=limit, metric=metric, group_chat_id=group_chat_id)
