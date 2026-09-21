@@ -217,8 +217,12 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
             "📝 <b>ثبت اتفاقات</b>\n\n"
             "اتفاقات را در یک یا چند پیام ارسال کنید؛ سپس «ثبت نهایی» را بزنید.",
             parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(row_width=1).add(
-                InlineKeyboardButton("⬅️ بازگشت", callback_data="progress:incidents")
+            reply_markup=InlineKeyboardMarkup(row_width=2).add(
+                InlineKeyboardButton("✅ ثبت نهایی", callback_data="progress:incident_finalize"),
+                InlineKeyboardButton("👁 پیش‌نمایش", callback_data="progress:incident_preview"),
+                InlineKeyboardButton("🗑 حذف آخرین", callback_data="progress:incident_pop"),
+                InlineKeyboardButton("❌ لغو", callback_data="progress:incident_cancel"),
+                InlineKeyboardButton("⬅️ بازگشت", callback_data="progress:incidents"),
             ),
         )
         await c.answer()
@@ -323,8 +327,12 @@ class ProgressFeaturesV4(ProgressFeaturesV3):
             "✏️ <b>ویرایش اتفاقات</b>\n\n"
             "نسخه جدید را در یک یا چند پیام ارسال کنید؛ سپس «ثبت نهایی» را بزنید.",
             parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(row_width=1).add(
-                InlineKeyboardButton("⬅️ لغو و بازگشت", callback_data="progress:incidents")
+            reply_markup=InlineKeyboardMarkup(row_width=2).add(
+                InlineKeyboardButton("✅ ثبت نهایی", callback_data="progress:incident_finalize"),
+                InlineKeyboardButton("👁 پیش‌نمایش", callback_data="progress:incident_preview"),
+                InlineKeyboardButton("🗑 حذف آخرین", callback_data="progress:incident_pop"),
+                InlineKeyboardButton("❌ لغو", callback_data="progress:incident_cancel"),
+                InlineKeyboardButton("⬅️ لغو و بازگشت", callback_data="progress:incidents"),
             ),
         )
         await c.answer()
