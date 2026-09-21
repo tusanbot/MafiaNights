@@ -29,6 +29,31 @@ class PlayerRepository(DatabaseRepository):
             """), {"id": user_id, "username": username, "first_name": first_name, "last_name": last_name})
             session.commit()
 
+    def register(self, user_id, nickname, username=None, first_name=None, last_name=None):
+        """Atomically create or complete a player's registration."""
+        with self.SessionLocal() as session:
+            session.execute(text("""
+                insert into public.mafia_players
+                    (id, username, first_name, last_name, nickname, registered_at, created_at, updated_at)
+                values
+                    (:id, :username, :first_name, :last_name, :nickname, now(), now(), now())
+                on conflict (id) do update set
+                    username = coalesce(excluded.username, public.mafia_players.username),
+                    first_name = coalesce(excluded.first_name, public.mafia_players.first_name),
+                    last_name = coalesce(excluded.last_name, public.mafia_players.last_name),
+                    nickname = excluded.nickname,
+                    registered_at = now(),
+                    updated_at = now()
+            """), {
+                "id": int(user_id),
+                "username": (username or "").strip() or None,
+                "first_name": (first_name or "").strip() or None,
+                "last_name": (last_name or "").strip() or None,
+                "nickname": (nickname or "").strip() or None,
+            })
+            session.commit()
+        return True
+
     def get(self, user_id):
         with self.SessionLocal() as session:
             row = session.execute(text("""
