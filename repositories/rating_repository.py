@@ -42,7 +42,7 @@ class RatingRepository(DatabaseRepository):
     def player_profile(self,user_id):
         with self.SessionLocal() as session:
             row=session.execute(text("""
-                with r as (select user_id,count(*) games,sum(score) score,count(*) filter(where result='win') wins,count(*) filter(where result='loss') losses,count(*) filter(where result='draw') draws)
+                with r as (select user_id,count(*) games,sum(score) score,count(*) filter(where result='win') wins,count(*) filter(where result='loss') losses,count(*) filter(where result='draw') draws from public.mafia_ratings group by user_id)
                 select p.id,p.username,p.first_name,p.last_name,p.nickname,coalesce(r.games,0)::int games,
                        (50+coalesce(r.score,0)+(select coalesce(sum(ar.reward_points),0) from public.mafia_achievement_rewards ar where ar.player_id=p.id))::int score,
                        (select coalesce(sum(ar.reward_points),0) from public.mafia_achievement_rewards ar where ar.player_id=p.id)::int achievement_points,
