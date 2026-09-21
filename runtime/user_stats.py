@@ -77,15 +77,27 @@ def _metric_title(metric):
     return {"score":"رتبه‌بندی بر اساس بیشترین امتیاز","average":"رتبه‌بندی بر اساس بالاترین میانگین امتیاز","win_rate":"رتبه‌بندی بر اساس بالاترین درصد برد","best_game":"رتبه‌بندی بر اساس بهترین امتیاز یک بازی"}.get(metric, "رتبه‌بندی بازیکنان")
 
 
-def _ranking_text(rows, title="🏆 <b>رتبه‌بندی بازیکنان</b>"):
+def _ranking_text(rows, metric="score"):
+    title = "🏆 <b>رتبه‌بندی بازیکنان</b>" if metric == "score" else f"<b>{html.escape(_metric_title(metric))}</b>"
     if not rows:
         return title + "\n\nهنوز آماری برای رتبه‌بندی ثبت نشده است."
     medals = ["🥇", "🥈", "🥉"]
     lines = [title, ""]
     for i, row in enumerate(rows, 1):
         prefix = medals[i - 1] if i <= 3 else f"{i}."
-        lines.append(f"{prefix} {mention(row['user_id'], name(row))} — ⭐ {row['score']} | 🏆 {row['wins']} | 🎮 {row['games']}")
+        if metric == "average":
+            value = f"📊 {float(row.get('avg_score') or 0):.1f}"
+        elif metric == "win_rate":
+            value = f"🏆 {float(row.get('win_rate') or 0):.1f}%"
+        elif metric == "best_game":
+            value = f"🎯 {int(row.get('best_game') or 0):+d}"
+        else:
+            value = f"⭐ {int(row.get('score') or 0)}"
+        lines.append(f"{prefix} {mention(row['id'], name(row))} — {value} | 🎮 {row['games']} | 🏆 {row['wins']}")
+    lines.append("")
+    lines.append("معیارها: امتیاز کل، میانگین امتیاز هر بازی، درصد برد و بهترین امتیاز یک بازی.")
     return "\n".join(lines)
+
 
 
 def _signed(value: int) -> str:
