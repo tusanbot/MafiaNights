@@ -60,8 +60,21 @@ def _profile_text(row, rank):
 def _profile_kb():
     kb = InlineKeyboardMarkup(row_width=2)
     kb.row(InlineKeyboardButton("🏆 رتبه‌بندی", callback_data="ustats:ranking"), InlineKeyboardButton("📊 آمار", callback_data="ustats:stats"))
+    kb.row(InlineKeyboardButton("✏️ تنظیم مستعار", callback_data="profile:nickname"))
     kb.row(InlineKeyboardButton("🔄 بروزرسانی", callback_data="ustats:profile"))
     return kb
+
+
+def _ranking_kb():
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.row(InlineKeyboardButton("⭐ بیشترین امتیاز", callback_data="ustats:rank:score"), InlineKeyboardButton("📊 میانگین امتیاز", callback_data="ustats:rank:average"))
+    kb.row(InlineKeyboardButton("🏆 درصد برد", callback_data="ustats:rank:win_rate"), InlineKeyboardButton("🎯 بهترین بازی", callback_data="ustats:rank:best_game"))
+    kb.row(InlineKeyboardButton("✖️ بستن", callback_data="ustats:close"))
+    return kb
+
+
+def _metric_title(metric):
+    return {"score":"رتبه‌بندی بر اساس بیشترین امتیاز","average":"رتبه‌بندی بر اساس بالاترین میانگین امتیاز","win_rate":"رتبه‌بندی بر اساس بالاترین درصد برد","best_game":"رتبه‌بندی بر اساس بهترین امتیاز یک بازی"}.get(metric, "رتبه‌بندی بازیکنان")
 
 
 def _ranking_text(rows, title="🏆 <b>رتبه‌بندی بازیکنان</b>"):
