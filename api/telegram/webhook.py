@@ -172,7 +172,7 @@ async def _dispatch_registration_message(message: Any, runtime_entry: Any) -> bo
         waiting = getattr(registration.RegistrationStates.waiting_name, "state", None)
         if current == waiting:
             await registration.save_name(message, state)
-            logging.info("WEBHOOK CANONICAL REGISTRATION NAME ROUTE user_id=%s mode=fsm", uid)
+            logging.info("WEBHOOK CANONICAL REGISTRATION NAME ROUTE user_id=%s mode=fsm db=mafia_players", uid)
             return True
     except Exception:
         logging.exception("registration FSM name route failed for %s", uid)
