@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import logging
 from typing import Any
 
 _seen_updates: set[int] = set()
@@ -47,6 +48,31 @@ async def _ensure_startup() -> None:
         # Startup is best-effort on webhook workers. Do not retry the entire
         # bootstrap on every Telegram update if an optional recovery component fails.
         _startup_complete = True
+
+
+async def _registration_guard(message: Any, runtime_entry: Any) -> bool:
+    from runtime import registration
+    uid = getattr(getattr(message, "from_user", None), "id", None)
+    if uid is None:
+        return False
+    text_value = str(getattr(message, "text", "") or "").strip()
+    normalized = " ".join(text_value.replace("\\u200c", " ").split())
+    if normalized.casefold().startswith("/start"):
+        return False
+    try:
+        dp = runtime_entry.main.dp
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        if chat_id is not None:
+            state = dp.current_state(chat=chat_id, user=int(uid))
+            if await state.get_state():
+                return False
+    except Exception:
+        logging.exception("registration FSM state check failed")
+    if registration.is_registered(int(uid)):
+        return False
+    await registration.prompt_registration(message, runtime_entry.main, group=getattr(getattr(message, "chat", None), "type", None) in {"group", "supergroup"})
+    logging.info("REGISTRATION REQUIRED user_id=%s chat_type=%s", uid, getattr(getattr(message, "chat", None), "type", None))
+    return True
 
 
 async def _dispatch_priority_message(message: Any, runtime_entry: Any) -> bool:
@@ -132,7 +158,18 @@ async def _dispatch(payload: dict[str, Any]) -> None:
     if getattr(update, "message", None) is not None:
         if await _dispatch_priority_message(update.message, runtime_entry):
             return
+        if await _registration_guard(update.message, runtime_entry):
+            return
     callback = getattr(update, "callback_query", None)
+    if callback is not None:
+        data = str(getattr(callback, "data", "") or "")
+        if data != "registration:start":
+            from runtime import registration
+            uid = getattr(getattr(callback, "from_user", None), "id", None)
+            if uid is not None and not registration.is_registered(int(uid)):
+                await registration.prompt_registration(callback.message, runtime_entry.main, group=getattr(getattr(callback.message, "chat", None), "type", None) in {"group", "supergroup"})
+                await callback.answer("🔐 ابتدا ثبت‌نام کنید.", show_alert=True)
+                return
     if callback is not None and str(getattr(callback, "data", "") or "") in {"fl_new", "new_game"}:
         handler = getattr(runtime_entry.main, "_canonical_new_game_handler", None)
         if handler is not None:
