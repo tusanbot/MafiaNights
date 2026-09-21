@@ -841,7 +841,43 @@ async def _role_text(message, app):
     row = next((r for r in rows if int(r.get("player_id") or 0) == int(message.from_user.id)), None)
     if not row or not row.get("role"):
         await message.reply("ℹ️ هنوز نقشی برای شما ثبت نشده است."); return
-    await message.reply(f"🎭 <b>نقش شما</b>\n\n💺 صندلی: <b>{int(row.get('seat') or 0)}</b>\n🎭 نقش: <b>{html.escape(str(row.get('role')))}</b>", parse_mode="HTML")
+
+    event_no = game.get("event_number") or game.get("game_number") or game.get("number") or "—"
+    scenario_name = str(game.get("scenario_name") or game.get("scenario") or "—")
+    created = game.get("created_at") or game.get("started_at") or game.get("createdAt")
+    date_text = str(created or "—")
+    if "T" in date_text:
+        date_text = date_text.replace("T", " ", 1).split("+", 1)[0].split("Z", 1)[0]
+    moderator_id = game.get("moderator_id") or game.get("host_id") or game.get("owner_id") or game.get("created_by")
+    moderator_name = game.get("moderator_name") or game.get("host_name") or game.get("owner_name") or game.get("moderator_username")
+    if not moderator_name and moderator_id:
+        moderator_row = next((r for r in rows if int(r.get("player_id") or 0) == int(moderator_id)), None)
+        if moderator_row:
+            moderator_name = moderator_row.get("nickname") or moderator_row.get("first_name") or moderator_row.get("username")
+    moderator_name = str(moderator_name or "—")
+    role = str(row.get("role") or row.get("role_name") or "—")
+    side = str(row.get("side") or row.get("faction") or row.get("team") or "—")
+    seat = row.get("seat")
+    seat_text = str(int(seat)) if seat is not None else "—"
+    player_name = str(row.get("nickname") or row.get("first_name") or message.from_user.full_name or "بازیکن")
+
+    body = (
+        "╔══════════════════════╗\n"
+        "║ 🎭 <b>کارت نقش شما</b>\n"
+        "╚══════════════════════╝\n\n"
+        f"🎮 <b>شماره بازی:</b> <code>{html.escape(str(event_no))}</code>\n"
+        f"📅 <b>تاریخ:</b> <code>{html.escape(date_text)}</code>\n"
+        f"🎬 <b>سناریو:</b> <b>{html.escape(scenario_name)}</b>\n"
+        f"🎙 <b>گرداننده:</b> <b>{html.escape(moderator_name)}</b>\n"
+        f"👤 <b>بازیکن:</b> {html.escape(player_name)}\n"
+        f"💺 <b>صندلی:</b> <b>{html.escape(seat_text)}</b>\n"
+        f"🎭 <b>نقش:</b> <b>{html.escape(role)}</b>\n"
+        f"🛡 <b>ساید:</b> <b>{html.escape(side)}</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "ℹ️ این اطلاعات مربوط به بازی جاری شماست.\n"
+        "🔒 اطلاعات نقش سایر بازیکنان و اطلاعات مخفی بازی نمایش داده نمی‌شود."
+    )
+    await message.reply(body, parse_mode="HTML")
 
 
 async def _pv_text(message, app):
