@@ -154,7 +154,7 @@ def install(app: Any) -> bool:
         random.shuffle(roles); game_id = int(game["id"]); role_map: dict[str, str] = {}; save_failures: list[int] = []
         for player, role in zip(players, roles):
             player_id = int(player["player_id"])
-            if not app.runtime.state.games.set_player_role(game_id, player_id, str(role)): save_failures.append(player_id)
+            if not app.runtime.state.games.set_player_role(game_id, player_id, str(role), seat=int(player["seat"])): save_failures.append(player_id)
             role_map[str(player_id)] = str(role)
         if save_failures:
             await callback.answer("❌ ذخیره نقش‌ها کامل نشد؛ بازی شروع نشد.", show_alert=True); logging.error("role distribution failed players=%s game=%s", save_failures, game_id); return
