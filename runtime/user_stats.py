@@ -144,18 +144,15 @@ class UserStats:
         else:
             await message.reply(text, parse_mode="HTML", reply_markup=_profile_kb())
 
-    async def show_ranking(self, message: types.Message, group_id: int | None = None, edit=False):
-        if group_id:
-            rows = self.ratings.group_top(group_id, 10)
-            title = "🏆 <b>رتبه‌بندی این گروه</b>"
-        else:
-            rows = self.ratings.top(10)
-            title = "🏆 <b>رتبه‌بندی بازیکنان</b>"
-        text = _ranking_text(rows, title)
+    async def show_ranking(self, message: types.Message, group_id: int | None = None, metric="score", edit=False):
+        metric = metric if metric in {"score","average","win_rate","best_game"} else "score"
+        rows = self.ratings.group_top(group_id, 10, metric) if group_id else self.ratings.top(10, metric)
+        text = _ranking_text(rows, metric)
         if edit:
-            await message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("✖️ بستن", callback_data="ustats:close")))
+            await message.edit_text(text, parse_mode="HTML", reply_markup=_ranking_kb())
         else:
-            await message.reply(text, parse_mode="HTML")
+            await message.reply(text, parse_mode="HTML", reply_markup=_ranking_kb())
+
 
     async def show_stats(self, message: types.Message, uid: int | None = None, group_id: int | None = None, edit=False):
         uid = int(uid or message.from_user.id)
@@ -217,7 +214,12 @@ class UserStats:
         elif action == "profile":
             await self.show_profile(callback.message, callback.from_user.id, edit=True)
         elif action == "ranking":
-            await self.show_ranking(callback.message, edit=True)
+            gid = callback.message.chat.id if callback.message.chat.type in {"group", "supergroup"} else None
+            await self.show_ranking(callback.message, gid, edit=True)
+        elif action.startswith("rank:"):
+            metric = action.split(":", 1)[1]
+            gid = callback.message.chat.id if callback.message.chat.type in {"group", "supergroup"} else None
+            await self.show_ranking(callback.message, gid, metric=metric, edit=True)
         elif action == "stats":
             await self.show_stats(callback.message, callback.from_user.id, edit=True)
         await callback.answer()
