@@ -73,27 +73,40 @@ async def _dispatch_priority_message(message: Any, runtime_entry: Any) -> bool:
                         getattr(getattr(message, "from_user", None), "id", None),
                     )
                     return True
-        if normalized == "بازی جدید":
-            handler = getattr(runtime_entry.main, "_canonical_new_game_handler", None)
-            if handler is not None:
-                from types import SimpleNamespace
-                callback = SimpleNamespace(
-                    message=message,
-                    from_user=message.from_user,
-                    data="fl_new",
-                    answer=message.answer,
-                    _from_text_command=True,
-                )
-                await handler(callback)
-                import logging
-                logging.info(
-                    "WEBHOOK CANONICAL NEW_GAME ROUTE chat_type=%s user_id=%s",
-                    getattr(getattr(message, "chat", None), "type", None),
-                    getattr(getattr(message, "from_user", None), "id", None),
-                )
-                return True
-    return False
 
+        # Canonical production text-command routing happens here rather than
+        # through mutable aiogram handler ordering. Legacy/feature installers
+        # register catch-all text handlers, so dispatcher reordering alone is
+        # not a reliable authority.
+        try:
+            from commands import resolve_command, run_command
+            command_name = resolve_command(normalized)
+        except Exception:
+            command_name = None
+
+        if command_name:
+            # Preserve speaking-lock enforcement before executing a group
+            # command. commands.py remains the sole owner of command behavior.
+            if getattr(message, "chat", None) is not None and message.chat.type in {"group", "supergroup"}:
+                try:
+                    from runtime.chat_locks import _message_guard
+                    await _message_guard(message, runtime_entry.main)
+                except Exception as exc:
+                    from aiogram.dispatcher.handler import CancelHandler
+                    if isinstance(exc, CancelHandler):
+                        return True
+                    raise
+
+            await run_command(command_name, message, runtime_entry.main)
+            import logging
+            logging.info(
+                "WEBHOOK CANONICAL TEXT COMMAND ROUTE command=%s chat_type=%s user_id=%s",
+                command_name,
+                getattr(getattr(message, "chat", None), "type", None),
+                getattr(getattr(message, "from_user", None), "id", None),
+            )
+            return True
+    return False
 
 async def _dispatch(payload: dict[str, Any]) -> None:
     from aiogram import Bot, Dispatcher, types
