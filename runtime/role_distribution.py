@@ -54,7 +54,7 @@ def install(app: Any) -> bool:
         if not player or player.get("seat") is None or not player.get("role"):
             return False
         scenario_id = game.get("scenario_id")
-        scenario = scenario_repo.get_by_id(int(scenario_id)) if scenario_id is not None else None
+        scenario = scenario_repo.get_by_id(scenario_id) if scenario_id is not None else None
         scenario_name = str((scenario or {}).get("name") or scenario_id or "---")
         try:
             await bot.send_message(int(player_id), _role_text(str(player["role"]), int(player["seat"]), scenario_name), parse_mode="HTML")
@@ -140,7 +140,7 @@ def install(app: Any) -> bool:
             try: allowed = (await bot.get_chat_member(group_id, uid)).status in {"creator", "administrator"}
             except Exception: allowed = False
         if not allowed: await callback.answer("⛔ فقط گرداننده یا مدیر گروه می‌تواند نقش‌ها را پخش کند.", show_alert=True); return
-        scenario_id = game.get("scenario_id"); scenario = scenario_repo.get_by_id(int(scenario_id)) if scenario_id is not None else None
+        scenario_id = game.get("scenario_id"); scenario = scenario_repo.get_by_id(scenario_id) if scenario_id is not None else None
         if not scenario: await callback.answer("❌ سناریوی بازی مشخص نیست.", show_alert=True); return
         roles = scenario.get("roles") or []
         if isinstance(roles, str):
