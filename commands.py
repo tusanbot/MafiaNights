@@ -519,11 +519,42 @@ async def _join(message: types.Message, app: Any) -> None:
     if seat is None:
         await message.reply("🎟 ظرفیت اصلی تکمیل است؛ برای رزرو از پنل لابی استفاده کنید.")
         return
+    # A player row is mandatory because mafia_game_players.player_id has
+    # a foreign-key constraint. Never swallow registration failures and then
+    # attempt the membership insert.
     try:
         await app._ensure_player(message.from_user)
     except Exception:
-        pass
-    app.runtime.state.lobby.join(game["id"], uid, seat, is_substitute=False)
+        logging.exception("text join: app._ensure_player failed; using direct player upsert")
+        try:
+            from player_repository import PlayerRepository
+            with PlayerRepository().SessionLocal() as session:
+                session.execute(text("""
+                    insert into public.mafia_players
+                        (id, username, first_name, last_name, created_at, updated_at)
+                    values (:id, :username, :first_name, :last_name, now(), now())
+                    on conflict (id) do update set
+                        username=coalesce(excluded.username, public.mafia_players.username),
+                        first_name=coalesce(excluded.first_name, public.mafia_players.first_name),
+                        last_name=coalesce(excluded.last_name, public.mafia_players.last_name),
+                        updated_at=now()
+                """), {
+                    "id": uid,
+                    "username": message.from_user.username,
+                    "first_name": message.from_user.first_name,
+                    "last_name": message.from_user.last_name,
+                })
+                session.commit()
+        except Exception:
+            logging.exception("text join: direct player upsert failed")
+            await message.reply("❌ ثبت بازیکن انجام نشد. لطفاً دوباره «ورود» را ارسال کنید.")
+            return
+    try:
+        app.runtime.state.lobby.join(game["id"], uid, seat, is_substitute=False)
+    except Exception:
+        logging.exception("text join: lobby membership insert failed")
+        await message.reply("❌ ورود به بازی انجام نشد. ثبت بازیکن یا ظرفیت لابی با مشکل مواجه شد.")
+        return
     refresh = getattr(app, "_refresh_final_lobby_from_text", None)
     if refresh:
         await refresh(message)
@@ -721,19 +752,17 @@ async def _cancel_game_text(message, app):
     if not game or not await _manager(app, message, game):
         await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند بازی را لغو کند.")
         return
-    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
-    state = dict(game.get("state") or {})
-    state.update({"cancelled": True, "cancel_reason": "text_command", "cancelled_at": now.isoformat()})
-    ok = app.runtime.state.games.update_game(game["id"], status="cancelled", event_number=0, state=state, finished_at=now)
-    if ok:
-        try:
-            app.runtime.state.games.clear_game_players(game["id"])
-        except Exception:
-            pass
-        await message.reply("🚫 <b>بازی لغو شد.</b>", parse_mode="HTML")
-    else:
-        await message.reply("❌ لغو بازی انجام نشد.")
-
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    kb = InlineKeyboardMarkup(row_width=2).add(
+        InlineKeyboardButton("🚫 بله، لغو شود", callback_data=f"cancel_text:{int(game['id'])}:confirm"),
+        InlineKeyboardButton("⬅️ انصراف", callback_data=f"cancel_text:{int(game['id'])}:back"),
+    )
+    await message.reply(
+        "⚠️ <b>لغو بازی</b>\n\nآیا مطمئن هستید که می‌خواهید بازی فعلی لغو شود؟\n"
+        "این عملیات قابل بازگشت نیست.",
+        parse_mode="HTML",
+        reply_markup=kb,
+    )
 
 async def _player_state_action(message, app, action: str):
     game = _game(app, message)
@@ -1134,6 +1163,90 @@ def register_commands(app: Any) -> bool:
     dp = getattr(app, "dp", None)
     if dp is None or getattr(app, "_canonical_text_commands_installed", False):
         return False
+
+    async def _cancel_callback_allowed(callback, game) -> bool:
+        if not game:
+            return False
+        uid = int(callback.from_user.id)
+        if uid == int(game.get("moderator_id") or 0):
+            return True
+        try:
+            return (await app.bot.get_chat_member(int(callback.message.chat.id), uid)).status in {"creator", "administrator"}
+        except Exception:
+            return False
+
+    async def _cancel_text_confirm(callback):
+        parts = str(callback.data or "").split(":")
+        if len(parts) != 3 or parts[0] != "cancel_text" or parts[2] != "confirm":
+            return
+        gid = int(callback.message.chat.id)
+        game = _game(app, callback.message)
+        if not game or int(game.get("id") or 0) != int(parts[1]) or not await _cancel_callback_allowed(callback, game):
+            await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True)
+            return
+        status = str(game.get("status") or "")
+        if status not in {"lobby", "running", "paused", "turn"}:
+            await callback.answer("ℹ️ این بازی دیگر قابل لغو نیست.", show_alert=True)
+            return
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        state = dict(game.get("state") or {})
+        state.update({
+            "cancelled": True,
+            "cancel_reason": "text_command_confirmed",
+            "cancelled_at": now.isoformat(),
+            "cancelled_from_status": status,
+        })
+        ok = app.runtime.state.games.update_game(
+            game["id"], status="cancelled", event_number=0, state=state, finished_at=now
+        )
+        if not ok:
+            await callback.answer("❌ لغو بازی انجام نشد.", show_alert=True)
+            return
+        for owner, attr in (
+            (getattr(app, "ui", None), "turn_timer_task"),
+            (getattr(app, "ui", None), "voting_timer_task"),
+            (getattr(app, "ui", None), "day_timer_task"),
+            (app, "_voting_task"),
+        ):
+            task = getattr(owner, attr, None) if owner is not None else None
+            if task is not None and hasattr(task, "done") and not task.done():
+                try:
+                    task.cancel()
+                except Exception:
+                    logging.exception("cancel_text_confirm: failed to cancel task %s", attr)
+        lobby_message_id = state.get("lobby_message_id")
+        if lobby_message_id:
+            try:
+                await app.bot.edit_message_text(
+                    "🚫 <b>این بازی لغو شد.</b>\n\nاطلاعات بازی در بایگانی بازی‌های لغوشده نگهداری شد.",
+                    gid, int(lobby_message_id), parse_mode="HTML", reply_markup=None,
+                )
+            except Exception:
+                logging.info("cancel_text_confirm: lobby message edit failed")
+        await callback.message.edit_text(
+            "🚫 <b>بازی لغو شد.</b>\n\nاین بازی در تاریخچه بازی‌های انجام‌شده ثبت نمی‌شود و امتیاز و سابقه بازیکنان تغییر نمی‌کند.",
+            parse_mode="HTML",
+        )
+        await callback.answer("🚫 بازی لغو شد.")
+
+    async def _cancel_text_back(callback):
+        parts = str(callback.data or "").split(":")
+        if len(parts) != 3 or parts[0] != "cancel_text" or parts[2] != "back":
+            return
+        await callback.message.edit_text("ℹ️ لغو بازی انجام نشد.")
+        await callback.answer("لغو شد.")
+
+    dp.register_callback_query_handler(
+        _cancel_text_confirm,
+        lambda c: str(c.data or "").startswith("cancel_text:") and str(c.data or "").endswith(":confirm"),
+        state="*",
+    )
+    dp.register_callback_query_handler(
+        _cancel_text_back,
+        lambda c: str(c.data or "").startswith("cancel_text:") and str(c.data or "").endswith(":back"),
+        state="*",
+    )
 
     @dp.message_handler(lambda m: bool(resolve_command(getattr(m, "text", None))), state="*")
     async def handle_text_commands(message: types.Message):
