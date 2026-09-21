@@ -232,7 +232,7 @@ class GameRepository(DatabaseRepository):
                 return existing["id"]
             if seat is not None and session.execute(text("select 1 from public.mafia_game_players where game_id=:game_id and seat=:seat limit 1"), {"game_id": resolved, "seat": int(seat)}).first():
                 raise ValueError("این صندلی قبلاً رزرو شده است")
-            row = session.execute(text("insert into public.mafia_game_players(game_id,player_id,seat,role,status,is_substitute) values(:game_id,:player_id,:seat,:role,:status,:is_substitute) returning id"), {"game_id": resolved, "player_id": uid, "seat": seat, "role": role, "status": status, "is_substitute": is_substitute}).scalar_one()
+            row = session.execute(text("insert into public.mafia_game_players(game_id,player_id,user_id,seat,role,status,is_substitute) values(:game_id,:player_id,:user_id,:seat,:role,:status,:is_substitute) returning id"), {"game_id": resolved, "player_id": uid, "user_id": uid, "seat": seat, "role": role, "status": status, "is_substitute": is_substitute}).scalar_one()
             session.commit()
         self._invalidate(game_id=game_id)
         return row
