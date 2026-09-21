@@ -54,14 +54,15 @@ class FixedProfileEnhancements(ProfileEnhancements):
             with self._session() as s:
                 s.execute(text("""
                     insert into public.mafia_players
-                        (id, username, first_name, last_name, nickname, gender, created_at, updated_at)
+                        (id, username, first_name, last_name, nickname, gender, registered_at, created_at, updated_at)
                     values
-                        (:id, :username, :first_name, :last_name, :nickname, null, now(), now())
+                        (:id, :username, :first_name, :last_name, :nickname, null, now(), now(), now())
                     on conflict (id) do update set
                         username=coalesce(excluded.username, public.mafia_players.username),
                         first_name=coalesce(excluded.first_name, public.mafia_players.first_name),
                         last_name=coalesce(excluded.last_name, public.mafia_players.last_name),
                         nickname=excluded.nickname,
+                        registered_at=coalesce(public.mafia_players.registered_at, now()),
                         updated_at=now()
                 """), {
                     "id": int(message.from_user.id),
