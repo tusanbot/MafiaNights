@@ -34,15 +34,14 @@ class PlayerRepository(DatabaseRepository):
         with self.SessionLocal() as session:
             session.execute(text("""
                 insert into public.mafia_players
-                    (id, username, first_name, last_name, nickname, registered_at, created_at, updated_at)
+                    (id, username, first_name, last_name, nickname, updated_at)
                 values
-                    (:id, :username, :first_name, :last_name, :nickname, now(), now(), now())
+                    (:id, :username, :first_name, :last_name, :nickname, now())
                 on conflict (id) do update set
                     username = coalesce(excluded.username, public.mafia_players.username),
                     first_name = coalesce(excluded.first_name, public.mafia_players.first_name),
                     last_name = coalesce(excluded.last_name, public.mafia_players.last_name),
                     nickname = excluded.nickname,
-                    registered_at = now(),
                     updated_at = now()
             """), {
                 "id": int(user_id),
