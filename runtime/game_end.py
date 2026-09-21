@@ -297,6 +297,71 @@ def _stop_and_finalize_players(app: Any, game: dict[str, Any], rows: list[dict[s
     _stop_transient_tasks(app)
 
 
+def _days_played(game: dict[str, Any]) -> int:
+    state = dict(game.get("state") or {})
+    for key in ("days_played", "day_count", "day_number", "current_day"):
+        try:
+            value = int(state.get(key) or 0)
+            if value > 0:
+                return value
+        except (TypeError, ValueError):
+            pass
+    # Older runtimes did not persist a dedicated day counter. A completed
+    # game necessarily contains at least the day on which it was finished.
+    return max(1, int(state.get("round") or 1))
+
+
+def _private_player_final_text(
+    app: Any,
+    game: dict[str, Any],
+    row: dict[str, Any],
+    winner: str,
+) -> str:
+    """Build the player's private, game-specific final report."""
+    rating = RatingRepository()
+    uid = int(row.get("player_id") or 0)
+    try:
+        details = rating.game_score_details(uid, game["id"])
+    except Exception:
+        logging.exception("failed to load game score details game=%s user=%s", game.get("id"), uid)
+        details = {"score_delta": 0, "result": "", "role": row.get("role") or ""}
+    try:
+        summary = rating.player_summary(uid)
+    except Exception:
+        logging.exception("failed to load player total score game=%s user=%s", game.get("id"), uid)
+        summary = {"score": 0, "games": 0, "wins": 0, "losses": 0, "draws": 0}
+    state = dict(game.get("state") or {})
+    scenario = str(state.get("scenario_name") or game.get("scenario") or game.get("scenario_id") or "—")
+    start, end = _game_times(game)
+    start = _local_dt(start)
+    end = _local_dt(end)
+    side = _role_side(row, state)
+    side_label = {"city": "🏙 شهر", "mafia": "🔴 مافیا", "independent": "🟣 مستقل"}.get(side, "—")
+    result_label = _result_label(winner) if winner else "تعیین نشده"
+    score_delta = int(details.get("score_delta") or 0)
+    total_score = int(summary.get("score") or 0)
+    earned = f"+{score_delta}" if score_delta > 0 else str(score_delta)
+    return (
+        "🏁 <b>گزارش پایان بازی</b>\n\n"
+        f"📓 شماره بازی: <b>{int(game.get('event_number') or 0) or '—'}</b>\n"
+        f"🎭 سناریو: <b>{html.escape(scenario)}</b>\n"
+        f"📅 تاریخ: <b>{_jalali_date(start)}</b>\n"
+        f"▶️ شروع: <b>{start:%H:%M}</b>  |  ⏹ پایان: <b>{end:%H:%M}</b>\n"
+        f"⏱ مدت بازی: <b>{_duration_text(game)}</b>\n"
+        f"📆 تعداد روزهای حضور در بازی: <b>{_days_played(game)}</b>\n\n"
+        f"👤 بازیکن: <b>{html.escape(_name(row))}</b>\n"
+        f"🪑 صندلی: <b>{int(row.get('seat') or 0) or '—'}</b>\n"
+        f"🎭 نقش: <b>{html.escape(str(row.get('role') or details.get('role') or '—'))}</b>\n"
+        f"🏷️ ساید: <b>{side_label}</b>\n"
+        f"🏆 نتیجه بازی: <b>{html.escape(result_label)}</b>\n\n"
+        f"⭐ امتیاز این بازی: <b>{earned}</b>\n"
+        f"📊 امتیاز کل: <b>{total_score}</b>\n"
+        f"🎮 تعداد بازی‌های ثبت‌شده: <b>{int(summary.get('games') or 0)}</b>\n"
+        f"🏆 برد: <b>{int(summary.get('wins') or 0)}</b>  |  ❌ باخت: <b>{int(summary.get('losses') or 0)}</b>  |  🤝 مساوی: <b>{int(summary.get('draws') or 0)}</b>\n\n"
+        "ℹ️ این گزارش فقط در پیام خصوصی شما ارسال شده است."
+    )
+
+
 def _events_message(events: dict[str, Any]) -> str:
     text = str(events.get("text") or "").strip()
     if text:
@@ -522,9 +587,16 @@ def install(app: Any) -> bool:
                 await callback.message.answer(_events_message(events), parse_mode="HTML")
             for row in rows:
                 try:
-                    await app.bot.send_message(int(row["player_id"]), "🏁 <b>بازی به پایان رسید.</b>\n\n" + f"🏆 نتیجه: <b>{html.escape(_result_label(winner))}</b>", parse_mode="HTML")
+                    await app.bot.send_message(
+                        int(row["player_id"]),
+                        _private_player_final_text(app, final_game, row, winner),
+                        parse_mode="HTML",
+                        reply_markup=InlineKeyboardMarkup(row_width=1).add(
+                            InlineKeyboardButton("📊 نتیجه بازی", callback_data=f"game_end:{game_id}:result")
+                        ),
+                    )
                 except Exception:
-                    pass
+                    logging.exception("failed to send private final report game=%s user=%s", game_id, row.get("player_id"))
             await callback.answer("🏁 بازی با موفقیت ثبت نهایی شد.")
             return
         if action == "result":
