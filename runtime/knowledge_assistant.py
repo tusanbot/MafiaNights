@@ -39,23 +39,8 @@ def _game_context(app: Any, message: Any) -> tuple[str | None, str | None]:
         return None, None
 
 
-AI_TRIGGER = "دستیار"
-
-
-def _extract_triggered_question(text: str) -> str | None:
-    """Return a question only when the user explicitly addresses the assistant."""
-    value = (text or "").strip()
-    if not value or value.startswith("/"):
-        return None
-    normalized = value.replace("ي", "ی").replace("ى", "ی").replace("ك", "ک").replace("ۀ", "ه")
-    trigger = AI_TRIGGER
-    if not normalized.casefold().startswith(trigger.casefold()):
-        return None
-    rest = normalized[len(trigger):]
-    if rest and not (rest[0].isspace() or rest[0] in ":،,-—"):
-        return None
-    question = rest.lstrip(" :،,-—").strip()
-    return question or None
+# The AI assistant intentionally has NO natural-language trigger. It is slash-only.
+# This prevents the assistant from consuming the bot's existing Persian text commands.
 
 def _web_search(query: str, limit: int = 4) -> list[dict[str, str]]:
     """Optional no-key fallback using DuckDuckGo HTML search.
@@ -607,17 +592,17 @@ def install(app: Any) -> bool:
 
     async def handler(message: Any):
         text = str(getattr(message, "text", "") or "").strip()
-        lowered = text.casefold()
-        question = ""
-        if lowered.startswith("/ask"):
-            question = text[4:].strip()
-        elif lowered.startswith("/mafia"):
-            question = text[6:].strip()
-
+        parts = text.split(maxsplit=1)
+        command = parts[0].split("@", 1)[0].casefold() if parts else ""
+        if command not in {"/ask", "/mafia"}:
+            return
+        question = parts[1].strip() if len(parts) > 1 else ""
         if not question:
             await message.reply(
                 "🤖 <b>دستیار Mafia Nights</b>\n\n"
-                "مثال:\n<code>دستیار نقش زودیاک چه توانایی دارد؟</code>\n\nیا از دستور <code>/ask</code> استفاده کنید.",
+                "برای پرسیدن سؤال فقط از دستورهای زیر استفاده کنید:\n"
+                "• <code>/ask نقش زودیاک چه توانایی دارد؟</code>\n"
+                "• <code>/mafia نقش بازپرس در سناریوی زودیاک چیست؟</code>",
                 parse_mode="HTML",
             )
             return
@@ -632,52 +617,17 @@ def install(app: Any) -> bool:
     app.dp.register_message_handler(
         handler,
         lambda m: (
-            str(getattr(m, "text", "") or "")
-            .casefold()
-            .startswith(("/ask", "/mafia", "سوال", "سؤال"))
-        ),
-        state="*",
-        content_types=types.ContentTypes.TEXT,
-    )
-    async def auto_handler(message: Any):
-        text = str(getattr(message, "text", "") or "").strip()
-        question = _extract_triggered_question(text)
-        if question is None:
-            return
-        enabled, _api_key, _provider, _model = await _thread_call(
-            "AI trigger-route settings", _ai_config, app, message, None, timeout=5.0
-        )
-        if not enabled:
-            return
-        if not question:
-            await _send_plain_reply(
-                message,
-                f"🤖 برای پرسیدن سؤال، بعد از کلمه «{AI_TRIGGER}» متن سؤال را بنویسید.\nمثال: «{AI_TRIGGER} نقش بازپرس چیست؟»",
-            )
-            return
-        await answer(message, app, question)
-
-    app.dp.register_message_handler(
-        auto_handler,
-        lambda m: _extract_triggered_question(str(getattr(m, "text", "") or "")) is not None,
+            str(getattr(m, "text", "") or "").strip().split(maxsplit=1)[0].split("@", 1)[0].casefold()
+            if str(getattr(m, "text", "") or "").strip() else ""
+        ) in {"/ask", "/mafia"},
         state="*",
         content_types=types.ContentTypes.TEXT,
     )
 
-    # Expose both handlers so the real production entry can re-arm their
-    # priority after later feature installers register generic text handlers.
+    # Deliberately do not register any Persian/natural-language assistant handler.
+    # Existing text commands remain fully owned by commands.py.
     app._knowledge_assistant_handler = handler
-    app._knowledge_assistant_auto_handler = auto_handler
-    registry = getattr(getattr(app.dp, "message_handlers", None), "handlers", [])
-    for i, item in enumerate(list(registry)):
-        callback = getattr(item, "handler", None) or getattr(item, "callback", None)
-        if callback is handler:
-            registry.insert(0, registry.pop(i))
-            break
-    for i, item in enumerate(list(registry)):
-        callback = getattr(item, "handler", None) or getattr(item, "callback", None)
-        if callback is auto_handler:
-            registry.insert(1 if registry else 0, registry.pop(i))
-            break
+    app._knowledge_assistant_auto_handler = None
+
     logging.info("Mafia knowledge assistant installed")
     return True
