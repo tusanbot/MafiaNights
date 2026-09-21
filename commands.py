@@ -1275,6 +1275,15 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
     }
     if name in {"profile","ranking","stats"}:
         stats = getattr(app,"_user_stats_instance",None)
+        if stats is None:
+            try:
+                from runtime.user_stats import UserStats
+                stats = UserStats(app)
+                app._user_stats_instance = stats
+                app._user_stats_installed = True
+            except Exception:
+                logging.exception("lazy user stats initialization failed")
+                stats = None
         if stats is not None:
             uid=int(message.reply_to_message.from_user.id if message.reply_to_message else message.from_user.id)
             gid=int(message.chat.id) if message.chat.type in {"group","supergroup"} else None
