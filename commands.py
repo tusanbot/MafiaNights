@@ -75,7 +75,7 @@ COMMANDS = {
     "commands": {"commands", "دستورات", "دستورها"},
     "help": {"راهنما", "کمک", "/help"},
     "profile": {"پروفایل", "profile", "/profile"},
-    "ranking": {"رتبه", "رتبه بندی", "رتبه‌بندی", "ranking", "rank", "/rank"},
+    "ranking": {"رتبه", "رتبه بندی", "رتبه‌بندی", "رتبه امتیاز", "رتبه میانگین", "رتبه برد", "رتبه بهترین بازی", "ranking", "rank", "/rank"},
     "stats": {"آمار", "امار", "آمار من", "امار من", "stats", "statistics", "امتیاز", "امتیاز من", "/stats"},
     "seats": {"لیست صندلی", "لیست صندلی‌ها", "صندلی ها", "صندلی‌ها"},
     "players": {"لیست بازیکنان", "بازیکنان"},
@@ -209,6 +209,10 @@ COMMAND_REFERENCE = (
         ("راهنما / کمک", "راهنمای دستورات"),
         ("پروفایل", "پروفایل"),
         ("رتبه", "رتبه‌بندی"),
+        ("رتبه امتیاز", "مرتب‌سازی بر اساس بیشترین امتیاز"),
+        ("رتبه میانگین", "مرتب‌سازی بر اساس بالاترین میانگین امتیاز هر بازی"),
+        ("رتبه برد", "مرتب‌سازی بر اساس بالاترین درصد برد"),
+        ("رتبه بهترین بازی", "مرتب‌سازی بر اساس بهترین امتیاز یک بازی"),
         ("آمار", "آمار"),
         ("لیست بازیکنان", "لیست بازیکنان"),
         ("لیست صندلی", "لیست صندلی‌ها"),
@@ -523,32 +527,13 @@ async def _join(message: types.Message, app: Any) -> None:
     # a foreign-key constraint. Never swallow registration failures and then
     # attempt the membership insert.
     try:
-        await app._ensure_player(message.from_user)
+        from player_service import ensure_player
+        if ensure_player(message.from_user) is None:
+            raise RuntimeError("player upsert returned no result")
     except Exception:
-        logging.exception("text join: app._ensure_player failed; using direct player upsert")
-        try:
-            from player_repository import PlayerRepository
-            with PlayerRepository().SessionLocal() as session:
-                session.execute(text("""
-                    insert into public.mafia_players
-                        (id, username, first_name, last_name, created_at, updated_at)
-                    values (:id, :username, :first_name, :last_name, now(), now())
-                    on conflict (id) do update set
-                        username=coalesce(excluded.username, public.mafia_players.username),
-                        first_name=coalesce(excluded.first_name, public.mafia_players.first_name),
-                        last_name=coalesce(excluded.last_name, public.mafia_players.last_name),
-                        updated_at=now()
-                """), {
-                    "id": uid,
-                    "username": message.from_user.username,
-                    "first_name": message.from_user.first_name,
-                    "last_name": message.from_user.last_name,
-                })
-                session.commit()
-        except Exception:
-            logging.exception("text join: direct player upsert failed")
-            await message.reply("❌ ثبت بازیکن انجام نشد. لطفاً دوباره «ورود» را ارسال کنید.")
-            return
+        logging.exception("text join: canonical player upsert failed")
+        await message.reply("❌ ثبت بازیکن انجام نشد. لطفاً ابتدا ثبت‌نام را کامل کنید.")
+        return
     try:
         app.runtime.state.lobby.join(game["id"], uid, seat, is_substitute=False)
     except Exception:
@@ -1043,9 +1028,10 @@ async def _reserve_text(message, app, cancel=False):
         await message.reply("ℹ️ رزرو پس از تکمیل ظرفیت فعال می‌شود."); return
 
     try:
-        await app._ensure_player(message.from_user)
+        from player_service import ensure_player
+        ensure_player(message.from_user)
     except Exception:
-        pass
+        logging.exception("text reserve: canonical player upsert failed")
     try:
         app.runtime.state.lobby.join(game["id"], uid, None, is_substitute=True)
     except Exception:
@@ -1066,7 +1052,10 @@ async def _sub_text(message, app):
     rows=app.runtime.state.games.list_players(game["id"])
     if any(int(r.get("player_id") or 0)==int(target.id) and r.get("seat") is None and str(r.get("status") or "")=="waiting" for r in rows):
         await message.reply("ℹ️ این کاربر قبلاً در لیست جایگزین است."); return
-    await app._ensure_player(target)
+    from player_service import ensure_player
+    if ensure_player(target) is None:
+        await message.reply("❌ ثبت بازیکن انجام نشد. ابتدا ثبت‌نام را کامل کنید.")
+        return
     app.runtime.state.lobby.join(game["id"],int(target.id),None,is_substitute=True)
     await message.reply(f"🔄 <b>{html.escape(target.full_name)}</b> به لیست جایگزین اضافه شد.",parse_mode="HTML")
 
@@ -1095,6 +1084,57 @@ async def _legacy_command_adapter(name, message, app):
     # Keep the already-working assistant/tag surfaces available without
     # creating a second text-command registration surface.
     await run_command(name, message, app)
+
+async def _help_text(message: types.Message, app: Any) -> None:
+    await message.reply(
+        "📚 <b>راهنمای استفاده از Mafia Nights</b>\n\n"
+        "👤 <b>شروع کار:</b> ابتدا در پیوی ثبت‌نام کنید و نام فارسی خود را ثبت کنید.\n"
+        "🎮 <b>ورود به بازی:</b> داخل گروه «ورود» را بفرستید و سپس صندلی خود را انتخاب کنید.\n"
+        "🏆 <b>رتبه‌بندی:</b> با «رتبه»، «رتبه امتیاز»، «رتبه میانگین» یا «رتبه برد» معیار موردنظر را انتخاب کنید.\n"
+        "👤 <b>پروفایل:</b> اطلاعات، امتیازها و تنظیم نام مستعار از بخش پروفایل قابل مدیریت است.\n\n"
+        "برای فهرست کامل دستورات متنی، دستور <code>دستورات</code> را ارسال کنید.",
+        parse_mode="HTML",
+    )
+
+
+async def _seats_list_text(message: types.Message, app: Any) -> None:
+    if message.chat.type not in {"group", "supergroup"}:
+        await message.reply("ℹ️ این دستور فقط داخل گروه بازی است.")
+        return
+    game = _game(app, message)
+    if not game:
+        await message.reply("❌ بازی فعالی وجود ندارد.")
+        return
+    rows = app.runtime.state.games.list_players(game["id"])
+    rows = [r for r in rows if str(r.get("status") or "active") not in {"removed","dead","finished","kicked"}]
+    if not rows:
+        await message.reply("👥 هنوز بازیکنی در لابی ثبت نشده است.")
+        return
+    lines=["💺 <b>لیست صندلی‌ها</b>",""]
+    for r in sorted(rows, key=lambda x:int(x.get("seat") or 999)):
+        seat = r.get("seat")
+        name = str(r.get("nickname") or r.get("first_name") or r.get("username") or r.get("player_id") or "بازیکن")
+        lines.append(f"{int(seat):02d}. <a href='tg://user?id={int(r['player_id'])}'>{html.escape(name)}</a>" if seat is not None else f"⏳ رزرو: <a href='tg://user?id={int(r['player_id'])}'>{html.escape(name)}</a>")
+    await message.reply("\n".join(lines), parse_mode="HTML")
+
+
+async def _players_list_text(message: types.Message, app: Any) -> None:
+    game = _game(app, message)
+    if not game:
+        await message.reply("❌ بازی فعالی وجود ندارد.")
+        return
+    if not await _manager(app, message, game):
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند این فهرست را ببیند.")
+        return
+    rows = app.runtime.state.games.list_players(game["id"])
+    rows = [r for r in rows if str(r.get("status") or "active") not in {"removed","dead","finished","kicked"}]
+    lines=["👥 <b>لیست بازیکنان</b>",""]
+    for r in sorted(rows, key=lambda x:int(x.get("seat") or 999)):
+        name = str(r.get("nickname") or r.get("first_name") or r.get("username") or r.get("player_id") or "بازیکن")
+        seat = f"{int(r['seat']):02d}" if r.get("seat") is not None else "—"
+        lines.append(f"{seat}. <a href='tg://user?id={int(r['player_id'])}'>{html.escape(name)}</a>")
+    await message.reply("\n".join(lines), parse_mode="HTML")
+
 
 async def _nickname_set_text(message: types.Message, app: Any) -> None:
     if message.chat.type not in {"group", "supergroup"}:
@@ -1211,14 +1251,16 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
         "nightunlock": lambda m,a: _set_lock(m,a,"night_lock",False,"قفل شب"),
         "turnlock": lambda m,a: _set_lock(m,a,"turn_lock",True,"قفل نوبت"),
         "turnunlock": lambda m,a: _set_lock(m,a,"turn_lock",False,"قفل نوبت"),
-        "commands": cmd_commands, "help": cmd_commands,
+        "commands": cmd_commands, "help": _help_text,
         "ask": lambda m,a: __import__("runtime.knowledge_assistant", fromlist=["answer"]).answer(m,a,(m.text or "").split(" ",1)[1] if " " in (m.text or "") else ""),
         "ai_on": lambda m,a: _ai_control(m,a,"on"), "ai_off": lambda m,a: _ai_control(m,a,"off"),
         "ai_status": lambda m,a: _ai_control(m,a,"status"), "ai_key": _ai_key,
         "ai_panel": _ai_panel_text,
         "nickname_set": _nickname_set_text, "nickname_del": _nickname_del_text, "nickname_get": _nickname_get_text, "nickname_list": _nickname_list_text,
+        "management": _panel_text, "lobby": _lobby_text, "seats": _seats_list_text, "players": _players_list_text,
         "kb_list": lambda m,a: _kb_control(m,a,"list"), "kb_add": lambda m,a: _kb_control(m,a,"add"),
         "kb_publish": lambda m,a: _kb_control(m,a,"publish"),
+        "sub_list": lambda m,a: _legacy_command_adapter("sub_list",m,a), "sub_del": lambda m,a: _legacy_command_adapter("sub_del",m,a),
         "tag_all": cmd_tag_all, "tag_admins": cmd_tag_admins, "tag_list": cmd_tag_players,
     }
     if name in {"profile","ranking","stats"}:
@@ -1234,7 +1276,16 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
                 except Exception:
                     logging.exception("profile command: player registration failed for %s", message.from_user.id)
                 await stats.show_profile(message,uid,gid)
-            elif name=="ranking": await stats.show_ranking(message,gid)
+            elif name=="ranking":
+                raw = normalize_text(message.text)
+                metric = "score"
+                if "میانگین" in raw:
+                    metric = "average"
+                elif "برد" in raw:
+                    metric = "win_rate"
+                elif "بهترین بازی" in raw:
+                    metric = "best_game"
+                await stats.show_ranking(message, gid, metric=metric)
             else: await stats.show_stats(message,uid,gid)
         else: await message.reply("⚠️ بخش آمار در دسترس نیست.")
         return
