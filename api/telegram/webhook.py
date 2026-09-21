@@ -163,13 +163,38 @@ async def _dispatch(payload: dict[str, Any]) -> None:
     callback = getattr(update, "callback_query", None)
     if callback is not None:
         data = str(getattr(callback, "data", "") or "")
-        if data != "registration:start":
+
+        # Registration is a protected entry route. It must be handled directly
+        # here, before aiogram's callback registry, because several compatibility
+        # layers can register/promote broad callback handlers during startup.
+        # The private registration button uses exactly this callback_data.
+        if data == "registration:start":
             from runtime import registration
             uid = getattr(getattr(callback, "from_user", None), "id", None)
             if uid is not None and not registration.is_registered(int(uid)):
-                await registration.prompt_registration(callback.message, runtime_entry.main, group=getattr(getattr(callback.message, "chat", None), "type", None) in {"group", "supergroup"})
-                await callback.answer("🔐 ابتدا ثبت‌نام کنید.", show_alert=True)
+                dp = runtime_entry.main.dp
+                state = dp.current_state(
+                    chat=callback.message.chat.id,
+                    user=int(uid),
+                )
+                await registration.begin(callback, state)
+                import logging
+                logging.info("WEBHOOK CANONICAL REGISTRATION START user_id=%s", uid)
                 return
+            await callback.answer("✅ حساب شما قبلاً ثبت شده است.", show_alert=True)
+            return
+
+        from runtime import registration
+        uid = getattr(getattr(callback, "from_user", None), "id", None)
+        if uid is not None and not registration.is_registered(int(uid)):
+            await registration.prompt_registration(
+                callback.message,
+                runtime_entry.main,
+                group=getattr(getattr(callback.message, "chat", None), "type", None)
+                in {"group", "supergroup"},
+            )
+            await callback.answer("🔐 ابتدا ثبت‌نام کنید.", show_alert=True)
+            return
     if callback is not None and str(getattr(callback, "data", "") or "") in {"fl_new", "new_game"}:
         handler = getattr(runtime_entry.main, "_canonical_new_game_handler", None)
         if handler is not None:
