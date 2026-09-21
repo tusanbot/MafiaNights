@@ -511,7 +511,7 @@ async def _join(message: types.Message, app: Any) -> None:
         await message.reply("❌ لابی فعالی وجود ندارد.")
         return
     from repositories.scenario_repository import ScenarioRepository
-    scenario = ScenarioRepository().get_by_id(int(game.get("scenario_id") or 0))
+    scenario = ScenarioRepository().get_by_id(game.get("scenario_id"))
     capacity = len((scenario or {}).get("roles") or [])
     rows = app.runtime.state.games.list_players(game["id"])
     uid = int(message.from_user.id)
@@ -974,7 +974,7 @@ async def _seat_text(message, app):
         await message.reply("❌ لابی فعالی وجود ندارد."); return
     uid=int(message.from_user.id); target=int(parts[1])
     from repositories.scenario_repository import ScenarioRepository
-    scenario=ScenarioRepository().get_by_id(int(game.get("scenario_id") or 0))
+    scenario=ScenarioRepository().get_by_id(game.get("scenario_id"))
     cap=len((scenario or {}).get("roles") or [])
     if target<1 or target>cap:
         await message.reply("❌ شماره صندلی نامعتبر است."); return
@@ -1014,7 +1014,7 @@ async def _reserve_text(message, app, cancel=False):
         return
 
     from repositories.scenario_repository import ScenarioRepository
-    scenario = ScenarioRepository().get_by_id(int(game.get("scenario_id") or 0))
+    scenario = ScenarioRepository().get_by_id(game.get("scenario_id"))
     cap = len((scenario or {}).get("roles") or [])
     active = [
         r for r in rows
