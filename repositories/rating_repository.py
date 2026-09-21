@@ -27,6 +27,30 @@ class RatingRepository(DatabaseRepository):
                 returning id
             """),{"user_id":int(user_id),"game_id":resolved_game_id,"score":int(score),"result":result,"role":role,"base_score":BASE_SCORE,"win_bonus":int(win_bonus),"challenge_bonus":int(challenge_bonus),"warning_penalty":int(warning_penalty),"kick_penalty":int(kick_penalty)}).scalar_one();session.commit();return row
 
+    def game_score_details(self,user_id,game_id):
+        """Return the score delta and result recorded for one game."""
+        with self.SessionLocal() as session:
+            resolved_game_id = self._game_uuid(session, game_id)
+            row = session.execute(text("""
+                select
+                    coalesce(score,0)::int as score_delta,
+                    coalesce(base_score,50)::int as base_score,
+                    coalesce(win_bonus,0)::int as win_bonus,
+                    coalesce(challenge_bonus,0)::int as challenge_bonus,
+                    coalesce(warning_penalty,0)::int as warning_penalty,
+                    coalesce(kick_penalty,0)::int as kick_penalty,
+                    coalesce(result,'') as result,
+                    coalesce(role,'') as role
+                from public.mafia_ratings
+                where user_id=:user_id and game_id=:game_id
+                limit 1
+            """), {"user_id": int(user_id), "game_id": resolved_game_id}).mappings().first()
+            return dict(row) if row else {
+                "score_delta": 0, "base_score": 50, "win_bonus": 0,
+                "challenge_bonus": 0, "warning_penalty": 0,
+                "kick_penalty": 0, "result": "", "role": ""
+            }
+
     def player_summary(self,user_id):
         with self.SessionLocal() as session:
             row=session.execute(text("""
