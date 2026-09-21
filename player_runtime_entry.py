@@ -162,6 +162,12 @@ from runtime.progress_features_v4 import install as install_progress_features
 _progress_features_runtime = install_progress_features(main)
 main._progress_features_runtime = _progress_features_runtime
 
+# Canonical private profile/ranking/stats owner. It must be installed before
+# commands.py so the canonical text-command dispatcher can delegate to the same
+# UserStats instance instead of returning "stats unavailable".
+from runtime.user_stats import install as install_user_stats
+install_user_stats(main)
+
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.live_controls_v2 import install as install_live_controls_v2
 from runtime.lobby_challenge_v2 import install as install_lobby_challenge_v2
