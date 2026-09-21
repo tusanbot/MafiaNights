@@ -53,7 +53,7 @@ COMMANDS = {
     "attendance": {"حاضری", "/attendance"},
     "management": {"مدیریت", "مدیریت بازی", "/management"},
     "lobby": {"لابی", "بازگشت به لابی", "/lobby"},
-    "nickname_set": {"تنظیم مستعار", "تنظیم نام مستعار", "/nickname_set"},
+    "nickname_set": {"تنظیم مستعار", "تنظیم نام مستعار", "ثبت مستعار", "ثبت نام مستعار", "/nickname_set"},
     "nickname_del": {"حذف مستعار", "حذف نام مستعار", "/nickname_del"},
     "nickname_get": {"نام مستعار", "دیدن نام مستعار", "/nickname_get"},
     "nickname_list": {"لیست مستعار", "لیست نامهای مستعار", "لیست نام‌های مستعار", "/nickname_list"},
