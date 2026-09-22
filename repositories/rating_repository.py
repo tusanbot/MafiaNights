@@ -12,7 +12,11 @@ class RatingRepository(DatabaseRepository):
         raw=str(game_id).strip()
         try:return str(UUID(raw))
         except (TypeError,ValueError,AttributeError):
-            row=session.execute(text("select id from public.mafia_games where event_number=:event_number limit 1"),{"event_number":int(raw)}).scalar_one_or_none()
+            try:numeric=int(raw)
+            except (TypeError,ValueError,OverflowError):raise ValueError("بازی پیدا نشد")
+            row=session.execute(text("select id from public.mafia_games where id=:game_id limit 1"),{"game_id":numeric}).scalar_one_or_none()
+            if row is None:
+                row=session.execute(text("select id from public.mafia_games where event_number=:event_number order by created_at desc limit 1"),{"event_number":numeric}).scalar_one_or_none()
             if row is None:raise ValueError("بازی پیدا نشد")
             return str(row)
 
