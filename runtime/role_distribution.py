@@ -157,23 +157,51 @@ def install(app: Any) -> bool:
                 if (await bot.get_chat_member(group_id, int(callback.from_user.id))).status not in {"creator", "administrator"}: raise PermissionError
             except Exception:
                 await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True); return
-        rows = [r for r in app.runtime.lobby_snapshot(group_id).get("players", []) if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed", "dead", "finished"}]
-        if not rows: await callback.answer("❌ بازیکنی برای سردست وجود ندارد.", show_alert=True); return
+        # Always read the authoritative seat list from the durable game-player
+        # rows. lobby_snapshot can be stale on a new Vercel instance and was
+        # the source of intermittent "invalid seat" errors.
+        rows = [
+            r for r in app.runtime.state.games.list_players(game_id)
+            if r.get("seat") is not None
+            and str(r.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
+        ]
+        if not rows:
+            await callback.answer("❌ بازیکنی برای سردست وجود ندارد.", show_alert=True); return
+        valid_seats = {int(r["seat"]) for r in rows}
         seat = int(random.choice(rows)["seat"]) if random_pick else int(parts[3])
-        if not random_pick and seat not in {int(r["seat"]) for r in rows}: await callback.answer("❌ صندلی نامعتبر است.", show_alert=True); return
-        state = dict(game.get("state") or {}); state["head_seat"] = seat
-        app.runtime.state.games.update_game(game_id, state=state)
+        if seat not in valid_seats:
+            logging.warning("head selection rejected stale seat: game=%s requested=%s valid=%s", game_id, seat, sorted(valid_seats))
+            await callback.answer("❌ صندلی نامعتبر است. فهرست بازیکنان را دوباره باز کنید.", show_alert=True); return
 
-        # New-day reset clears transient in-memory turn data. Rehydrate the
-        # canonical seat map from DB immediately after chief selection so the
-        # next "start round" cannot see an empty player_slots map.
+        # Persist head selection and the complete speaker order together. The
+        # selected head is the first speaker; the remaining active seats follow
+        # cyclically. This prevents the next round from reconstructing numeric
+        # seat order after a new-day reset.
+        ordered_seats = sorted(valid_seats)
+        head_index = ordered_seats.index(seat)
+        turn_order = ordered_seats[head_index:] + ordered_seats[:head_index]
+        state = dict(game.get("state") or {})
+        state["head_seat"] = seat
+        state["speaker_seat"] = seat
+        state["turn_order"] = [int(x) for x in turn_order]
+        state["turn_order_source"] = "selected_speaker"
+        state["current_turn_index"] = 0
+        if not app.runtime.state.games.update_game(
+            game_id,
+            state=state,
+            current_turn_index=0,
+            current_turn_seat=int(seat),
+        ):
+            await callback.answer("❌ ذخیره سردست انجام نشد؛ دوباره تلاش کنید.", show_alert=True); return
+
+        # Rehydrate the process-local bridge only after the durable state is
+        # successfully saved.
         try:
-            fresh_players = [
-                row for row in app.runtime.state.games.list_players(game_id)
-                if row.get("seat") is not None
-                and str(row.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
-            ]
-            _sync_gameplay_bridge(app, group_id, game, fresh_players)
+            _sync_gameplay_bridge(app, group_id, game, rows)
+            app.turn_order = list(turn_order)
+            app._stable_normal_order = list(turn_order)
+            app._gm_normal_order = list(turn_order)
+            app.current_turn_index = 0
             app._head_seat = seat
         except Exception:
             logging.exception("failed to hydrate gameplay bridge after head selection")
