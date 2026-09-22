@@ -230,7 +230,7 @@ async def _start_target(main):
     v["eligible_voters"] = sorted(_current_voters(main, v))
     voting_runtime._put(main, v)
     markup = (
-        InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رأی می‌دهم", callback_data="vote:cast"))
+        InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رأی می‌دهم", callback_data="vote:autocast"))
         if v.get("mode") == voting_runtime.AUTO
         else voting_runtime._manual_next_kb(idx >= len(targets) - 1)
     )
@@ -462,8 +462,8 @@ async def _round2(main, callback):
     for uid in candidates:
         name = await _resolve_name(main, uid, rows.get(uid, {}).get("seat"))
         kb.add(InlineKeyboardButton(f"{name}" + (" ✅" if uid in selected else ""), callback_data=f"vote:r2pick:{uid}"))
-    kb.add(InlineKeyboardButton("✅ تایید بازیکنان دفاع", callback_data="vote:r2confirm"))
-    kb.add(InlineKeyboardButton("⬅️ بازگشت", callback_data="vote:settings"))
+    kb.add(InlineKeyboardButton("✅ تایید بازیکنان دفاع", callback_data="vote:r2confirm_v2"))
+    kb.add(InlineKeyboardButton("⬅️ بازگشت", callback_data="vote:r2back"))
     await callback.message.edit_text(
         "🔄 <b>انتخاب بازیکنان دفاع دور ۲</b>\n\n"
         "فقط بازیکنانی که در دور ۱ به حدنصاب رسیده‌اند در این فهرست هستند.\n"
@@ -656,6 +656,10 @@ def install(main):
 
     async def r2confirm(c):
         await only_mod(c); await _round2_confirm(main, c)
+    async def r2back(c):
+        await only_mod(c)
+        await _settings(main, c)
+
 
     handlers = [
         (lambda c: c.data == "vote:settings", settings_handler),
@@ -672,10 +676,11 @@ def install(main):
         (lambda c: c.data == "vote:manual_next", lambda c: _manual_next(main, c)),
         (lambda c: c.data == "vote:manual_end", lambda c: _manual_end(main, c)),
         (lambda c: c.data == "vote:noop", _vote_noop),
-        (lambda c: c.data == "vote:cast", cast),
+        (lambda c: c.data == "vote:autocast", cast),
         (lambda c: c.data == "vote:round2", r2),
         (lambda c: c.data.startswith("vote:r2pick:"), r2pick),
-        (lambda c: c.data == "vote:r2confirm", r2confirm),
+        (lambda c: c.data == "vote:r2confirm_v2", r2confirm),
+        (lambda c: c.data == "vote:r2back", r2back),
     ]
     for predicate, handler in handlers:
         dp.register_callback_query_handler(handler, predicate, state="*")
