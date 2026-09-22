@@ -459,6 +459,8 @@ class GameManagement:
 
     async def challenge(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
+        parts = str(callback.data or "").split(":")
+        context = parts[3] if len(parts) >= 4 else "management"
         if not game or not await self._allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         rows = self.app.runtime.state.challenges.list_challenges(game["id"])
@@ -477,7 +479,9 @@ class GameManagement:
             InlineKeyboardButton(f"⏳ در انتظار: {pending}", callback_data=f"mgmt:{game['id']}:noop"),
             InlineKeyboardButton(f"🤏 اجراشده: {executed}", callback_data=f"mgmt:{game['id']}:noop"),
         )
-        kb.row(InlineKeyboardButton("⬅️ مدیریت", callback_data=f"mgmt:{game['id']}:open"))
+        back_data = f"mgmt:{game['id']}:challenge_back:start" if context == "start" else (f"mgmt:{game['id']}:challenge_back:round" if context == "round" else f"mgmt:{game['id']}:open")
+        back_text = "⬅️ شروع بازی" if context == "start" else ("⬅️ منوی دور" if context == "round" else "⬅️ مدیریت بازی")
+        kb.row(InlineKeyboardButton(back_text, callback_data=back_data))
         await callback.message.edit_text(f"⚔ <b>مدیریت چالش</b>\n\n🟢 سرویس: {'فعال' if enabled else 'خاموش'}\n⏳ در انتظار: {pending}\n⚡ فعال: {active}\n🤏 اجراشده: {executed}\n📦 کل: {len(rows)}\n\n🤏 نمایش وضعیت کنار نام بازیکنان: {'فعال' if show else 'غیرفعال'}", parse_mode="HTML", reply_markup=kb)
         await callback.answer()
 
@@ -505,6 +509,26 @@ class GameManagement:
         self.app.runtime.state.games.update_game(game["id"], state=state)
         await callback.answer("🤏 نمایش وضعیت چالش تغییر کرد.")
         await self.challenge(callback)
+
+    async def challenge_back(self, callback):
+        gid = int(callback.message.chat.id); game = self._game(gid)
+        if not game or not await self._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        parts = str(callback.data or "").split(":")
+        context = parts[3] if len(parts) >= 4 else "management"
+        if context == "start":
+            from runtime.role_distribution import _day_markup
+            await callback.message.edit_text("🎭 <b>شروع بازی</b>\n\nسر صحبت و تنظیمات دور را انتخاب کنید:", reply_markup=_day_markup(int(game["id"])), parse_mode="HTML")
+            await callback.answer("⬅️ به منوی شروع بازی برگشتید."); return
+        if context == "round":
+            kb = InlineKeyboardMarkup(row_width=1)
+            kb.add(InlineKeyboardButton("🎲 انتخاب خودکار", callback_data="speaker_auto"))
+            kb.add(InlineKeyboardButton("✋ انتخاب دستی", callback_data="speaker_manual"))
+            kb.add(InlineKeyboardButton("⚔ وضعیت چالش", callback_data=f"mgmt:{int(game['id'])}:challenge:round"))
+            kb.add(InlineKeyboardButton("▶️ شروع دور", callback_data="start_turn"))
+            await callback.message.edit_text("🌞 <b>منوی دور</b>\n\nسر صحبت را انتخاب کنید:", reply_markup=kb, parse_mode="HTML")
+            await callback.answer("⬅️ به منوی دور برگشتید."); return
+        await self.open(callback)
 
     async def back_lobby(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
@@ -642,7 +666,7 @@ class GameManagement:
             "birthday": self.birthday, "birthday_pick": self.birthday_pick,
             "challenge": self.challenge, "challenge_toggle": self.challenge_toggle, "challenge_visibility_toggle": self.challenge_visibility_toggle,
             "next": self.next, "next_toggle": self.next_toggle,
-            "cancel": self.cancel, "back_lobby": self.back_lobby,
+            "cancel": self.cancel, "back_lobby": self.back_lobby, "challenge_back": self.challenge_back,
         }
         for action, fn in handlers.items():
             dp.register_callback_query_handler(
