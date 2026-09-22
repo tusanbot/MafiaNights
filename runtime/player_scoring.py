@@ -43,7 +43,7 @@ def score_game(app:Any,game:dict[str,Any],rows:list[dict[str,Any]],winner:str)->
     for row in rows:
         uid=int(row["player_id"]);key=str(uid)
         if key in recorded:continue
-        side=game_end._role_side(row,state);win_bonus=WIN_POINTS if winner!="draw" and side==winner else 0;challenge_bonus=_count_challenges(app,int(game["id"]),uid)*CHALLENGE_POINTS;warning_total=warning_penalty(_warning_count(row,state));kick_penalty=KICK_PENALTY if _is_kicked(row,state) else 0;delta=win_bonus+challenge_bonus-warning_total-kick_penalty;result="draw" if winner=="draw" else ("win" if side==winner else "loss")
+        side=game_end._role_side(row,state);win_bonus=WIN_POINTS if winner!="draw" and side==winner else 0;challenge_bonus=_count_challenges(app,game["id"],uid)*CHALLENGE_POINTS;warning_total=warning_penalty(_warning_count(row,state));kick_penalty=KICK_PENALTY if _is_kicked(row,state) else 0;delta=win_bonus+challenge_bonus-warning_total-kick_penalty;result="draw" if winner=="draw" else ("win" if side==winner else "loss")
         try:
             repo.record(uid,game["id"],int(delta),result,str(row.get("role") or ""),win_bonus=win_bonus,challenge_bonus=challenge_bonus,warning_penalty=warning_total,kick_penalty=kick_penalty);recorded.add(key)
             engine=getattr(app,"_achievement_engine",None)
