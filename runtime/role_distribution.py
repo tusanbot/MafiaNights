@@ -41,8 +41,35 @@ def _day_markup(game_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def _role_text(role: str, seat: int, scenario_name: str) -> str:
-    return "༄\n<b>🎭 MAFIA NIGHTS</b>\n\n" + f"🎭 <b>نقش شما:</b> {html.escape(role)}\n" + f"💺 <b>صندلی:</b> {seat}\n" + f"📝 <b>سناریو:</b> {html.escape(scenario_name)}"
+ROLE_SIDE_ICONS = {
+    "مافیا": "🌃",
+    "مافیاها": "🌃",
+    "مستقل": "🥷",
+    "شهروند": "🏘",
+    "شهر": "🏘",
+}
+GENDER_ICONS = {"female": "🙎🏻‍♀", "male": "🙎🏻‍♂", "زن": "🙎🏻‍♀", "مرد": "🙎🏻‍♂"}
+
+def _role_side_icon(role: str) -> str:
+    value = str(role or "").strip()
+    for key, icon in ROLE_SIDE_ICONS.items():
+        if key in value:
+            return icon
+    return "🎭"
+
+def _role_text(role: str, seat: int, scenario_name: str, player: dict[str, Any] | None = None) -> str:
+    player = player or {}
+    gender = str(player.get("gender") or player.get("sex") or "").strip().lower()
+    gender_icon = GENDER_ICONS.get(gender, "")
+    side_icon = _role_side_icon(role)
+    return (
+        "༄\n<b>🎭 MAFIA NIGHTS</b>\n\n"
+        f"{gender_icon} <b>بازیکن:</b> {html.escape(str(player.get('nickname') or player.get('first_name') or 'بازیکن'))}\n"
+        f"{side_icon} <b>نقش شما:</b> {html.escape(role)}\n"
+        f"🪑 <b>صندلی:</b> {seat}\n"
+        f"📜 <b>سناریو:</b> {html.escape(scenario_name)}\n\n"
+        "🔒 این نقش محرمانه است؛ فقط خودت ببینش."
+    )
 
 
 def install(app: Any) -> bool:
@@ -58,7 +85,7 @@ def install(app: Any) -> bool:
         scenario = scenario_repo.get_by_id(scenario_id) if scenario_id is not None else None
         scenario_name = str((scenario or {}).get("name") or scenario_id or "---")
         try:
-            await bot.send_message(int(player_id), _role_text(str(player["role"]), int(player["seat"]), scenario_name), parse_mode="HTML")
+            await bot.send_message(int(player_id), _role_text(str(player["role"]), int(player["seat"]), scenario_name, player), parse_mode="HTML")
             state = dict(game.get("state") or {})
             deliveries = dict(state.get("role_delivery") or {})
             deliveries[str(int(player_id))] = True
@@ -206,7 +233,7 @@ def install(app: Any) -> bool:
         for player in players:
             player_id = int(player["player_id"]); role = role_map[str(player_id)]; seat = int(player["seat"])
             try:
-                await bot.send_message(player_id, _role_text(role, seat, scenario_name), parse_mode="HTML"); sent += 1
+                await bot.send_message(player_id, _role_text(role, seat, scenario_name, player), parse_mode="HTML"); sent += 1
             except Exception:
                 delivery_failures.append(player_id); logging.exception("failed to send role privately: user=%s game=%s", player_id, game_id)
 
