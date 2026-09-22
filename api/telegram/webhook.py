@@ -155,7 +155,6 @@ async def _dispatch_priority_message(message: Any, runtime_entry: Any) -> bool:
                     raise
 
             await run_command(command_name, message, runtime_entry.main)
-            import logging
             logging.info(
                 "WEBHOOK CANONICAL TEXT COMMAND ROUTE command=%s chat_type=%s user_id=%s",
                 command_name,
