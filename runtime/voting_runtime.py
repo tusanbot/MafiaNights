@@ -23,6 +23,7 @@ VOTE_OPTIONS = (10, 20, 30)
 AUTO, MANUAL = "auto", "manual"
 
 _VOTES = VotingRepository()
+_VOTE_CACHE = {}
 
 
 def _gid(main):
@@ -129,7 +130,15 @@ def _default(main, round_no=1):
     }
 
 
+def _cache_key(main):
+    game = _game(main)
+    return str(game.get("id")) if game else None
+
+
 def _v(main):
+    key = _cache_key(main)
+    if key and key in _VOTE_CACHE:
+        return _VOTE_CACHE[key]
     payload = _state(main)
     voting = payload.get("voting")
     if not isinstance(voting, dict):
@@ -140,21 +149,31 @@ def _v(main):
         voting["vote_rights_taken"] = list(voting.get("round_two_vote_rights_taken") or [])
     voting.pop("round_two_vote_rights_taken", None)
     voting.setdefault("round2_targets", list(voting.get("selected_round_two") or []))
+    if key:
+        _VOTE_CACHE[key] = voting
     return voting
 
 
-def _put(main, voting):
+def _put_memory(main, voting):
+    key = _cache_key(main)
+    if key:
+        _VOTE_CACHE[key] = voting
+    return voting
+
+
+def _persist(main, voting):
     payload = _state(main)
     payload["voting"] = voting
     return _save(main, payload)
 
 
-def _put_memory(main, voting):
-    return voting
-
-
-def _persist(main, voting):
-    return _put(main, voting)
+def _put(main, voting):
+    _put_memory(main, voting)
+    try:
+        return _persist(main, voting)
+    except Exception:
+        logging.exception("VOTE STATE PERSIST FAILED game=%s phase=%s", _gid(main), voting.get("phase"))
+        return False
 
 
 def _active_rights(v):
@@ -404,13 +423,17 @@ async def _start_wait(main):
 
 async def _close_target(main):
     v = _v(main)
+    if v.get("phase") != "voting" or v.get("target_vote_ended"):
+        logging.info("VOTE CLOSE SKIPPED game=%s phase=%s ended=%s", _gid(main), v.get("phase"), v.get("target_vote_ended"))
+        return
+    v["phase"] = "closing"
+    v["target_vote_ended"] = True
+    _put_memory(main, v)
     targets = [int(x) for x in (v.get("targets") or [])]
     idx = int(v.get("target_index") or 0)
     if idx >= len(targets):
         return await _finish_round(main)
     target = targets[idx]
-    v["target_vote_ended"] = True
-    _put(main, v)
     await _edit_vote_message(main, v, target, closed=True)
     v.update(target_index=idx + 1, started_at=None, deadline=None, vote_message_id=None)
     _put(main, v)
@@ -422,8 +445,12 @@ async def _close_target(main):
 
 async def _finish_round(main):
     v = _v(main)
+    if v.get("phase") == "round_finished":
+        logging.info("VOTE FINISH SKIPPED game=%s already finished", _gid(main))
+        return
     round_no = int(v.get("round") or 1)
     v.update(phase="round_finished", deadline=None, vote_message_id=None)
+    _put_memory(main, v)
     if round_no == 1 and _game(main):
         rules = _rules(main)
         threshold = _threshold(rules, len(_players(main)))
@@ -574,7 +601,7 @@ async def _cast(main, callback):
     }
     votes.append(record)
     v["votes"] = votes
-    _put(main, v)
+    _put_memory(main, v)
 
     # DB persistence is best-effort; the live game state is authoritative for the
     # active vote, so a slow/legacy DB cannot block the voting UI.
@@ -586,6 +613,10 @@ async def _cast(main, callback):
 
     logging.info("VOTE CAST game=%s round=%s target=%s voter=%s mode=%s", _gid(main), round_no, target, uid, v.get("mode"))
     await _edit_vote_message(main, v, target)
+    try:
+        _persist(main, v)
+    except Exception:
+        logging.exception("VOTE STATE SAVE AFTER UI FAILED game=%s", _gid(main))
     raise CancelHandler()
 
 
