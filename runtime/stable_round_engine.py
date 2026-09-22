@@ -43,6 +43,67 @@ def _uid(main, seat):
         return None
 
 
+
+def _hydrate_runtime_players(main, game=None):
+    """Rebuild process-local player/seat state from durable game rows."""
+    gid = _gid(main)
+    if not gid:
+        return None, []
+    try:
+        if game is None:
+            game = main.runtime.state.active_game(gid)
+        if not game:
+            return None, []
+        rows = [
+            row for row in main.runtime.state.games.list_players(game["id"])
+            if row.get("seat") is not None
+            and str(row.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
+        ]
+        slots, players = {}, {}
+        for row in rows:
+            try:
+                seat, uid = int(row["seat"]), int(row["player_id"])
+            except (TypeError, ValueError):
+                continue
+            if uid:
+                slots[seat] = uid
+                players[uid] = str(row.get("nickname") or row.get("first_name") or row.get("username") or uid)
+        main.player_slots = slots
+        main.players = players
+        return game, rows
+    except Exception:
+        logging.exception("stable round: failed to hydrate runtime players from DB")
+        return game, []
+
+
+def _restore_persisted_turn_state(main, game):
+    """Restore durable turn order/index and discard stale process-local order."""
+    state = dict((game or {}).get("state") or {})
+    persisted = []
+    for raw in state.get("turn_order") or []:
+        try:
+            persisted.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    occupied = set((getattr(main, "player_slots", {}) or {}).keys())
+    persisted = [seat for seat in persisted if seat in occupied]
+    if not persisted:
+        persisted = sorted(occupied)
+    main.turn_order = list(persisted)
+    main._stable_normal_order = list(persisted)
+    main._gm_normal_order = list(persisted)
+    raw_index = (game or {}).get("current_turn_index")
+    if raw_index is None:
+        raw_index = state.get("current_turn_index")
+    try:
+        idx = int(raw_index)
+    except (TypeError, ValueError):
+        idx = 0
+    if idx < 0 or idx >= len(main.turn_order):
+        idx = 0
+    main.current_turn_index = idx
+    return list(main.turn_order), idx
+
 def _seat(main, uid):
     try:
         uid = int(uid)
@@ -390,15 +451,11 @@ def install(main):
         # Always restore the durable order chosen by «سر صحبت» before the
         # round engine starts. This prevents fallback to numeric seat order.
         try:
-            game = main.runtime.state.active_game(_gid(main))
-            persisted = [int(x) for x in dict((game or {}).get("state") or {}).get("turn_order") or []]
-            if persisted:
-                main.turn_order = persisted
-                main.current_turn_index = 0
-                main._stable_normal_order = list(persisted)
-                main._gm_normal_order = list(persisted)
+            game, _rows = _hydrate_runtime_players(main)
+            _restore_persisted_turn_state(main, game)
+            main.current_turn_index = 0
         except Exception:
-            logging.exception("stable round: failed to restore persisted speaker order")
+            logging.exception("stable round: failed to restore durable player/turn state")
 
         if main._stable_day_active and not main._stable_day_ended:
             await callback.answer("⚠️ این دور قبلاً شروع شده است.", show_alert=True)
@@ -434,6 +491,17 @@ def install(main):
         main._gm_extra_turn_active = False
         main._gm_extra_seats = set()
         main._gm_normal_order = list(base)
+        try:
+            game_now = main.runtime.state.active_game(_gid(main))
+            if game_now:
+                state_now = dict(game_now.get("state") or {})
+                state_now["turn_order"] = [int(x) for x in base]
+                state_now["current_turn_index"] = 0
+                main.runtime.state.games.update_game(
+                    game_now["id"], state=state_now, current_turn_index=0, current_turn_seat=int(base[0])
+                )
+        except Exception:
+            logging.exception("stable round: failed to persist initial turn state")
         roster = []
         for seat in base:
             uid = _uid(main, seat)
@@ -459,6 +527,7 @@ def install(main):
             raise CancelHandler()
         active = _active(main)
         if active is None:
+            logging.warning("stable round: no active seat after DB hydration game=%s index=%s order=%s", game.get("id") if game else None, getattr(main, "current_turn_index", None), getattr(main, "turn_order", None))
             await callback.answer("⚠️ نوبت فعالی وجود ندارد.", show_alert=True)
             raise CancelHandler()
         try:
@@ -557,6 +626,20 @@ def install(main):
                 return await _start_turn(main, challenger_seat, 60, True)
 
         main.current_turn_index += 1
+        try:
+            game_now = main.runtime.state.active_game(_gid(main))
+            if game_now:
+                state_now = dict(game_now.get("state") or {})
+                state_now["turn_order"] = [int(x) for x in main.turn_order]
+                state_now["current_turn_index"] = int(main.current_turn_index)
+                main.runtime.state.games.update_game(
+                    game_now["id"],
+                    state=state_now,
+                    current_turn_index=int(main.current_turn_index),
+                    current_turn_seat=(int(main.turn_order[main.current_turn_index]) if main.current_turn_index < len(main.turn_order) else None),
+                )
+        except Exception:
+            logging.exception("stable round: failed to persist next transition")
         return await _advance(main)
 
     async def challenge_request(callback):
