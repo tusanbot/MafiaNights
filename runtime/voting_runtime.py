@@ -321,7 +321,16 @@ def _vote_message_text(main, v, target):
     game = _game(main)
     if not game:
         return "🗳 رأی‌گیری فعال نیست."
-    records = _VOTES.list_target(game["id"], int(v.get("round") or 1), int(target))
+    round_no = int(v.get("round") or 1)
+    local_votes = [
+        dict(x) for x in (v.get("votes") or [])
+        if int(x.get("round") or 0) == round_no and int(x.get("target_player_id") or 0) == int(target)
+    ]
+    try:
+        records = local_votes or _VOTES.list_target(game["id"], round_no, int(target))
+    except Exception:
+        logging.exception("VOTE LIST FAILED game=%s round=%s target=%s", game["id"], round_no, target)
+        records = local_votes
     rows = _row_map(main)
     target_name = _name(main, target, rows.get(int(target), {}).get("seat"))
     voters = "• هنوز رایی ثبت نشده"
@@ -360,6 +369,7 @@ async def _start_target(main):
         deadline=None if v.get("mode") == MANUAL else now + int(v.get("vote_seconds", 20)),
         target_vote_ended=False,
         vote_message_id=None,
+        votes=[],
         eligible_voters=sorted(_current_voters(main, v)),
     )
     _put(main, v)
@@ -373,7 +383,7 @@ async def _start_target(main):
 async def _start_wait(main):
     v = _v(main)
     round_no = int(v.get("round") or 1)
-    v.update(target_index=0, deadline=None, started_at=None, target_vote_ended=False, vote_message_id=None, eligible_voters=sorted(_current_voters(main, v)))
+    v.update(target_index=0, deadline=None, started_at=None, target_vote_ended=False, vote_message_id=None, votes=[], eligible_voters=sorted(_current_voters(main, v)))
     game = _game(main)
     if game:
         _VOTES.clear_round(game["id"], round_no)
@@ -535,19 +545,48 @@ async def _cast(main, callback):
     if uid == target and not _rules(main).get("self_vote", False):
         await callback.answer("🚫 نمی‌توانید به خودتان رأی بدهید.", show_alert=True)
         raise CancelHandler()
+    # Answer the Telegram callback before touching the database. A slow DB connection
+    # must never leave the user's button in the infinite loading state.
     try:
-        await callback.answer("⏳ رأی شما در حال ثبت است...")
+        await callback.answer("⏳ رأی شما ثبت شد.")
     except Exception:
         logging.exception("VOTE CALLBACK ACK FAILED game=%s voter=%s", _gid(main), uid)
     game = _game(main)
     if not game:
         raise CancelHandler()
-    inserted = _VOTES.cast(game["id"], int(v.get("round") or 1), target, uid, _timestamp())
-    if not inserted:
-        logging.info("VOTE DUPLICATE game=%s round=%s target=%s voter=%s", _gid(main), int(v.get("round") or 1), target, uid)
-        return
-    logging.info("VOTE CAST game=%s round=%s target=%s voter=%s mode=%s", _gid(main), int(v.get("round") or 1), target, uid, v.get("mode"))
+
+    round_no = int(v.get("round") or 1)
+    votes = [dict(x) for x in (v.get("votes") or [])]
+    if any(
+        int(x.get("round") or 0) == round_no
+        and int(x.get("target_player_id") or 0) == target
+        and int(x.get("voter_player_id") or 0) == uid
+        for x in votes
+    ):
+        logging.info("VOTE DUPLICATE LOCAL game=%s round=%s target=%s voter=%s", _gid(main), round_no, target, uid)
+        raise CancelHandler()
+
+    record = {
+        "round": round_no,
+        "target_player_id": target,
+        "voter_player_id": uid,
+        "voted_at": _timestamp().isoformat(),
+    }
+    votes.append(record)
+    v["votes"] = votes
+    _put(main, v)
+
+    # DB persistence is best-effort; the live game state is authoritative for the
+    # active vote, so a slow/legacy DB cannot block the voting UI.
+    try:
+        inserted = _VOTES.cast(game["id"], round_no, target, uid, _timestamp())
+        logging.info("VOTE DB PERSIST game=%s round=%s target=%s voter=%s inserted=%s", _gid(main), round_no, target, uid, inserted)
+    except Exception:
+        logging.exception("VOTE DB PERSIST FAILED game=%s round=%s target=%s voter=%s", _gid(main), round_no, target, uid)
+
+    logging.info("VOTE CAST game=%s round=%s target=%s voter=%s mode=%s", _gid(main), round_no, target, uid, v.get("mode"))
     await _edit_vote_message(main, v, target)
+    raise CancelHandler()
 
 
 async def _manual_start(main, callback):
