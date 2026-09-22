@@ -440,12 +440,14 @@ async def _settings(main, callback):
         "🗳 <b>تنظیمات رأی‌گیری دور ۱</b>\n\n"
         f"⏱ زمان انتظار: {int(v.get('wait_seconds', 20))} ثانیه\n"
         f"⏱ زمان هر رأی: {int(v.get('vote_seconds', 20))} ثانیه\n"
-        f"🚫 بدون حق رأی: {len(v.get('vote_rights_taken', []))} نفر"
+        f"🚫 بدون حق رأی: {len(v.get('vote_rights_taken', []))} نفر\n"
+        f"🗳 نوع رأی‌گیری: {'خودکار' if v.get('mode') == voting_runtime.AUTO else 'دستی'}"
     )
     kb = InlineKeyboardMarkup(row_width=1).add(
         InlineKeyboardButton(f"⏱ زمان انتظار: {int(v.get('wait_seconds', 20))} ثانیه", callback_data="vote:wait"),
         InlineKeyboardButton(f"⏱ زمان هر رأی: {int(v.get('vote_seconds', 20))} ثانیه", callback_data="vote:duration"),
         InlineKeyboardButton(f"🚫 گرفتن حق رأی ({len(v.get('vote_rights_taken', []))})", callback_data="vote:rights"),
+        InlineKeyboardButton(f"🗳 نوع رأی‌گیری: {'خودکار' if v.get('mode') == voting_runtime.AUTO else 'دستی'}", callback_data="vote:mode"),
         InlineKeyboardButton("▶️ شروع رأی‌گیری", callback_data="vote:start"),
     )
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
