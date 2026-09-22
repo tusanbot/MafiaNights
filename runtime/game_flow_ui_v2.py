@@ -41,8 +41,23 @@ def install(main):
         if callback.from_user.id != main.moderator_id:
             await callback.answer("❌ فقط گرداننده می‌تواند دور را شروع کند.", show_alert=True)
             return
+        # Transient in-memory seat maps may be empty after a new day. Always
+        # hydrate from the durable game-player rows before validating the turn.
+        try:
+            game0 = main.runtime.state.active_game(int(main.group_chat_id or callback.message.chat.id))
+            rows0 = [
+                row for row in main.runtime.state.games.list_players(game0["id"])
+                if row.get("seat") is not None
+                and str(row.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
+            ] if game0 else []
+            main.player_slots = {int(row["seat"]): int(row["player_id"]) for row in rows0}
+            main.players = {int(row["player_id"]): str(row.get("nickname") or row.get("first_name") or row.get("username") or row["player_id"]) for row in rows0}
+            main.turn_order = sorted(main.player_slots)
+        except Exception:
+            logging.exception("start_round_clean: failed to hydrate seats")
+
         if not main.player_slots:
-            await callback.answer("⚠️ بازیکنی برای شروع دور وجود ندارد.", show_alert=True)
+            await callback.answer("⚠️ هیچ صندلی ثبت‌شده‌ای برای بازیکنان فعال وجود ندارد.", show_alert=True)
             return
 
         # If no chief has been selected yet, show the canonical chief-selection
@@ -167,12 +182,17 @@ def install(main):
             except Exception:
                 logging.exception("persistent start_new_day failed")
 
-        kb = InlineKeyboardMarkup(row_width=1)
-        kb.add(InlineKeyboardButton("🎲 انتخاب خودکار", callback_data="speaker_auto"))
-        kb.add(InlineKeyboardButton("✋ انتخاب دستی", callback_data="speaker_manual"))
+        # Do not render a second speaker/player list here. The day control
+        # has one source of truth: chief selection. If the moderator presses
+        # start round without selecting a chief, start_round_clean renders the
+        # canonical chief list itself.
+        kb = InlineKeyboardMarkup(row_width=2)
+        kb.add(
+            InlineKeyboardButton("🎩 انتخاب سردست", callback_data=f"day:{int((main.runtime.state.active_game(int(group_id)) or {}).get('id') or 0)}:head"),
+            InlineKeyboardButton("▶️ شروع دور", callback_data="start_round"),
+        )
         kb.add(InlineKeyboardButton("⚔️ وضعیت چالش", callback_data=f"mgmt:{int(group_id)}:challenge:round"))
-        kb.add(InlineKeyboardButton("▶️ شروع دور", callback_data="start_turn"))
-        text = "🌞 <b>روز جدید شروع شد!</b>\n\nسر صحبت را انتخاب کنید:"
+        text = "🌞 <b>روز جدید شروع شد!</b>\n\nابتدا سردست را انتخاب کنید؛ سپس «شروع دور» را بزنید."
 
         try:
             await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
