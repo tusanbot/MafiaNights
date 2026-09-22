@@ -603,16 +603,18 @@ async def _cast(main, callback):
     v["votes"] = votes
     _put_memory(main, v)
 
-    # DB persistence is best-effort; the live game state is authoritative for the
-    # active vote, so a slow/legacy DB cannot block the voting UI.
+    logging.info("VOTE CAST game=%s round=%s target=%s voter=%s mode=%s", _gid(main), round_no, target, uid, v.get("mode"))
+    # The live message is updated before any synchronous database operation.
+    await _edit_vote_message(main, v, target)
+
+    # Persistence is best-effort and intentionally comes last. A slow DB must
+    # never prevent the voter from seeing the vote immediately.
     try:
         inserted = _VOTES.cast(game["id"], round_no, target, uid, _timestamp())
         logging.info("VOTE DB PERSIST game=%s round=%s target=%s voter=%s inserted=%s", _gid(main), round_no, target, uid, inserted)
     except Exception:
         logging.exception("VOTE DB PERSIST FAILED game=%s round=%s target=%s voter=%s", _gid(main), round_no, target, uid)
 
-    logging.info("VOTE CAST game=%s round=%s target=%s voter=%s mode=%s", _gid(main), round_no, target, uid, v.get("mode"))
-    await _edit_vote_message(main, v, target)
     try:
         _persist(main, v)
     except Exception:
