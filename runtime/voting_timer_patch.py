@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import logging
 import math
 import time
 
@@ -656,5 +657,19 @@ def install(main):
     ]
     for predicate, handler in handlers:
         dp.register_callback_query_handler(handler, predicate, state="*")
+
+    # vote:cast existed in older voting handlers too. Put the canonical cast
+    # handler at the very front so a stale legacy callback can never consume
+    # the button before the persistent voting state is updated.
+    try:
+        registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
+        if registry is not None:
+            cast_items = [item for item in registry if getattr(getattr(item, "handler", None), "__name__", "") == "cast"]
+            for item in cast_items:
+                registry.remove(item)
+                registry.insert(0, item)
+    except Exception:
+        logging.exception("failed to prioritize canonical vote:cast handler")
+
     main._voting_timer_patch_installed = True
     return True
