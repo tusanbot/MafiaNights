@@ -137,7 +137,7 @@ def install(main):
         kb = InlineKeyboardMarkup(row_width=1)
         kb.add(InlineKeyboardButton("🎲 انتخاب خودکار", callback_data="speaker_auto"))
         kb.add(InlineKeyboardButton("✋ انتخاب دستی", callback_data="speaker_manual"))
-        kb.add(InlineKeyboardButton("⚔️ وضعیت چالش", callback_data="challenge_toggle"))
+        kb.add(InlineKeyboardButton("⚔️ وضعیت چالش", callback_data=f"mgmt:{int(group_id)}:challenge:round"))
         kb.add(InlineKeyboardButton("▶️ شروع دور", callback_data="start_turn"))
         text = "🌞 <b>روز جدید شروع شد!</b>\n\nسر صحبت را انتخاب کنید:"
 
