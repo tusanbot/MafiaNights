@@ -47,7 +47,7 @@ def _threshold(rules, player_count):
     spec = (rules.get("r1") or {}).get("defense_threshold") or {}
     if not isinstance(spec, dict):
         spec = {"type": str(spec)}
-    kind = str(spec.get("type") or "none").lower()
+    kind = str(spec.get("type") or "ceil_half").lower()
     n = int(player_count)
     if kind in {"floor_half", "half_floor", "floor-half"}:
         return max(1, n // 2)
@@ -63,7 +63,7 @@ def _threshold(rules, player_count):
             return max(1, math.ceil(n * float(spec.get("value")) / 100.0))
         except Exception:
             return None
-    return None
+    return max(1, math.ceil(n / 2))
 
 
 def _round2_mode(rules):
