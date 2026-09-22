@@ -15,12 +15,12 @@ from runtime.game_management import GameManagement
 
 
 RESULTS = (
-    ("city", "🏙 شهر"),
-    ("mafia", "🔴 مافیا"),
-    ("independent", "🟣 مستقل"),
+    ("city", "🏘 شهر"),
+    ("mafia", "🌃 مافیا"),
+    ("independent", "🥷 مستقل"),
     ("draw", "🤝 مساوی"),
 )
-SIDE_ICONS = {"city": "🏙️", "mafia": "🌃", "independent": "🏴‍☠️"}
+SIDE_ICONS = {"city": "🏘", "mafia": "🌃", "independent": "🥷"}
 WIN_SCORE = 1
 DRAW_SCORE = 0
 
