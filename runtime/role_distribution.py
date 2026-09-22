@@ -26,7 +26,12 @@ def _sync_gameplay_bridge(app: Any, group_id: int, game: dict[str, Any], players
     app._stable_day_active = False
     app._stable_day_ended = False
     app._stable_phase = "normal"
-    app.challenge_active = bool(getattr(app, "challenge_enabled", {}).get(int(group_id), True))
+    state = dict(game.get("state") or {})
+    settings = dict(state.get("challenge_settings") or {})
+    enabled = bool(settings.get("enabled", getattr(app, "challenge_enabled", {}).get(int(group_id), True)))
+    app.challenge_active = enabled
+    if not hasattr(app, "challenge_enabled"): app.challenge_enabled = {}
+    app.challenge_enabled[int(group_id)] = enabled
     app.challenge_mode = False
     app.pending_challenges = {}
     app.active_challenger_seats = set()
@@ -35,7 +40,7 @@ def _sync_gameplay_bridge(app: Any, group_id: int, game: dict[str, Any], players
 def _day_markup(game_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(row_width=2).add(
         InlineKeyboardButton("🎩 انتخاب سردست", callback_data=f"day:{int(game_id)}:head"),
-        InlineKeyboardButton("⚔ وضعیت چالش", callback_data=f"mgmt:{int(game_id)}:challenge"),
+        InlineKeyboardButton("⚔ وضعیت چالش", callback_data=f"mgmt:{int(game_id)}:challenge:start"),
         InlineKeyboardButton("▶️ شروع دور", callback_data="start_round"),
         InlineKeyboardButton("⚙️ مدیریت بازی", callback_data=f"mgmt:{int(game_id)}:open"),
     )
