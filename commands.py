@@ -493,6 +493,21 @@ async def _newgame(message: types.Message, app: Any) -> None:
     if message.chat.type not in {"group", "supergroup"}:
         await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
         return
+
+    # Creating a new game is a management operation. Ordinary group members
+    # must not be able to trigger it through the text-command path.
+    uid = int(message.from_user.id)
+    allowed = uid == int(getattr(app, "moderator_id", 0) or 0)
+    if not allowed:
+        try:
+            status = (await app.bot.get_chat_member(message.chat.id, uid)).status
+            allowed = status in {"creator", "administrator"}
+        except Exception:
+            allowed = False
+    if not allowed:
+        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند بازی جدید ایجاد کند.")
+        return
+
     handler = getattr(app, "_canonical_new_game_handler", None)
     if handler is None:
         await message.reply("⚠️ مسیر ایجاد بازی در دسترس نیست.")
@@ -1425,7 +1440,6 @@ def register_commands(app: Any) -> bool:
         try:
             from aiogram.types import BotCommand, BotCommandScopeChat
             group_commands = [
-                BotCommand("newgame", "بازی جدید"),
                 BotCommand("join", "ورود"),
                 BotCommand("leave", "خروج"),
                 BotCommand("sub", "جایگزین"),
@@ -1472,6 +1486,14 @@ def register_commands(app: Any) -> bool:
             gid = int(getattr(app, "ALLOWED_GROUP_ID", 0) or 0)
             if gid:
                 await app.bot.set_my_commands(group_commands, scope=BotCommandScopeChat(chat_id=gid))
+                try:
+                    from aiogram.types import BotCommandScopeChatAdministrators
+                    await app.bot.set_my_commands(
+                        [BotCommand("newgame", "بازی جدید")],
+                        scope=BotCommandScopeChatAdministrators(chat_id=gid),
+                    )
+                except Exception:
+                    logging.exception("Failed to register admin-only newgame command menu")
             await app.bot.set_my_commands([
                 BotCommand("start", "منوی اصلی"),
                 BotCommand("pv", "پنل پیوی"),
