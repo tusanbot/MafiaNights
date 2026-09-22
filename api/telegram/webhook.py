@@ -10,6 +10,20 @@ from typing import Any
 _seen_updates: set[int] = set()
 _runtime_module: Any = None
 _startup_complete = False
+# Keep one event loop alive for the lifetime of a warm Vercel worker. aiogram v2
+# and aiohttp objects created by the production runtime are loop-bound; creating
+# a new loop with asyncio.run() for every Telegram update can detach the Bot
+# session from the loop that owns it and causes:
+# "RuntimeError: Timeout context manager should be used inside a task".
+_webhook_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _run_on_webhook_loop(coro: Any) -> Any:
+    global _webhook_loop
+    if _webhook_loop is None or _webhook_loop.is_closed():
+        _webhook_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_webhook_loop)
+    return _webhook_loop.run_until_complete(coro)
 
 
 def _response(body: dict[str, Any], status: str = "200 OK") -> tuple[str, list[tuple[str, str]], bytes]:
@@ -297,7 +311,10 @@ def app(environ: dict[str, Any], start_response: Any) -> list[bytes]:
             _seen_updates.add(update_id)
 
     try:
-        asyncio.run(_dispatch(payload))
+        # Do not use asyncio.run() here. The production aiogram Bot/Dispatcher
+        # and their aiohttp session must stay attached to the same event loop
+        # across warm webhook invocations.
+        _run_on_webhook_loop(_dispatch(payload))
     except Exception:
         import logging
         logging.exception("Telegram webhook dispatch failed")
