@@ -255,7 +255,7 @@ async def _finish_round(main):
             text = "✅ <b>رأی‌گیری دور ۱ به پایان رسید.</b>\n\n" + threshold_text + "\n🛡 <b>واجدین شرایط دفاع:</b>\n" + "\n".join(lines)
             kb = InlineKeyboardMarkup(row_width=1).add(
                 InlineKeyboardButton("🔄 شروع رای دوم", callback_data="vote:round2"),
-                InlineKeyboardButton("🌙 شروع فاز شب", callback_data="start_night"),
+                InlineKeyboardButton("🌌 شروع فاز شب", callback_data="start_night"),
                 InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"),
             )
         else:
