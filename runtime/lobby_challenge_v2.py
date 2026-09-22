@@ -39,7 +39,19 @@ def install(main):
         if not await is_admin(callback) and int(callback.from_user.id) != int(getattr(main, "moderator_id", 0) or 0):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True)
             return
-        main.challenge_active = not bool(getattr(main, "challenge_active", True))
+        gid = int(callback.message.chat.id)
+        game = main.runtime.state.active_game(gid)
+        if not game:
+            await callback.answer("⛔ بازی فعال نیست.", show_alert=True); return
+        state = dict(game.get("state") or {})
+        settings = dict(state.get("challenge_settings") or {})
+        enabled = not bool(settings.get("enabled", getattr(main, "challenge_active", True)))
+        settings["enabled"] = enabled
+        state["challenge_settings"] = settings
+        main.runtime.state.games.update_game(game["id"], state=state)
+        main.challenge_active = enabled
+        if not hasattr(main, "challenge_enabled"): main.challenge_enabled = {}
+        main.challenge_enabled[gid] = enabled
         await challenge(callback)
 
     async def visibility(callback):
