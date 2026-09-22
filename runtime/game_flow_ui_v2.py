@@ -45,6 +45,39 @@ def install(main):
             await callback.answer("⚠️ بازیکنی برای شروع دور وجود ندارد.", show_alert=True)
             return
 
+        # If no chief has been selected yet, show the canonical chief-selection
+        # list here. Once a chief exists, starting the round must NOT render a
+        # second player list.
+        try:
+            game = main.runtime.state.active_game(int(main.group_chat_id or callback.message.chat.id))
+            head_seat = dict((game or {}).get("state") or {}).get("head_seat")
+            game_id = int((game or {}).get("id") or 0)
+        except Exception:
+            game, head_seat, game_id = None, None, 0
+
+        if head_seat is None and game_id:
+            rows = [
+                r for r in main.runtime.lobby_snapshot(int(main.group_chat_id or callback.message.chat.id)).get("players", [])
+                if r.get("seat") is not None
+                and str(r.get("status") or "active") not in {"removed", "dead", "finished"}
+            ]
+            kb = InlineKeyboardMarkup(row_width=2)
+            kb.add(InlineKeyboardButton("🎲 انتخاب تصادفی", callback_data=f"day:{game_id}:head_random"))
+            for row in sorted(rows, key=lambda r: int(r.get("seat") or 999)):
+                label = str(row.get("nickname") or row.get("first_name") or row.get("username") or row.get("player_id"))
+                kb.insert(InlineKeyboardButton(
+                    f"{int(row['seat'])}. {label[:20]}",
+                    callback_data=f"day:{game_id}:head_pick:{int(row['seat'])}",
+                ))
+            kb.row(InlineKeyboardButton("⬅️ بازگشت", callback_data=f"mgmt:{game_id}:close"))
+            await callback.message.edit_text(
+                "🎩 <b>انتخاب سردست</b>\n\nسردست را انتخاب کنید یا انتخاب تصادفی بزنید:",
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+            await callback.answer("ابتدا سردست را انتخاب کنید.")
+            return
+
         if not main.turn_order:
             main.turn_order = sorted(main.player_slots.keys())
         main.current_turn_index = 0
