@@ -163,6 +163,20 @@ def install(app: Any) -> bool:
         if not random_pick and seat not in {int(r["seat"]) for r in rows}: await callback.answer("❌ صندلی نامعتبر است.", show_alert=True); return
         state = dict(game.get("state") or {}); state["head_seat"] = seat
         app.runtime.state.games.update_game(game_id, state=state)
+
+        # New-day reset clears transient in-memory turn data. Rehydrate the
+        # canonical seat map from DB immediately after chief selection so the
+        # next "start round" cannot see an empty player_slots map.
+        try:
+            fresh_players = [
+                row for row in app.runtime.state.games.list_players(game_id)
+                if row.get("seat") is not None
+                and str(row.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
+            ]
+            _sync_gameplay_bridge(app, group_id, game, fresh_players)
+            app._head_seat = seat
+        except Exception:
+            logging.exception("failed to hydrate gameplay bridge after head selection")
         await callback.message.edit_text(f"🌅 <b>شروع روز</b>\n\n🎩 سردست انتخاب شد: <b>صندلی {seat}</b>", parse_mode="HTML", reply_markup=_day_markup(game_id))
         await callback.answer(f"🎩 سردست: صندلی {seat}")
 
