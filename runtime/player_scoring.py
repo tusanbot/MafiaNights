@@ -25,7 +25,7 @@ def warning_penalty(count:int)->int:
 
 def _count_challenges(app:Any,game_id:int,user_id:int)->int:
     try:
-        rows=app.runtime.state.challenges.list_challenges(int(game_id));return sum(1 for row in rows if int(row.get("target_id") or 0)==int(user_id) and str(row.get("status") or "").lower() not in {"cancelled","canceled","rejected"})
+        rows=app.runtime.state.challenges.list_challenges(game_id);return sum(1 for row in rows if int(row.get("target_id") or 0)==int(user_id) and str(row.get("status") or "").lower() not in {"cancelled","canceled","rejected"})
     except Exception:logging.exception("failed to count challenges game=%s user=%s",game_id,user_id);return 0
 
 def _warning_count(row,state):
@@ -45,7 +45,7 @@ def score_game(app:Any,game:dict[str,Any],rows:list[dict[str,Any]],winner:str)->
         if key in recorded:continue
         side=game_end._role_side(row,state);win_bonus=WIN_POINTS if winner!="draw" and side==winner else 0;challenge_bonus=_count_challenges(app,int(game["id"]),uid)*CHALLENGE_POINTS;warning_total=warning_penalty(_warning_count(row,state));kick_penalty=KICK_PENALTY if _is_kicked(row,state) else 0;delta=win_bonus+challenge_bonus-warning_total-kick_penalty;result="draw" if winner=="draw" else ("win" if side==winner else "loss")
         try:
-            repo.record(uid,int(game["id"]),int(delta),result,str(row.get("role") or ""),win_bonus=win_bonus,challenge_bonus=challenge_bonus,warning_penalty=warning_total,kick_penalty=kick_penalty);recorded.add(key)
+            repo.record(uid,game["id"],int(delta),result,str(row.get("role") or ""),win_bonus=win_bonus,challenge_bonus=challenge_bonus,warning_penalty=warning_total,kick_penalty=kick_penalty);recorded.add(key)
             engine=getattr(app,"_achievement_engine",None)
             if engine is not None:engine.sync_achievements(uid)
         except Exception:logging.exception("failed to record rating/achievement game=%s user=%s",game.get("id"),uid)
