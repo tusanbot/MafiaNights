@@ -1,70 +1,130 @@
-"""Atomic persistence for Mafia voting records.
+"""Compatibility persistence for Mafia voting records.
 
-Votes are intentionally stored outside mafia_games.state.  The unique
-constraint makes a vote idempotent even when two Telegram callbacks arrive
-concurrently.
+Production workers can temporarily point at an older database schema. The
+repository therefore discovers the installed mafia_votes schema once per
+worker and supports both the current round_no schema and the legacy round
+schema, as well as UUID/integer game identifiers.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from .base import DatabaseRepository
 
 
 class VotingRepository(DatabaseRepository):
-    def clear_round(self, game_id, round_no: int) -> None:
-        with self.SessionLocal() as session:
-            session.execute(
-                text(
-                    "delete from public.mafia_votes "
-                    "where game_id=:game_id and round_no=:round_no"
-                ),
-                {"game_id": str(game_id), "round_no": int(round_no)},
-            )
-            session.commit()
+    _schema_cache = None
 
-    def cast(self, game_id, round_no: int, target_player_id: int, voter_player_id: int, voted_at) -> bool:
-        with self.SessionLocal() as session:
-            row = session.execute(
-                text(
-                    """
-                    insert into public.mafia_votes
-                        (game_id, round_no, target_player_id, voter_player_id, voted_at)
-                    values
-                        (:game_id, :round_no, :target_player_id, :voter_player_id, :voted_at)
-                    on conflict (game_id, round_no, target_player_id, voter_player_id)
-                    do nothing
-                    returning id
-                    """
-                ),
-                {
-                    "game_id": str(game_id),
-                    "round_no": int(round_no),
-                    "target_player_id": int(target_player_id),
-                    "voter_player_id": int(voter_player_id),
-                    "voted_at": voted_at,
-                },
-            ).scalar_one_or_none()
-            session.commit()
-            return row is not None
-
-    def list_target(self, game_id, round_no: int, target_player_id: int) -> list[dict]:
+    def _schema(self):
+        if self.__class__._schema_cache is not None:
+            return self.__class__._schema_cache
         with self.SessionLocal() as session:
             rows = session.execute(
                 text(
                     """
+                    select column_name, data_type
+                    from information_schema.columns
+                    where table_schema='public' and table_name='mafia_votes'
+                    """
+                )
+            ).mappings().all()
+        cols = {str(r["column_name"]): str(r["data_type"]) for r in rows}
+        if not cols:
+            raise RuntimeError("public.mafia_votes وجود ندارد")
+        round_col = "round_no" if "round_no" in cols else ("round" if "round" in cols else None)
+        if round_col is None:
+            raise RuntimeError("ستون دور در public.mafia_votes پیدا نشد")
+        game_type = cols.get("game_id", "")
+        schema = {"round_col": round_col, "game_type": game_type}
+        self.__class__._schema_cache = schema
+        logging.info("VOTING DB SCHEMA round_col=%s game_id_type=%s", round_col, game_type)
+        return schema
+
+    def _game_value(self, game_id):
+        game_type = self._schema()["game_type"]
+        if "uuid" in game_type:
+            return str(game_id)
+        try:
+            return int(game_id)
+        except (TypeError, ValueError):
+            return str(game_id)
+
+    def clear_round(self, game_id, round_no: int) -> None:
+        s = self._schema()
+        with self.SessionLocal() as session:
+            session.execute(
+                text(
+                    f"delete from public.mafia_votes "
+                    f"where game_id=:game_id and {s['round_col']}=:round_no"
+                ),
+                {"game_id": self._game_value(game_id), "round_no": int(round_no)},
+            )
+            session.commit()
+
+    def cast(self, game_id, round_no: int, target_player_id: int, voter_player_id: int, voted_at) -> bool:
+        s = self._schema()
+        params = {
+            "game_id": self._game_value(game_id),
+            "round_no": int(round_no),
+            "target_player_id": int(target_player_id),
+            "voter_player_id": int(voter_player_id),
+            "voted_at": voted_at,
+        }
+        with self.SessionLocal() as session:
+            try:
+                existing = session.execute(
+                    text(
+                        f"""
+                        select 1 from public.mafia_votes
+                        where game_id=:game_id
+                          and {s['round_col']}=:round_no
+                          and target_player_id=:target_player_id
+                          and voter_player_id=:voter_player_id
+                        limit 1
+                        """
+                    ),
+                    params,
+                ).scalar()
+                if existing:
+                    session.rollback()
+                    return False
+                session.execute(
+                    text(
+                        f"""
+                        insert into public.mafia_votes
+                            (game_id, {s['round_col']}, target_player_id, voter_player_id, voted_at)
+                        values
+                            (:game_id, :round_no, :target_player_id, :voter_player_id, :voted_at)
+                        """
+                    ),
+                    params,
+                )
+                session.commit()
+                return True
+            except IntegrityError:
+                session.rollback()
+                return False
+
+    def list_target(self, game_id, round_no: int, target_player_id: int) -> list[dict]:
+        s = self._schema()
+        with self.SessionLocal() as session:
+            rows = session.execute(
+                text(
+                    f"""
                     select voter_player_id, voted_at
                     from public.mafia_votes
                     where game_id=:game_id
-                      and round_no=:round_no
+                      and {s['round_col']}=:round_no
                       and target_player_id=:target_player_id
                     order by voted_at asc
                     """
                 ),
                 {
-                    "game_id": str(game_id),
+                    "game_id": self._game_value(game_id),
                     "round_no": int(round_no),
                     "target_player_id": int(target_player_id),
                 },
@@ -72,39 +132,44 @@ class VotingRepository(DatabaseRepository):
             return [dict(row) for row in rows]
 
     def counts(self, game_id, round_no: int) -> dict[int, int]:
+        s = self._schema()
         with self.SessionLocal() as session:
             rows = session.execute(
                 text(
-                    """
+                    f"""
                     select target_player_id, count(*) as vote_count
                     from public.mafia_votes
-                    where game_id=:game_id and round_no=:round_no
+                    where game_id=:game_id and {s['round_col']}=:round_no
                     group by target_player_id
                     """
                 ),
-                {"game_id": str(game_id), "round_no": int(round_no)},
+                {"game_id": self._game_value(game_id), "round_no": int(round_no)},
             ).mappings().all()
             return {int(row["target_player_id"]): int(row["vote_count"]) for row in rows}
 
     def round_votes(self, game_id, round_no: int) -> list[dict]:
+        s = self._schema()
         with self.SessionLocal() as session:
             rows = session.execute(
                 text(
-                    """
+                    f"""
                     select target_player_id, voter_player_id, voted_at
                     from public.mafia_votes
-                    where game_id=:game_id and round_no=:round_no
+                    where game_id=:game_id and {s['round_col']}=:round_no
                     order by voted_at asc
                     """
                 ),
-                {"game_id": str(game_id), "round_no": int(round_no)},
+                {"game_id": self._game_value(game_id), "round_no": int(round_no)},
             ).mappings().all()
             return [dict(row) for row in rows]
 
     def cleanup_game(self, game_id) -> None:
+        s = self._schema()
         with self.SessionLocal() as session:
             session.execute(
-                text("delete from public.mafia_votes where game_id=:game_id"),
-                {"game_id": str(game_id)},
+                text(
+                    f"delete from public.mafia_votes where game_id=:game_id"
+                ),
+                {"game_id": self._game_value(game_id)},
             )
             session.commit()
