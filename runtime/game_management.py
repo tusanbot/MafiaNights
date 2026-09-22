@@ -462,12 +462,23 @@ class GameManagement:
         if not game or not await self._allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         rows = self.app.runtime.state.challenges.list_challenges(game["id"])
-        enabled = bool(getattr(self.app, "challenge_enabled", {}).get(gid, True))
+        state = self._state(game); settings = dict(state.get("challenge_settings") or {})
+        enabled = bool(settings.get("enabled", getattr(self.app, "challenge_enabled", {}).get(gid, True)))
+        show = bool(settings.get("show_player_status", True))
         pending = sum(1 for r in rows if str(r.get("status")) == "pending")
         active = sum(1 for r in rows if str(r.get("status")) in {"accepted", "active"})
+        executed = sum(1 for r in rows if str(r.get("status")) == "executed")
         kb = InlineKeyboardMarkup(row_width=2)
-        kb.add(InlineKeyboardButton("🔴 خاموش" if enabled else "🟢 روشن", callback_data=f"mgmt:{game['id']}:challenge_toggle"), InlineKeyboardButton("⬅️ مدیریت", callback_data=f"mgmt:{game['id']}:open"))
-        await callback.message.edit_text(f"⚔ <b>وضعیت چالش</b>\n\n🟢 سرویس: {'فعال' if enabled else 'خاموش'}\n⏳ در انتظار: {pending}\n⚡ فعال: {active}\n📦 کل: {len(rows)}", parse_mode="HTML", reply_markup=kb)
+        kb.row(
+            InlineKeyboardButton("🟢 چالش: روشن" if enabled else "🔴 چالش: خاموش", callback_data=f"mgmt:{game['id']}:challenge_toggle"),
+            InlineKeyboardButton("🤏 نمایش وضعیت: روشن" if show else "🚫 نمایش وضعیت: خاموش", callback_data=f"mgmt:{game['id']}:challenge_visibility_toggle"),
+        )
+        kb.row(
+            InlineKeyboardButton(f"⏳ در انتظار: {pending}", callback_data=f"mgmt:{game['id']}:noop"),
+            InlineKeyboardButton(f"🤏 اجراشده: {executed}", callback_data=f"mgmt:{game['id']}:noop"),
+        )
+        kb.row(InlineKeyboardButton("⬅️ مدیریت", callback_data=f"mgmt:{game['id']}:open"))
+        await callback.message.edit_text(f"⚔ <b>مدیریت چالش</b>\n\n🟢 سرویس: {'فعال' if enabled else 'خاموش'}\n⏳ در انتظار: {pending}\n⚡ فعال: {active}\n🤏 اجراشده: {executed}\n📦 کل: {len(rows)}\n\n🤏 نمایش وضعیت کنار نام بازیکنان: {'فعال' if show else 'غیرفعال'}", parse_mode="HTML", reply_markup=kb)
         await callback.answer()
 
     async def challenge_toggle(self, callback):
