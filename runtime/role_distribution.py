@@ -50,7 +50,11 @@ ROLE_SIDE_ICONS = {
 }
 GENDER_ICONS = {"female": "🙎🏻‍♀", "male": "🙎🏻‍♂", "زن": "🙎🏻‍♀", "مرد": "🙎🏻‍♂"}
 
-def _role_side_icon(role: str) -> str:
+def _role_side_icon(role: str, side: str | None = None) -> str:
+    side_value = str(side or "").strip().lower()
+    if side_value in {"مافیا", "mafia"}: return "🌃"
+    if side_value in {"مستقل", "independent"}: return "🥷"
+    if side_value in {"شهروند", "city"}: return "🏘"
     value = str(role or "").strip()
     for key, icon in ROLE_SIDE_ICONS.items():
         if key in value:
