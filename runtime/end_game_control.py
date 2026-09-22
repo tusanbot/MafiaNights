@@ -215,6 +215,10 @@ def install(app: Any) -> bool:
             )
         except Exception:
             pass
+        try:
+            app.runtime.state.games._invalidate(group_chat_id=gid, game_id=int(game["id"]))
+        except Exception:
+            logging.exception("failed to invalidate cancelled game caches game=%s", game.get("id"))
         await callback.answer("🚫 بازی با موفقیت لغو شد.")
 
     dp = app.dp
