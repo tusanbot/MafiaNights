@@ -189,8 +189,26 @@ async def _durable_start_wait(main):
     # Vercel webhooks are ephemeral; keep this invocation alive through the configured wait.
     await asyncio.sleep(max(0, float(v["deadline"]) - time.time()))
     current = voting_runtime._v(main)
-    if current.get("phase") == "waiting" and current.get("deadline") == v["deadline"]:
-        await _start_target(main)
+    if current.get("phase") != "waiting" or current.get("deadline") != v["deadline"]:
+        main._voting_task = None
+        return
+
+    await _start_target(main)
+
+    # Keep this invocation alive through every automatic target.
+    while True:
+        current = voting_runtime._v(main)
+        if current.get("mode") != voting_runtime.AUTO or current.get("phase") != "voting":
+            break
+        deadline = current.get("deadline")
+        if deadline is None:
+            break
+        await asyncio.sleep(max(0, float(deadline) - time.time()))
+        current = voting_runtime._v(main)
+        if current.get("phase") != "voting" or current.get("deadline") != deadline:
+            continue
+        await _auto_end_target(main)
+
     main._voting_task = None
 
 
@@ -220,10 +238,53 @@ async def _start_target(main):
     )
     v["vote_message_id"] = int(sent.message_id)
     voting_runtime._put(main, v)
-    if v.get("mode") == voting_runtime.AUTO:
-        main._voting_task = asyncio.create_task(voting_runtime._timer(main, float(deadline), "voting"))
+    # Automatic voting timers are awaited by _durable_start_wait(). A background
+    # task is not reliable on Vercel because the webhook invocation can end.
+    main._voting_task = None
+
+
+async def _auto_end_target(main):
+    """Close the current automatic target and immediately advance."""
+    v = voting_runtime._v(main)
+    targets = [int(x) for x in (v.get("targets") or [])]
+    idx = int(v.get("target_index") or 0)
+    if idx >= len(targets):
+        return await _finish_round(main)
+
+    target = targets[idx]
+    records = voting_runtime._vote_records(v, target)
+    rows = _row_map(main)
+    target_name = await _resolve_name(main, target, rows.get(target, {}).get("seat"))
+    voter_text = voting_runtime._voter_lines(main, v, target)
+    message_id = v.get("vote_message_id")
+
+    if message_id:
+        try:
+            await main.bot.edit_message_reply_markup(
+                chat_id=voting_runtime._gid(main),
+                message_id=int(message_id),
+                reply_markup=voting_runtime._disabled_vote_kb(),
+            )
+        except Exception:
+            pass
+
+    await main.bot.send_message(
+        voting_runtime._gid(main),
+        f"📊 <b>گزارش رأی‌گیری برای {html.escape(target_name)}</b>\n\n"
+        f"🗳 تعداد رأی: <b>{len(records)}</b>\n"
+        f"👥 <b>رأی‌دهندگان:</b>\n{voter_text}",
+        parse_mode="HTML",
+    )
+
+    v["target_index"] = idx + 1
+    v["started_at"] = None
+    v["deadline"] = None
+    voting_runtime._put(main, v)
+
+    if idx + 1 < len(targets):
+        await _start_target(main)
     else:
-        main._voting_task = None
+        await _finish_round(main)
 
 
 async def _finish_round(main):
@@ -299,8 +360,10 @@ async def _cast(main, callback):
     if message_id:
         try:
             await main.bot.edit_message_text(
-                voting_runtime._gid(main), int(message_id),
-                voting_runtime._vote_message_text(main, v, target), parse_mode="HTML",
+                voting_runtime._vote_message_text(main, v, target),
+                chat_id=voting_runtime._gid(main),
+                message_id=int(message_id),
+                parse_mode="HTML",
                 reply_markup=(
                     voting_runtime._manual_next_kb(idx >= len(targets) - 1)
                     if v.get("mode") == voting_runtime.MANUAL
