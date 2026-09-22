@@ -236,7 +236,6 @@ async def _dispatch(payload: dict[str, Any]) -> None:
                     user=int(uid),
                 )
                 await registration.begin(callback, state)
-                import logging
                 logging.info("WEBHOOK CANONICAL REGISTRATION START user_id=%s", uid)
                 return
             await callback.answer("✅ حساب شما قبلاً ثبت شده است.", show_alert=True)
@@ -272,7 +271,6 @@ async def _dispatch(payload: dict[str, Any]) -> None:
         handler = getattr(runtime_entry.main, "_canonical_new_game_handler", None)
         if handler is not None:
             await handler(callback)
-            import logging
             logging.info(
                 "WEBHOOK CANONICAL NEW_GAME CALLBACK ROUTE chat_type=%s user_id=%s data=%s",
                 getattr(getattr(callback, "message", None).chat, "type", None),
