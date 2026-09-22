@@ -475,10 +475,36 @@ class GameManagement:
         if not game or not await self._allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         if not hasattr(self.app, "challenge_enabled"): self.app.challenge_enabled = {}
-        self.app.challenge_enabled[gid] = not self.app.challenge_enabled.get(gid, True)
-        self.app.challenge_active = self.app.challenge_enabled[gid]
+        enabled = not bool(self.app.challenge_enabled.get(gid, True))
+        self.app.challenge_enabled[gid] = enabled
+        state = self._state(game); settings = dict(state.get("challenge_settings") or {})
+        settings["enabled"] = enabled; state["challenge_settings"] = settings
+        self.app.runtime.state.games.update_game(game["id"], state=state)
+        self.app.challenge_active = enabled
         await callback.answer("⚔ وضعیت چالش تغییر کرد.")
         await self.challenge(callback)
+
+    async def challenge_visibility_toggle(self, callback):
+        gid = int(callback.message.chat.id); game = self._game(gid)
+        if not game or not await self._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        state = self._state(game); settings = dict(state.get("challenge_settings") or {})
+        settings["show_player_status"] = not bool(settings.get("show_player_status", True))
+        state["challenge_settings"] = settings
+        self.app.runtime.state.games.update_game(game["id"], state=state)
+        await callback.answer("🤏 نمایش وضعیت چالش تغییر کرد.")
+        await self.challenge(callback)
+
+    async def back_lobby(self, callback):
+        gid = int(callback.message.chat.id); game = self._game(gid)
+        if not game or not await self._allowed(callback, gid, game):
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        renderer = getattr(self.app, "_render_final_lobby", None) or getattr(self.app, "_render_production_lobby", None)
+        if renderer:
+            try:
+                await renderer(callback); await callback.answer("↩️ لابی باز شد."); return
+            except Exception: logging.exception("management back_lobby failed game=%s",game.get("id"))
+        await callback.answer("❌ باز کردن لابی انجام نشد.", show_alert=True)
 
     async def next(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
@@ -603,9 +629,9 @@ class GameManagement:
             "replace": self.replace, "replace_sub": self.replace_sub, "replace_target": self.replace_target,
             "attendance": self.attendance, "attendance_ready": self.attendance_ready, "attendance_close": self.attendance_close,
             "birthday": self.birthday, "birthday_pick": self.birthday_pick,
-            "challenge": self.challenge, "challenge_toggle": self.challenge_toggle,
+            "challenge": self.challenge, "challenge_toggle": self.challenge_toggle, "challenge_visibility_toggle": self.challenge_visibility_toggle,
             "next": self.next, "next_toggle": self.next_toggle,
-            "cancel": self.cancel,
+            "cancel": self.cancel, "back_lobby": self.back_lobby,
         }
         for action, fn in handlers.items():
             dp.register_callback_query_handler(
