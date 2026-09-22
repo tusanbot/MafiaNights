@@ -225,6 +225,7 @@ async def _start_target(main):
     now = time.time()
     deadline = None if v.get("mode") == voting_runtime.MANUAL else now + int(v["vote_seconds"])
     v["phase"], v["started_at"], v["deadline"] = "voting", now, deadline
+    v["target_vote_ended"] = False
     v.setdefault("votes", {}).setdefault(str(target), [])
     v["eligible_voters"] = sorted(_current_voters(main, v))
     voting_runtime._put(main, v)
@@ -245,7 +246,7 @@ async def _start_target(main):
 
 
 async def _auto_end_target(main):
-    """Close the current automatic target and immediately advance."""
+    """Close the current target in-place and immediately advance."""
     v = voting_runtime._v(main)
     targets = [int(x) for x in (v.get("targets") or [])]
     idx = int(v.get("target_index") or 0)
@@ -253,29 +254,22 @@ async def _auto_end_target(main):
         return await _finish_round(main)
 
     target = targets[idx]
-    records = voting_runtime._vote_records(v, target)
-    rows = _row_map(main)
-    target_name = await _resolve_name(main, target, rows.get(target, {}).get("seat"))
-    voter_text = voting_runtime._voter_lines(main, v, target)
     message_id = v.get("vote_message_id")
+    v["target_vote_ended"] = True
+    voting_runtime._put(main, v)
 
+    # Keep the complete result in the original voting message.
     if message_id:
         try:
-            await main.bot.edit_message_reply_markup(
+            await main.bot.edit_message_text(
+                voting_runtime._vote_message_text(main, v, target),
                 chat_id=voting_runtime._gid(main),
                 message_id=int(message_id),
+                parse_mode="HTML",
                 reply_markup=voting_runtime._disabled_vote_kb(),
             )
         except Exception:
             pass
-
-    await main.bot.send_message(
-        voting_runtime._gid(main),
-        f"📊 <b>گزارش رأی‌گیری برای {html.escape(target_name)}</b>\n\n"
-        f"🗳 تعداد رأی: <b>{len(records)}</b>\n"
-        f"👥 <b>رأی‌دهندگان:</b>\n{voter_text}",
-        parse_mode="HTML",
-    )
 
     v["target_index"] = idx + 1
     v["started_at"] = None
@@ -286,7 +280,6 @@ async def _auto_end_target(main):
         await _start_target(main)
     else:
         await _finish_round(main)
-
 
 async def _finish_round(main):
     v = voting_runtime._v(main)
@@ -390,11 +383,26 @@ async def _manual_next(main, callback):
     v=voting_runtime._v(main)
     if v.get("mode") != voting_runtime.MANUAL or v.get("phase") != "voting":
         await callback.answer("⛔ رأی‌گیری دستی فعال نیست.", show_alert=True); raise CancelHandler()
+    idx = int(v.get("target_index") or 0)
+    targets = [int(x) for x in (v.get("targets") or [])]
+    if idx >= len(targets):
+        await callback.answer("⛔ هدف دیگری برای رأی‌گیری وجود ندارد.", show_alert=True); raise CancelHandler()
+    target = targets[idx]
     mid=v.get("vote_message_id")
+    v["target_vote_ended"] = True
+    voting_runtime._put(main, v)
     if mid:
-        try: await main.bot.edit_message_reply_markup(voting_runtime._gid(main),int(mid),voting_runtime._disabled_vote_kb())
-        except Exception: pass
-    v["target_index"]=int(v.get("target_index") or 0)+1; v["started_at"]=None; v["deadline"]=None; voting_runtime._put(main,v)
+        try:
+            await main.bot.edit_message_text(
+                voting_runtime._vote_message_text(main, v, target),
+                chat_id=voting_runtime._gid(main),
+                message_id=int(mid),
+                parse_mode="HTML",
+                reply_markup=voting_runtime._disabled_vote_kb(),
+            )
+        except Exception:
+            pass
+    v["target_index"]=idx+1; v["started_at"]=None; v["deadline"]=None; voting_runtime._put(main,v)
     await callback.answer("➡️ نفر بعدی"); await _start_target(main); raise CancelHandler()
 
 async def _manual_end(main, callback):
@@ -403,11 +411,25 @@ async def _manual_end(main, callback):
     v=voting_runtime._v(main)
     if v.get("mode") != voting_runtime.MANUAL or v.get("phase") != "voting":
         await callback.answer("⛔ رأی‌گیری دستی فعال نیست.", show_alert=True); raise CancelHandler()
-    mid=v.get("vote_message_id")
-    if mid:
-        try: await main.bot.edit_message_reply_markup(voting_runtime._gid(main),int(mid),voting_runtime._disabled_vote_kb())
-        except Exception: pass
-    v["target_index"]=len(list(v.get("targets") or [])); v["started_at"]=None; v["deadline"]=None; voting_runtime._put(main,v)
+    idx = int(v.get("target_index") or 0)
+    targets = [int(x) for x in (v.get("targets") or [])]
+    if idx < len(targets):
+        target = targets[idx]
+        mid=v.get("vote_message_id")
+        v["target_vote_ended"] = True
+        voting_runtime._put(main, v)
+        if mid:
+            try:
+                await main.bot.edit_message_text(
+                    voting_runtime._vote_message_text(main, v, target),
+                    chat_id=voting_runtime._gid(main),
+                    message_id=int(mid),
+                    parse_mode="HTML",
+                    reply_markup=voting_runtime._disabled_vote_kb(),
+                )
+            except Exception:
+                pass
+    v["target_index"]=len(targets); v["started_at"]=None; v["deadline"]=None; voting_runtime._put(main,v)
     await callback.answer("🏁 رأی‌گیری این دور به پایان رسید."); await voting_runtime._finish_round(main); raise CancelHandler()
 
 async def _vote_noop(callback):
@@ -664,8 +686,12 @@ def install(main):
     try:
         registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
         if registry is not None:
-            cast_items = [item for item in registry if getattr(getattr(item, "handler", None), "__name__", "") == "cast"]
-            for item in cast_items:
+            priority_names = {"cast", "r2confirm", "r2pick", "r2"}
+            priority_items = [
+                item for item in registry
+                if getattr(getattr(item, "handler", None), "__name__", "") in priority_names
+            ]
+            for item in reversed(priority_items):
                 registry.remove(item)
                 registry.insert(0, item)
     except Exception:
