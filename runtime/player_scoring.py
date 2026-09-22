@@ -14,7 +14,7 @@ import runtime.game_end as game_end
 
 BASE_SCORE=50
 WIN_POINTS=20
-CHALLENGE_POINTS=3
+CHALLENGE_MAX_POINTS=10
 KICK_PENALTY=20
 WARNING_PENALTIES=(1,2,3,4,5)
 
@@ -23,10 +23,21 @@ def warning_penalty(count:int)->int:
     if count<=len(WARNING_PENALTIES):return sum(WARNING_PENALTIES[:count])
     return sum(WARNING_PENALTIES)+sum(range(len(WARNING_PENALTIES)+1,count+1))
 
-def _count_challenges(app:Any,game_id:int,user_id:int)->int:
+def _challenge_stats(app:Any,game:dict[str,Any],user_id:int)->tuple[int,int]:
     try:
-        rows=app.runtime.state.challenges.list_challenges(game_id);return sum(1 for row in rows if int(row.get("target_id") or 0)==int(user_id) and str(row.get("status") or "").lower() not in {"cancelled","canceled","rejected"})
-    except Exception:logging.exception("failed to count challenges game=%s user=%s",game_id,user_id);return 0
+        state=dict(game.get("state") or {})
+        stats=dict(state.get("challenge_score_stats") or {})
+        eligible=max(0,int(stats.get("eligible_turns") or 0))
+        rows=app.runtime.state.challenges.list_challenges(game["id"])
+        executed=sum(1 for row in rows if int(row.get("target_id") or 0)==int(user_id) and str(row.get("status") or "").lower() in {"active","executed"})
+        return eligible,executed
+    except Exception:
+        logging.exception("failed to count challenge score game=%s user=%s",game.get("id"),user_id)
+        return 0,0
+
+def _challenge_points(eligible:int,executed:int)->int:
+    if eligible<=0 or executed<=0:return 0
+    return min(CHALLENGE_MAX_POINTS,int(round(CHALLENGE_MAX_POINTS*executed/eligible)))
 
 def _warning_count(row,state):
     value=(state.get("warnings") or {}).get(str(int(row.get("player_id") or 0)),row.get("warning_count",0))
@@ -43,7 +54,11 @@ def score_game(app:Any,game:dict[str,Any],rows:list[dict[str,Any]],winner:str)->
     for row in rows:
         uid=int(row["player_id"]);key=str(uid)
         if key in recorded:continue
-        side=game_end._role_side(row,state);win_bonus=WIN_POINTS if winner!="draw" and side==winner else 0;challenge_bonus=_count_challenges(app,game["id"],uid)*CHALLENGE_POINTS;warning_total=warning_penalty(_warning_count(row,state));kick_penalty=KICK_PENALTY if _is_kicked(row,state) else 0;delta=win_bonus+challenge_bonus-warning_total-kick_penalty;result="draw" if winner=="draw" else ("win" if side==winner else "loss")
+        side=game_end._role_side(row,state);win_bonus=WIN_POINTS if winner!="draw" and side==winner else 0
+        eligible_turns,executed_challenges=_challenge_stats(app,game,uid)
+        challenge_bonus=_challenge_points(eligible_turns,executed_challenges)
+        warning_total=warning_penalty(_warning_count(row,state));kick_penalty=KICK_PENALTY if _is_kicked(row,state) else 0
+        delta=win_bonus+challenge_bonus-warning_total-kick_penalty;result="draw" if winner=="draw" else ("win" if side==winner else "loss")
         try:
             repo.record(uid,game["id"],int(delta),result,str(row.get("role") or ""),win_bonus=win_bonus,challenge_bonus=challenge_bonus,warning_penalty=warning_total,kick_penalty=kick_penalty);recorded.add(key)
             engine=getattr(app,"_achievement_engine",None)
@@ -88,5 +103,5 @@ def install(app:Any)->bool:
     app._score_finished_game=lambda game_, rows_, winner_: score_game(app, game_, rows_, winner_)
     _patch_final_report()
     _install_final_score_hook(app)
-    app.player_scoring={"base":BASE_SCORE,"win":WIN_POINTS,"challenge":CHALLENGE_POINTS,"kick":KICK_PENALTY,"warnings":WARNING_PENALTIES}
+    app.player_scoring={"base":BASE_SCORE,"win":WIN_POINTS,"challenge_max":CHALLENGE_MAX_POINTS,"kick":KICK_PENALTY,"warnings":WARNING_PENALTIES}
     return True
