@@ -230,7 +230,7 @@ async def _start_target(main):
     v["eligible_voters"] = sorted(_current_voters(main, v))
     voting_runtime._put(main, v)
     markup = (
-        InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رأی می‌دهم", callback_data="vote:autocast"))
+        InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رأی می‌دهم", callback_data="vote:cast"))
         if v.get("mode") == voting_runtime.AUTO
         else voting_runtime._manual_next_kb(idx >= len(targets) - 1)
     )
@@ -676,7 +676,7 @@ def install(main):
         (lambda c: c.data == "vote:manual_next", lambda c: _manual_next(main, c)),
         (lambda c: c.data == "vote:manual_end", lambda c: _manual_end(main, c)),
         (lambda c: c.data == "vote:noop", _vote_noop),
-        (lambda c: c.data == "vote:autocast", cast),
+        (lambda c: c.data in {"vote:cast", "vote:autocast"}, cast),
         (lambda c: c.data == "vote:round2", r2),
         (lambda c: c.data.startswith("vote:r2pick:"), r2pick),
         (lambda c: c.data == "vote:r2confirm_v2", r2confirm),
@@ -685,22 +685,27 @@ def install(main):
     for predicate, handler in handlers:
         dp.register_callback_query_handler(handler, predicate, state="*")
 
-    # vote:cast existed in older voting handlers too. Put the canonical cast
-    # handler at the very front so a stale legacy callback can never consume
-    # the button before the persistent voting state is updated.
+    # This patch owns the complete voting callback surface.  Several older
+    # callback routers are also installed by the bot, so merely registering
+    # these handlers at the end is unsafe: a generic/legacy router can consume
+    # a vote callback first and make the button appear to do nothing.
+    #
+    # Move every handler defined by this module to the front, preserving the
+    # registration order inside this module.  This keeps all voting callbacks
+    # (including manual cast and round-2 confirm/back) behind one canonical
+    # authority without changing unrelated callback handlers.
     try:
         registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
         if registry is not None:
-            priority_names = {"cast", "r2confirm", "r2pick", "r2"}
-            priority_items = [
-                item for item in registry
-                if getattr(getattr(item, "handler", None), "__name__", "") in priority_names
+            ours = [
+                item for item in list(registry)
+                if getattr(getattr(item, "handler", None), "__module__", "") == __name__
             ]
-            for item in reversed(priority_items):
+            for item in reversed(ours):
                 registry.remove(item)
                 registry.insert(0, item)
     except Exception:
-        logging.exception("failed to prioritize canonical vote:cast handler")
+        logging.exception("failed to prioritize canonical voting handlers")
 
     main._voting_timer_patch_installed = True
     return True
