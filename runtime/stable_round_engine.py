@@ -410,6 +410,13 @@ def install(main):
         main._stable_day_active = True
         main._stable_day_ended = False
         main._stable_phase = "normal"
+        try:
+            game = main.runtime.state.active_game(_gid(main))
+            settings = dict((game or {}).get("state") or {}).get("challenge_settings") or {}
+            if "enabled" in settings:
+                main.challenge_active = bool(settings.get("enabled"))
+        except Exception:
+            logging.exception("stable round: failed to restore challenge setting")
         main._stable_normal_order = list(base)
         main._stable_extra_seats = set()
         main._stable_extra_used = set()
