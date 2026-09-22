@@ -360,6 +360,18 @@ async def _cast(main, callback):
     bucket.append({"user_id": uid, "voted_at": voting_runtime._vote_timestamp()})
     v["votes"][str(target)] = bucket
     voting_runtime._put(main, v)
+    # Acknowledge the callback immediately after durable persistence. The
+    # Telegram message refresh is a separate API round-trip and must not make
+    # the vote button appear stuck or delay the user's confirmation.
+    await callback.answer("✅ رأی شما ثبت شد.")
+    logging.info(
+        "VOTE CAST persisted game=%s round=%s target=%s voter=%s mode=%s",
+        voting_runtime._gid(main),
+        int(v.get("round") or 1),
+        target,
+        uid,
+        v.get("mode"),
+    )
     message_id = v.get("vote_message_id")
     if message_id:
         try:
