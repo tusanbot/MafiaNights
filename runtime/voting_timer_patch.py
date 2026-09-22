@@ -261,13 +261,13 @@ async def _finish_round(main):
         else:
             text = "✅ <b>رأی‌گیری دور ۱ به پایان رسید.</b>\n\n🛡 هیچ بازیکنی به حدنصاب دفاع نرسید."
             kb = InlineKeyboardMarkup(row_width=1).add(
-                InlineKeyboardButton("🌙 شروع فاز شب", callback_data="start_night"),
+                InlineKeyboardButton("🌌 شروع فاز شب", callback_data="start_night"),
                 InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"),
             )
     else:
         text = "🏁 <b>رأی‌گیری دور ۲ به پایان رسید.</b>\n\nمرحله بعد را انتخاب کنید."
         kb = InlineKeyboardMarkup(row_width=1).add(
-            InlineKeyboardButton("🌙 شروع فاز شب", callback_data="start_night"),
+            InlineKeyboardButton("🌌 شروع فاز شب", callback_data="start_night"),
             InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"),
         )
     await main.bot.send_message(voting_runtime._gid(main), text, parse_mode="HTML", reply_markup=kb)
@@ -358,7 +358,7 @@ async def _round2(main, callback):
         await callback.message.edit_text(
             "🛡 <b>هیچ بازیکنی به حدنصاب دفاع نرسیده است.</b>",
             reply_markup=InlineKeyboardMarkup(row_width=1).add(
-                InlineKeyboardButton("🌙 شروع فاز شب", callback_data="start_night"),
+                InlineKeyboardButton("🌌 شروع فاز شب", callback_data="start_night"),
                 InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"),
             ), parse_mode="HTML")
         await callback.answer()
