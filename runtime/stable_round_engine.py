@@ -43,6 +43,22 @@ def _uid(main, seat):
         return None
 
 
+def _fresh_active_game(main):
+    """Read the active game without relying on the short-lived active-game cache."""
+    gid = _gid(main)
+    if not gid:
+        return None
+    try:
+        cached = main.runtime.state.active_game(gid)
+        if not cached:
+            return None
+        fresh = main.runtime.state.games.get_game(cached["id"])
+        return fresh or cached
+    except Exception:
+        logging.exception("stable round: failed to refresh active game")
+        return cached if "cached" in locals() else None
+
+
 
 def _hydrate_runtime_players(main, game=None):
     """Rebuild process-local player/seat state from durable game rows."""
@@ -51,7 +67,12 @@ def _hydrate_runtime_players(main, game=None):
         return None, []
     try:
         if game is None:
-            game = main.runtime.state.active_game(gid)
+            game = _fresh_active_game(main)
+        else:
+            try:
+                game = main.runtime.state.games.get_game(game["id"]) or game
+            except Exception:
+                pass
         if not game:
             return None, []
         rows = [
@@ -102,6 +123,10 @@ def _restore_persisted_turn_state(main, game):
     if idx < 0 or idx >= len(main.turn_order):
         idx = 0
     main.current_turn_index = idx
+    main._stable_day_ended = bool(state.get("stable_day_ended", False))
+    main._stable_day_active = bool(state.get("stable_day_active", False)) and not main._stable_day_ended
+    if main._stable_day_ended:
+        main._stable_phase = "ended"
     return list(main.turn_order), idx
 
 def _seat(main, uid):
@@ -288,6 +313,21 @@ async def _start_turn(main, seat, duration=120, is_challenge=False):
         main._stable_phase = "normal"
     prefix = "🤏🏻" if is_challenge else "🌅"
     text = f"{prefix} <b>نوبت {mention} شروع شد.</b>\n⏱ {duration//60} دقیقه می‌تونی صحبت کنی."
+    try:
+        game = _fresh_active_game(main)
+        if game and not is_challenge:
+            state = dict(game.get("state") or {})
+            state["turn_order"] = [int(x) for x in main.turn_order]
+            state["current_turn_index"] = int(main.current_turn_index)
+            state["current_turn_seat"] = int(seat)
+            main.runtime.state.games.update_game(
+                game["id"],
+                state=state,
+                current_turn_index=int(main.current_turn_index),
+                current_turn_seat=int(seat),
+            )
+    except Exception:
+        logging.exception("stable round: failed to persist active turn before send")
     msg = await main.bot.send_message(_gid(main), text, parse_mode="HTML", reply_markup=_keyboard(main, seat, is_challenge))
     main.current_turn_message_id = msg.message_id
     if not is_challenge:
@@ -348,6 +388,23 @@ async def _end_day(main):
     main.current_turn_index = len(getattr(main, "turn_order", []) or [])
     gid = _gid(main)
     if gid:
+        try:
+            game = _fresh_active_game(main)
+            if game:
+                state = dict(game.get("state") or {})
+                state["turn_order"] = [int(x) for x in (getattr(main, "turn_order", []) or [])]
+                state["current_turn_index"] = int(main.current_turn_index)
+                state["current_turn_seat"] = None
+                state["stable_day_active"] = False
+                state["stable_day_ended"] = True
+                main.runtime.state.games.update_game(
+                    game["id"],
+                    state=state,
+                    current_turn_index=int(main.current_turn_index),
+                    current_turn_seat=None,
+                )
+        except Exception:
+            logging.exception("stable round: failed to persist day-end state")
         await main.bot.send_message(
             gid,
             "✅ همه بازیکنا صحبت کردن. فاز روز تموم شد.",
@@ -414,6 +471,7 @@ def _clear_legacy_handlers(reg):
                 "next_terminal", "next_turn_day_end_guard", "start_round_handler",
                 "handle_start_turn", "challenge_request", "challenge_choice",
                 "handle_challenge_response",
+                "start_round_clean", "start_turn_clean",
             }
             or getattr(fn, "_v5_next", False)
             or getattr(fn, "_v8_next", False)
@@ -448,22 +506,37 @@ def install(main):
             raise CancelHandler()
         _ensure(main)
 
-        # Always restore the durable order chosen by «سر صحبت» before the
-        # round engine starts. This prevents fallback to numeric seat order.
+        # Always restore the durable player roster and speaker order before the
+        # round starts. The DB, not a warm Vercel worker, is the authority.
         try:
             game, _rows = _hydrate_runtime_players(main)
             _restore_persisted_turn_state(main, game)
-            main.current_turn_index = 0
         except Exception:
             logging.exception("stable round: failed to restore durable player/turn state")
 
-        if main._stable_day_active and not main._stable_day_ended:
+        if main._stable_day_ended:
+            await callback.answer("ℹ️ فاز روز قبلاً تمام شده است.", show_alert=True)
+            raise CancelHandler()
+
+        if main._stable_day_active:
             await callback.answer("⚠️ این دور قبلاً شروع شده است.", show_alert=True)
             raise CancelHandler()
         base = _base_order(main)
         if not base:
             await callback.answer("⚠️ بازیکنی برای شروع نوبت وجود ندارد.", show_alert=True)
             raise CancelHandler()
+
+        head_seat = None
+        try:
+            head_seat = dict((game or {}).get("state") or {}).get("head_seat")
+            if head_seat is not None:
+                head_seat = int(head_seat)
+        except (TypeError, ValueError):
+            head_seat = None
+        if head_seat is None or head_seat not in base:
+            await callback.answer("⚠️ ابتدا از «انتخاب سردست» یک بازیکن را انتخاب کنید.", show_alert=True)
+            raise CancelHandler()
+
         main._stable_day_active = True
         main._stable_day_ended = False
         main._stable_phase = "normal"
@@ -497,6 +570,8 @@ def install(main):
                 state_now = dict(game_now.get("state") or {})
                 state_now["turn_order"] = [int(x) for x in base]
                 state_now["current_turn_index"] = 0
+                state_now["stable_day_active"] = True
+                state_now["stable_day_ended"] = False
                 main.runtime.state.games.update_game(
                     game_now["id"], state=state_now, current_turn_index=0, current_turn_seat=int(base[0])
                 )
@@ -522,12 +597,29 @@ def install(main):
         if callback.message and callback.message.chat.type == "private":
             await callback.answer("این عملیات فقط داخل گروه انجام می‌شود.", show_alert=True)
             raise CancelHandler()
+
+        # Rehydrate the roster and exact durable turn position on EVERY NEXT.
+        # A Vercel callback can land on a different worker from the one that
+        # rendered the button, so process-local turn_order is never authoritative.
+        game = None
+        try:
+            game, _rows = _hydrate_runtime_players(main)
+            _restore_persisted_turn_state(main, game)
+        except Exception:
+            logging.exception("stable round: failed to hydrate turn state for NEXT")
+
         if main._stable_day_ended:
             await callback.answer("ℹ️ فاز روز قبلاً تمام شده است.", show_alert=True)
             raise CancelHandler()
+
         active = _active(main)
         if active is None:
-            logging.warning("stable round: no active seat after DB hydration game=%s index=%s order=%s", game.get("id") if game else None, getattr(main, "current_turn_index", None), getattr(main, "turn_order", None))
+            logging.warning(
+                "stable round: no active seat game=%s index=%s order=%s",
+                game.get("id") if game else None,
+                getattr(main, "current_turn_index", None),
+                getattr(main, "turn_order", None),
+            )
             await callback.answer("⚠️ نوبت فعالی وجود ندارد.", show_alert=True)
             raise CancelHandler()
         try:
@@ -542,9 +634,8 @@ def install(main):
         owner = _uid(main, active)
         challenger_seats = {int(x) for x in getattr(main, "active_challenger_seats", set()) or set()}
         challenger_uids = {int(_uid(main, s) or -1) for s in challenger_seats}
-        game = None
         try:
-            game = main.runtime.state.active_game(_gid(main))
+            game = _fresh_active_game(main)
         except Exception:
             pass
         next_settings = dict((game or {}).get("state", {}).get("next_settings") or {})
