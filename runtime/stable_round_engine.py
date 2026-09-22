@@ -229,6 +229,16 @@ async def _start_turn(main, seat, duration=120, is_challenge=False):
     text = f"{prefix} <b>نوبت {mention} شروع شد.</b>\n⏱ {duration//60} دقیقه می‌تونی صحبت کنی."
     msg = await main.bot.send_message(_gid(main), text, parse_mode="HTML", reply_markup=_keyboard(main, seat, is_challenge))
     main.current_turn_message_id = msg.message_id
+    if not is_challenge:
+        try:
+            game = main.runtime.state.active_game(_gid(main)); state = dict((game or {}).get("state") or {})
+            settings = dict(state.get("challenge_settings") or {})
+            if bool(settings.get("enabled", getattr(main,"challenge_active",True))):
+                stats = dict(state.get("challenge_score_stats") or {})
+                stats["eligible_turns"] = int(stats.get("eligible_turns") or 0) + 1
+                state["challenge_score_stats"] = stats
+                main.runtime.state.games.update_game(game["id"], state=state)
+        except Exception: logging.exception("stable challenge: failed to record eligible speaking turn")
     countdown = getattr(main, "countdown", None)
     if countdown:
         main.turn_timer_task = asyncio.create_task(countdown(seat, duration, msg.message_id, is_challenge))
@@ -507,6 +517,11 @@ def install(main):
             try:
                 game = main.runtime.state.active_game(_gid(main))
                 state = dict((game or {}).get("state") or {})
+                runtime = dict(state.get("challenge_runtime") or {})
+                challenge_id = runtime.get("challenge_id")
+                if challenge_id:
+                    try: main.runtime.state.challenges.resolve_challenge(challenge_id, "executed")
+                    except Exception: logging.exception("stable challenge: failed to mark executed challenge")
                 state.pop("challenge_runtime", None)
                 main.runtime.state.games.update_game(game["id"], state=state)
             except Exception:
@@ -715,6 +730,7 @@ def install(main):
                 "target_seat": int(target_seat),
                 "challenger_seat": int(challenger_seat),
                 "challenger_id": int(challenger_id),
+                "challenge_id": str(challenge_id or ""),
                 "post_challenge_advance": True,
             }
             main.runtime.state.games.update_game(game["id"], state=state)
@@ -732,7 +748,10 @@ def install(main):
         except Exception:
             logging.exception("stable challenge: failed to announce accepted challenge")
         await callback.answer("🤏🏻 چالش تایید شد.")
-        await _start_turn(main, int(challenger_seat), 60, True)
+        started = await _start_turn(main, int(challenger_seat), 60, True)
+        if started and challenge_id:
+            try: main.runtime.state.challenges.resolve_challenge(challenge_id, "active")
+            except Exception: logging.exception("stable challenge: failed to mark active challenge")
         raise CancelHandler()
 
     main._stable_round_start_handler = start_round
