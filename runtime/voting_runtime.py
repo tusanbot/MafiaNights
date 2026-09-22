@@ -10,8 +10,8 @@ from zoneinfo import ZoneInfo
 from aiogram.dispatcher.handler import CancelHandler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-WAIT_OPTIONS = (15, 20, 30)
-VOTE_OPTIONS = (15, 20, 30)
+WAIT_OPTIONS = (10, 20, 30)
+VOTE_OPTIONS = (10, 20, 30)
 AUTO, MANUAL = "auto", "manual"
 
 
@@ -124,11 +124,15 @@ def _vote_message_text(main, v, target):
     rows = {int(x["player_id"]): x for x in _players(main)}
     target_name = _name(main, target, rows.get(target, {}).get("seat"))
     count = len(_vote_records(v, target))
+    if bool(v.get("target_vote_ended")):
+        timing = "⏱ <b>زمان رأی‌گیری پایان یافت.</b>"
+    else:
+        timing = f"⏱ {int(v.get('vote_seconds', 20))} ثانیه فرصت دارید."
     return (
         f"🗳 <b>رأی برای {html.escape(target_name)}</b>\n\n"
         f"👥 تعداد رأی ثبت‌شده: <b>{count}</b>\n"
         f"🗳 <b>رأی‌دهندگان:</b>\n{_voter_lines(main, v, target)}\n\n"
-        f"⏱ {int(v['vote_seconds'])} ثانیه فرصت دارید."
+        f"{timing}"
     )
 
 
@@ -256,6 +260,7 @@ async def _start_target(main):
     deadline = None if v.get("mode") == MANUAL else now + int(v["vote_seconds"])
     v["phase"], v["started_at"], v["deadline"] = "voting", now, deadline
     v.setdefault("votes", {}).setdefault(str(target), [])
+    v["target_vote_ended"] = False
     _put(main, v)
     markup = InlineKeyboardMarkup(row_width=1).add(
         InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast")
