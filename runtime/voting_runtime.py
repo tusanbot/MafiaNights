@@ -14,6 +14,10 @@ WAIT_OPTIONS = (10, 20, 30)
 VOTE_OPTIONS = (10, 20, 30)
 AUTO, MANUAL = "auto", "manual"
 
+# Warm-runtime cache for voting state. Votes are updated in memory first so
+# Telegram callbacks are not blocked by a database round-trip.
+_VOTE_CACHE = {}
+
 
 def _gid(main):
     for obj in (main, getattr(main, "addons", None)):
@@ -140,7 +144,15 @@ def _default(main):
     return {"round": 1, "wait_seconds": 20, "vote_seconds": 20, "mode": AUTO, "vote_rights_taken": [], "targets": [int(x["player_id"]) for x in _players(main)], "target_index": 0, "votes": {}, "started_at": None, "deadline": None, "phase": "settings", "selected_round_two": []}
 
 
+def _vote_cache_key(main):
+    game = _game(main)
+    return str(game.get("id")) if game else None
+
+
 def _v(main):
+    key = _vote_cache_key(main)
+    if key and key in _VOTE_CACHE:
+        return _VOTE_CACHE[key]
     payload = _state(main)
     voting = payload.get("voting")
     if not isinstance(voting, dict):
@@ -150,19 +162,30 @@ def _v(main):
     if "vote_rights_taken" not in voting:
         voting["vote_rights_taken"] = list(voting.get("round_two_vote_rights_taken") or [])
         voting.pop("round_two_vote_rights_taken", None)
-        _put(main, voting)
     elif "round_two_vote_rights_taken" in voting:
         voting.pop("round_two_vote_rights_taken", None)
-        _put(main, voting)
+    if key:
+        _VOTE_CACHE[key] = voting
     return voting
+
+
+def _put_memory(main, voting):
+    key = _vote_cache_key(main)
+    if key:
+        _VOTE_CACHE[key] = voting
+    return voting
+
+
+def _persist(main, voting):
+    payload = _state(main)
+    payload["voting"] = voting
+    return _save(main, payload)
 
 
 def _put(main, voting):
-    payload = _state(main)
-    payload["voting"] = voting
-    _save(main, payload)
+    _put_memory(main, voting)
+    _persist(main, voting)
     return voting
-
 
 def _active_rights(v):
     return {int(x) for x in (v.get("vote_rights_taken") or [])}
