@@ -52,7 +52,16 @@ def install(main):
             ] if game0 else []
             main.player_slots = {int(row["seat"]): int(row["player_id"]) for row in rows0}
             main.players = {int(row["player_id"]): str(row.get("nickname") or row.get("first_name") or row.get("username") or row["player_id"]) for row in rows0}
-            main.turn_order = sorted(main.player_slots)
+            state0 = dict((game0 or {}).get("state") or {})
+            persisted_order = []
+            for raw in state0.get("turn_order") or []:
+                try:
+                    seat = int(raw)
+                except (TypeError, ValueError):
+                    continue
+                if seat in main.player_slots:
+                    persisted_order.append(seat)
+            main.turn_order = persisted_order or sorted(main.player_slots)
         except Exception:
             logging.exception("start_round_clean: failed to hydrate seats")
 
@@ -96,7 +105,16 @@ def install(main):
         if not main.turn_order:
             main.turn_order = sorted(main.player_slots.keys())
         main.current_turn_index = 0
-        first_seat = main.turn_order[0]
+        first_seat = int(main.turn_order[0])
+        try:
+            state_now = dict((game or {}).get("state") or {})
+            state_now["turn_order"] = [int(x) for x in main.turn_order]
+            state_now["current_turn_index"] = 0
+            main.runtime.state.games.update_game(
+                game["id"], state=state_now, current_turn_index=0, current_turn_seat=first_seat
+            )
+        except Exception:
+            logging.exception("start_round_clean: failed to persist durable turn order")
 
         # The head-selection handler already rendered the canonical formatted
         # player list. Do NOT replace it with a second/simple player list here.
