@@ -137,7 +137,11 @@ def install(app: Any) -> bool:
                 if (await bot.get_chat_member(group_id, int(callback.from_user.id))).status not in {"creator", "administrator"}: raise PermissionError
             except Exception:
                 await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True); return
-        rows = [r for r in app.runtime.lobby_snapshot(group_id).get("players", []) if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed", "dead", "finished"}]
+        rows = [
+            r for r in app.runtime.state.games.list_players(game_id)
+            if r.get("seat") is not None
+            and str(r.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
+        ]
         kb = InlineKeyboardMarkup(row_width=2).add(InlineKeyboardButton("🎲 انتخاب تصادفی", callback_data=f"day:{game_id}:head_random"))
         for row in sorted(rows, key=lambda r: int(r.get("seat") or 999)):
             name = str(row.get("nickname") or row.get("first_name") or row.get("username") or row["player_id"])
