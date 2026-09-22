@@ -54,10 +54,20 @@ def install(app: Any) -> bool:
         # Keep the complete game and player snapshot. A cancelled game is an
         # archive record, not a finished game, so it must never affect rating,
         # history, achievements or other player statistics.
-        ok = app.runtime.state.games.update_game(game["id"], status="cancelled", state=state)
+        ok = app.runtime.state.games.update_game(game["id"], status="cancelled", event_number=0, state=state)
         if not ok:
             await message.reply("❌ لغو بازی انجام نشد.")
             return
+
+        try:
+            from runtime.end_game_control import _clear_runtime_flags
+            _clear_runtime_flags(app)
+        except Exception:
+            logging.exception("failed to clear runtime flags after command cancellation game=%s", game.get("id"))
+        try:
+            app.runtime.state.games.clear_game_players(game["id"])
+        except Exception:
+            logging.exception("failed to clear cancelled game players game=%s", game.get("id"))
 
         for owner, attr in (
             (getattr(app, "ui", None), "turn_timer_task"),
