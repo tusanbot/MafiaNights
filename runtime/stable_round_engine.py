@@ -201,7 +201,7 @@ def _keyboard(main, seat, is_challenge=False):
         return kb
     if int(seat) in getattr(main, "_stable_challenge_locked", set()):
         return kb
-    kb.add(InlineKeyboardButton("⚔️ درخواست چالش", callback_data=f"challenge_request_{int(seat)}"))
+    kb.add(InlineKeyboardButton("🤏🏻 درخواست چالش", callback_data=f"challenge_request_{int(seat)}"))
     return kb
 
 
@@ -225,8 +225,8 @@ async def _start_turn(main, seat, duration=120, is_challenge=False):
         main._stable_phase = "challenge"
     elif getattr(main, "_stable_phase", "normal") != "extra":
         main._stable_phase = "normal"
-    prefix = "🟥" if is_challenge else "🟦"
-    text = f"{prefix} ⏳ {duration//60:02d}:{duration%60:02d}\n🎙 نوبت صحبت {mention} است. ({duration} ثانیه)"
+    prefix = "🤏🏻" if is_challenge else "🌅"
+    text = f"{prefix} <b>نوبت {mention} شروع شد.</b>\n⏱ {duration//60} دقیقه می‌تونی صحبت کنی."
     msg = await main.bot.send_message(_gid(main), text, parse_mode="HTML", reply_markup=_keyboard(main, seat, is_challenge))
     main.current_turn_message_id = msg.message_id
     countdown = getattr(main, "countdown", None)
@@ -599,7 +599,7 @@ def install(main):
         target_name = await _resolve_name(main, target_uid, _stored_name(main, target_uid))
         msg = await main.bot.send_message(
             _gid(main),
-            f"⚔️ <b>درخواست چالش</b>\n\n{name} برای {target_name} درخواست چالش داده است.",
+            f"🤏🏻 <b>درخواست چالش</b>\n\n{name} از {target_name} چالش می‌خواد.",
             reply_markup=InlineKeyboardMarkup(row_width=2).add(
                 InlineKeyboardButton("✅ قبول", callback_data=f"accept_{target_seat}"),
                 InlineKeyboardButton("❌ رد", callback_data=f"reject_{target_seat}"),
@@ -607,7 +607,7 @@ def install(main):
             parse_mode="HTML",
         )
         main._stable_challenge_request_messages[target_seat] = msg.message_id
-        await callback.answer("⚔️ درخواست چالش ارسال شد.")
+        await callback.answer("🤏🏻 درخواست چالش فرستاده شد.")
         raise CancelHandler()
 
     async def challenge_choice(callback):
@@ -722,7 +722,16 @@ def install(main):
             logging.exception("stable challenge: failed to persist active challenge")
         await _cancel_timer(main)
         await _delete_turn_message(main)
-        await callback.answer("⚔️ چالش پذیرفته شد.")
+        challenger_name = await _resolve_name(main, int(challenger_id), _stored_name(main, int(challenger_id)))
+        target_name = await _resolve_name(main, int(target_uid), _stored_name(main, int(target_uid)))
+        try:
+            await main.bot.send_message(
+                _gid(main),
+                f"🤏🏻 <b>{html.escape(challenger_name)}</b> به <b>{html.escape(target_name)}</b> چالش داد.",
+            )
+        except Exception:
+            logging.exception("stable challenge: failed to announce accepted challenge")
+        await callback.answer("🤏🏻 چالش تایید شد.")
         await _start_turn(main, int(challenger_seat), 60, True)
         raise CancelHandler()
 
