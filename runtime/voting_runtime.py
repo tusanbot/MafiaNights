@@ -210,7 +210,7 @@ def _round2_kb(main, v):
 def _day_end_kb():
     return InlineKeyboardMarkup(row_width=1).add(
         InlineKeyboardButton("🗳 رای‌گیری", callback_data="vote:settings"),
-        InlineKeyboardButton("🌙 شروع فاز شب", callback_data="start_night"),
+        InlineKeyboardButton("🌌 شروع فاز شب", callback_data="start_night"),
         InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"),
     )
 
@@ -591,7 +591,7 @@ def install(main):
         gid = _gid(main)
         if rt and gid:
             rt.days.start_night(gid)
-        await c.answer("🌙 فاز شب شروع شد.")
+        await c.answer("🌌 فاز شب شروع شد.")
         raise CancelHandler()
 
     handlers = [
