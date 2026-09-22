@@ -472,8 +472,8 @@ class GameManagement:
         executed = sum(1 for r in rows if str(r.get("status")) == "executed")
         kb = InlineKeyboardMarkup(row_width=2)
         kb.row(
-            InlineKeyboardButton("🟢 چالش: روشن" if enabled else "🔴 چالش: خاموش", callback_data=f"mgmt:{game['id']}:challenge_toggle"),
-            InlineKeyboardButton("🤏 نمایش وضعیت: روشن" if show else "🚫 نمایش وضعیت: خاموش", callback_data=f"mgmt:{game['id']}:challenge_visibility_toggle"),
+            InlineKeyboardButton("🟢 چالش: روشن" if enabled else "🔴 چالش: خاموش", callback_data=f"mgmt:{game['id']}:challenge_toggle:{context}"),
+            InlineKeyboardButton("🤏 نمایش وضعیت: روشن" if show else "🚫 نمایش وضعیت: خاموش", callback_data=f"mgmt:{game['id']}:challenge_visibility_toggle:{context}"),
         )
         kb.row(
             InlineKeyboardButton(f"⏳ در انتظار: {pending}", callback_data=f"mgmt:{game['id']}:noop"),
@@ -487,6 +487,8 @@ class GameManagement:
 
     async def challenge_toggle(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
+        parts = str(callback.data or "").split(":")
+        context = parts[3] if len(parts) >= 4 else "management"
         if not game or not await self._allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         if not hasattr(self.app, "challenge_enabled"): self.app.challenge_enabled = {}
@@ -501,6 +503,8 @@ class GameManagement:
 
     async def challenge_visibility_toggle(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
+        parts = str(callback.data or "").split(":")
+        context = parts[3] if len(parts) >= 4 else "management"
         if not game or not await self._allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         state = self._state(game); settings = dict(state.get("challenge_settings") or {})
