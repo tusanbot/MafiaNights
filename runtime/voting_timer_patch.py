@@ -359,10 +359,9 @@ async def _cast(main, callback):
     bucket = list(v.setdefault("votes", {}).setdefault(str(target), []))
     bucket.append({"user_id": uid, "voted_at": voting_runtime._vote_timestamp()})
     v["votes"][str(target)] = bucket
-    voting_runtime._put(main, v)
-    # Acknowledge the callback immediately after durable persistence. The
-    # Telegram message refresh is a separate API round-trip and must not make
-    # the vote button appear stuck or delay the user's confirmation.
+    # Keep the vote authoritative in the warm runtime first. Do not block
+    # the Telegram callback on the database write.
+    voting_runtime._put_memory(main, v)
     await callback.answer("✅ رأی شما ثبت شد.")
     logging.info(
         "VOTE CAST persisted game=%s round=%s target=%s voter=%s mode=%s",
@@ -384,11 +383,27 @@ async def _cast(main, callback):
                     voting_runtime._manual_next_kb(idx >= len(targets) - 1)
                     if v.get("mode") == voting_runtime.MANUAL
                     else InlineKeyboardMarkup(row_width=1).add(
-                        InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast")
+                        InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:auto_cast_v2")
                     )
                 )            )
-        except Exception: pass
-    await callback.answer("✅ رأی شما ثبت شد.")
+        except Exception:
+            logging.exception(
+                "VOTE CAST message update failed game=%s target=%s voter=%s",
+                voting_runtime._gid(main), target, uid
+            )
+    # Persist only after the in-memory state has been displayed. A cold
+    # invocation can then recover the same vote from durable state.
+    try:
+        voting_runtime._persist(main, v)
+        logging.info(
+            "VOTE CAST persisted to DB game=%s round=%s target=%s voter=%s",
+            voting_runtime._gid(main), int(v.get("round") or 1), target, uid,
+        )
+    except Exception:
+        logging.exception(
+            "VOTE CAST DB persistence failed game=%s round=%s target=%s voter=%s",
+            voting_runtime._gid(main), int(v.get("round") or 1), target, uid,
+        )
 
 
 async def _manual_start(main, callback):
