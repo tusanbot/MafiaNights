@@ -37,7 +37,7 @@ def _challenge_stats(app:Any,game:dict[str,Any],user_id:int)->tuple[int,int]:
 
 def _challenge_points(eligible:int,executed:int)->int:
     if eligible<=0 or executed<=0:return 0
-    return min(CHALLENGE_MAX_POINTS,int(round(CHALLENGE_MAX_POINTS*executed/eligible)))
+    return min(CHALLENGE_MAX_POINTS,int((CHALLENGE_MAX_POINTS*executed/eligible)+0.5))
 
 def _warning_count(row,state):
     value=(state.get("warnings") or {}).get(str(int(row.get("player_id") or 0)),row.get("warning_count",0))
