@@ -1,8 +1,14 @@
-"""Persistent day-voting runtime for MafiaNights."""
+"""Canonical voting engine for MafiaNights.
+
+Votes are persisted independently from game JSON state. Automatic timers are
+deadline based and are advanced by a short Supabase Cron tick, so webhook
+requests never sleep and Telegram callback queries are answered promptly.
+"""
 from __future__ import annotations
 
-import asyncio
 import html
+import logging
+import math
 import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -10,13 +16,13 @@ from zoneinfo import ZoneInfo
 from aiogram.dispatcher.handler import CancelHandler
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from repositories.voting_repository import VotingRepository
+
 WAIT_OPTIONS = (10, 20, 30)
 VOTE_OPTIONS = (10, 20, 30)
 AUTO, MANUAL = "auto", "manual"
 
-# Warm-runtime cache for voting state. Votes are updated in memory first so
-# Telegram callbacks are not blocked by a database round-trip.
-_VOTE_CACHE = {}
+_VOTES = VotingRepository()
 
 
 def _gid(main):
@@ -37,7 +43,9 @@ def _rt(main):
 
 def _game(main):
     rt, gid = _rt(main), _gid(main)
-    return rt.state.active_game(gid) if rt and gid else None
+    if not rt or gid is None:
+        return None
+    return rt.state.active_game(gid)
 
 
 def _state(main):
@@ -53,10 +61,14 @@ def _players(main):
     game, rt = _game(main), _rt(main)
     if game and rt:
         try:
-            return [dict(x) for x in rt.state.games.list_players(game["id"]) if str(x.get("status") or "active") not in {"dead", "removed"}]
+            return [
+                dict(x) for x in rt.state.games.list_players(game["id"])
+                if str(x.get("status") or "active") not in {"dead", "removed"}
+            ]
         except Exception:
             pass
-    return [{"seat": int(s), "player_id": int(uid)} for s, uid in sorted((getattr(main, "player_slots", {}) or {}).items())]
+    return [{"seat": int(s), "player_id": int(uid)}
+            for s, uid in sorted((getattr(main, "player_slots", {}) or {}).items())]
 
 
 def _name(main, uid, seat=None):
@@ -83,76 +95,41 @@ def _row_name(main, row):
     return row.get("nickname") or row.get("first_name") or _name(main, row["player_id"], row.get("seat"))
 
 
-def _vote_timestamp():
-    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+def _timestamp():
+    return datetime.now(timezone.utc)
 
 
-def _vote_display_time(value):
+def _display_time(value):
     try:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         return dt.astimezone(ZoneInfo("Asia/Tehran")).strftime("%H:%M:%S.%f")[:-4]
     except Exception:
         return "نامشخص"
 
 
-def _vote_records(v, target):
-    raw = (v.get("votes") or {}).get(str(target), [])
-    records = []
-    for item in raw:
-        if isinstance(item, dict):
-            try:
-                records.append({"user_id": int(item["user_id"]), "voted_at": str(item["voted_at"])})
-            except Exception:
-                continue
-        else:
-            try:
-                records.append({"user_id": int(item), "voted_at": None})
-            except (TypeError, ValueError):
-                pass
-    return records
-
-
-def _voter_lines(main, v, target):
-    rows = {int(x["player_id"]): x for x in _players(main)}
-    records = _vote_records(v, target)
-    if not records:
-        return "• هنوز رأیی ثبت نشده است"
-    return "\n".join(
-        f"• {html.escape(_name(main, r['user_id'], rows.get(r['user_id'], {}).get('seat')))}"
-        f" — ⏱ {_vote_display_time(r['voted_at']) if r.get('voted_at') else 'زمان ثبت نشده'}"
-        for r in records
-    )
-
-
-def _vote_message_text(main, v, target):
-    rows = {int(x["player_id"]): x for x in _players(main)}
-    target_name = _name(main, target, rows.get(target, {}).get("seat"))
-    count = len(_vote_records(v, target))
-    if bool(v.get("target_vote_ended")):
-        timing = "⏱ <b>زمان رأی‌گیری پایان یافت.</b>"
-    else:
-        timing = f"⏱ {int(v.get('vote_seconds', 20))} ثانیه فرصت دارید."
-    return (
-        f"🗳 <b>رأی برای {html.escape(target_name)}</b>\n\n"
-        f"👥 تعداد رأی ثبت‌شده: <b>{count}</b>\n"
-        f"🗳 <b>رأی‌دهندگان:</b>\n{_voter_lines(main, v, target)}\n\n"
-        f"{timing}"
-    )
-
-
-def _default(main):
-    return {"round": 1, "wait_seconds": 20, "vote_seconds": 20, "mode": AUTO, "vote_rights_taken": [], "targets": [int(x["player_id"]) for x in _players(main)], "target_index": 0, "votes": {}, "started_at": None, "deadline": None, "phase": "settings", "selected_round_two": []}
-
-
-def _vote_cache_key(main):
-    game = _game(main)
-    return str(game.get("id")) if game else None
+def _default(main, round_no=1):
+    return {
+        "round": int(round_no),
+        "wait_seconds": 20,
+        "vote_seconds": 20,
+        "mode": AUTO,
+        "vote_rights_taken": [],
+        "targets": [int(x["player_id"]) for x in _players(main)],
+        "target_index": 0,
+        "started_at": None,
+        "deadline": None,
+        "phase": "settings",
+        "selected_round_two": [],
+        "round2_targets": [],
+        "eligible_voters": [],
+        "vote_message_id": None,
+        "target_vote_ended": False,
+        "defense_threshold": None,
+        "defense_candidates": [],
+    }
 
 
 def _v(main):
-    key = _vote_cache_key(main)
-    if key and key in _VOTE_CACHE:
-        return _VOTE_CACHE[key]
     payload = _state(main)
     voting = payload.get("voting")
     if not isinstance(voting, dict):
@@ -161,41 +138,142 @@ def _v(main):
         _save(main, payload)
     if "vote_rights_taken" not in voting:
         voting["vote_rights_taken"] = list(voting.get("round_two_vote_rights_taken") or [])
-        voting.pop("round_two_vote_rights_taken", None)
-    elif "round_two_vote_rights_taken" in voting:
-        voting.pop("round_two_vote_rights_taken", None)
-    if key:
-        _VOTE_CACHE[key] = voting
+    voting.pop("round_two_vote_rights_taken", None)
+    voting.setdefault("round2_targets", list(voting.get("selected_round_two") or []))
     return voting
 
 
-def _put_memory(main, voting):
-    key = _vote_cache_key(main)
-    if key:
-        _VOTE_CACHE[key] = voting
-    return voting
-
-
-def _persist(main, voting):
+def _put(main, voting):
     payload = _state(main)
     payload["voting"] = voting
     return _save(main, payload)
 
 
-def _put(main, voting):
-    _put_memory(main, voting)
-    _persist(main, voting)
+def _put_memory(main, voting):
     return voting
+
+
+def _persist(main, voting):
+    return _put(main, voting)
+
 
 def _active_rights(v):
     return {int(x) for x in (v.get("vote_rights_taken") or [])}
 
 
+def _scenario(main):
+    game = _game(main)
+    if not game:
+        return {}
+    repo = getattr(getattr(_rt(main), "state", None), "scenarios", None)
+    scenario_id = game.get("scenario_id")
+    try:
+        return dict((repo.get_by_id(scenario_id) if repo and scenario_id else None) or {})
+    except Exception:
+        return {}
+
+
+def _rules(main):
+    config = _scenario(main).get("config") or {}
+    voting = config.get("voting") if isinstance(config, dict) else {}
+    voting = voting if isinstance(voting, dict) else {}
+    r1, r2 = voting.get("round_1") or {}, voting.get("round_2") or {}
+    return {
+        "enabled": bool(voting.get("enabled", True)),
+        "self_vote": bool(voting.get("self_vote", False)),
+        "r1": r1 if isinstance(r1, dict) else {},
+        "r2": r2 if isinstance(r2, dict) else {},
+    }
+
+
+def _threshold(rules, player_count):
+    spec = (rules.get("r1") or {}).get("defense_threshold") or {}
+    if not isinstance(spec, dict):
+        spec = {"type": str(spec)}
+    kind, n = str(spec.get("type") or "ceil_half").lower(), int(player_count)
+    if kind in {"floor_half", "half_floor", "floor-half"}:
+        return max(1, n // 2)
+    if kind in {"ceil_half", "half_ceil", "ceil-half"}:
+        return max(1, math.ceil(n / 2))
+    if kind in {"exact", "count"}:
+        try:
+            return max(1, int(spec.get("value")))
+        except Exception:
+            return None
+    if kind in {"percentage", "percent"}:
+        try:
+            return max(1, math.ceil(n * float(spec.get("value")) / 100))
+        except Exception:
+            return None
+    return max(1, math.ceil(n / 2))
+
+
+def _round2_mode(rules):
+    mode = str((rules.get("r2") or {}).get("target_selection") or "manual").lower()
+    return "automatic" if mode in {"automatic", "auto", "خودکار"} else "manual"
+
+
+def _round2_targets_automatic(rules, candidates, player_count):
+    rule = (rules.get("r2") or {}).get("target_count")
+    if rule in (None, "all", "all_candidates", "همه"):
+        return list(candidates)
+    if isinstance(rule, dict):
+        kind = str(rule.get("type") or "all").lower()
+        if kind in {"count", "exact"}:
+            try:
+                return list(candidates)[:max(0, int(rule.get("value")))]
+            except Exception:
+                return list(candidates)
+        if kind in {"floor_half", "ceil_half"}:
+            count = player_count // 2 if kind == "floor_half" else math.ceil(player_count / 2)
+            return list(candidates)[:max(0, int(count))]
+    try:
+        return list(candidates)[:max(0, int(rule))]
+    except Exception:
+        return list(candidates)
+
+
+def _round1_voters(main, v):
+    return {int(x["player_id"]) for x in _players(main)} - _active_rights(v)
+
+
+def _round2_voters(main, v, rules):
+    voters = _round1_voters(main, v)
+    if not bool((rules.get("r2") or {}).get("defenders_can_vote", True)):
+        voters -= {int(x) for x in (v.get("round2_targets") or v.get("selected_round_two") or [])}
+    return voters
+
+
+def _current_voters(main, v):
+    return _round2_voters(main, v, _rules(main)) if int(v.get("round") or 1) == 2 else _round1_voters(main, v)
+
+
+async def _resolve_name(main, uid, seat=None):
+    value = _name(main, uid, seat)
+    if value and not str(value).startswith("بازیکن "):
+        return str(value)
+    gid = _gid(main)
+    if gid:
+        try:
+            member = await main.bot.get_chat_member(gid, int(uid))
+            user = getattr(member, "user", None)
+            name = getattr(user, "full_name", None) or getattr(user, "first_name", None)
+            if name:
+                return str(name)
+        except Exception:
+            pass
+    return str(value or f"بازیکن {int(seat or 0)}")
+
+
+def _row_map(main):
+    return {int(x["player_id"]): x for x in _players(main)}
+
+
 def _settings_kb(v):
     mode = "خودکار" if v.get("mode") == AUTO else "دستی"
     return InlineKeyboardMarkup(row_width=1).add(
-        InlineKeyboardButton(f"⏱ زمان انتظار رای‌گیری: {v['wait_seconds']} ثانیه", callback_data="vote:wait"),
-        InlineKeyboardButton(f"⏱ زمان هر رای: {v['vote_seconds']} ثانیه", callback_data="vote:duration"),
+        InlineKeyboardButton(f"⏱ زمان انتظار رای‌گیری: {int(v.get('wait_seconds', 20))} ثانیه", callback_data="vote:wait"),
+        InlineKeyboardButton(f"⏱ زمان هر رای: {int(v.get('vote_seconds', 20))} ثانیه", callback_data="vote:duration"),
         InlineKeyboardButton(f"🚫 گرفتن حق رای ({len(v.get('vote_rights_taken', []))})", callback_data="vote:rights"),
         InlineKeyboardButton(f"🗳 نوع رای‌گیری: {mode}", callback_data="vote:mode"),
         InlineKeyboardButton("▶️ شروع رای‌گیری", callback_data="vote:start"),
@@ -218,158 +296,532 @@ def _rights_kb(main, v):
     kb = InlineKeyboardMarkup(row_width=1)
     for row in _players(main):
         uid = int(row["player_id"])
-        label = f"🚫 {_row_name(main, row)}" + (" ✅" if uid in taken else "")
-        kb.add(InlineKeyboardButton(label, callback_data=f"vote:right:{uid}"))
+        kb.add(InlineKeyboardButton(f"🚫 {_row_name(main, row)}" + (" ✅" if uid in taken else ""), callback_data=f"vote:right:{uid}"))
     kb.add(InlineKeyboardButton("⬅️ تنظیمات رای‌گیری", callback_data="vote:settings"))
     return kb
 
 
-def _round2_kb(main, v):
-    selected = {int(x) for x in (v.get("selected_round_two") or [])}
-    kb = InlineKeyboardMarkup(row_width=1)
-    for row in _players(main):
-        uid = int(row["player_id"])
-        kb.add(InlineKeyboardButton(_row_name(main, row) + (" ✅" if uid in selected else ""), callback_data=f"vote:r2pick:{uid}"))
-    kb.add(InlineKeyboardButton("🚫 گرفتن حق رای", callback_data="vote:rights"), InlineKeyboardButton("✅ تایید و شروع رای دوم", callback_data="vote:r2confirm"), InlineKeyboardButton("⬅️ بازگشت", callback_data="vote:settings"))
-    return kb
-
-
-def _day_end_kb():
-    return InlineKeyboardMarkup(row_width=1).add(
-        InlineKeyboardButton("🗳 رای‌گیری", callback_data="vote:settings"),
-        InlineKeyboardButton("🌌 شروع فاز شب", callback_data="start_night"),
-        InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"),
-    )
-
 def _manual_start_kb():
     return InlineKeyboardMarkup(row_width=1).add(
-        InlineKeyboardButton("▶️ شروع رای‌گیری", callback_data="vote:manual_start"),
+        InlineKeyboardButton("▶️ شروع رای‌گیری", callback_data="vote:manual_start")
     )
 
 
 def _manual_next_kb(last=False):
-    kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast"))
-    kb.add(InlineKeyboardButton(
-        "🏁 اتمام رای‌گیری" if last else "➡️ بعدی",
-        callback_data="vote:manual_end" if last else "vote:manual_next",
-    ))
+    kb = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast"))
+    kb.add(InlineKeyboardButton("🏁 اتمام رای‌گیری" if last else "➡️ بعدی", callback_data="vote:manual_end" if last else "vote:manual_next"))
     return kb
 
 
 def _disabled_vote_kb():
-    return InlineKeyboardMarkup(row_width=1).add(
-        InlineKeyboardButton("✅ ثبت شد", callback_data="vote:noop")
-    )
+    return InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("✅ زمان رأی‌گیری پایان یافت", callback_data="vote:noop"))
 
 
-async def _settings(main, callback):
-    v = _v(main)
-    text = f"🗳 <b>تنظیمات رای‌گیری</b>\n\n⏱ زمان انتظار: {v['wait_seconds']} ثانیه\n⏱ زمان هر رای: {v['vote_seconds']} ثانیه\n🚫 بدون حق رای: {len(v.get('vote_rights_taken', []))} نفر\n🗳 نوع: {'خودکار' if v.get('mode') == AUTO else 'دستی'}"
-    await callback.message.edit_text(text, reply_markup=_settings_kb(v), parse_mode="HTML")
-    await callback.answer()
+def _vote_message_text(main, v, target):
+    game = _game(main)
+    if not game:
+        return "🗳 رأی‌گیری فعال نیست."
+    records = _VOTES.list_target(game["id"], int(v.get("round") or 1), int(target))
+    rows = _row_map(main)
+    target_name = _name(main, target, rows.get(int(target), {}).get("seat"))
+    voters = "• هنوز رایی ثبت نشده"
+    if records:
+        voters = "\n".join(
+            f"• {html.escape(_name(main, int(row['voter_player_id']), rows.get(int(row['voter_player_id']), {}).get('seat')))} — ⏱ {_display_time(row['voted_at'])}"
+            for row in records
+        )
+    timing = "⏱ <b>زمان رأی‌گیری پایان یافت.</b>" if v.get("target_vote_ended") else f"⏱ {int(v.get('vote_seconds', 20))} ثانیه فرصت دارید."
+    return f"🗳 <b>رأی برای {html.escape(target_name)}</b>\n\n👥 تعداد رأی ثبت‌شده: <b>{len(records)}</b>\n🗳 <b>رأی‌دهندگان:</b>\n{voters}\n\n{timing}"
+
+
+async def _edit_vote_message(main, v, target, closed=False):
+    mid = v.get("vote_message_id")
+    if not mid:
+        return
+    last = int(v.get("target_index") or 0) >= len(v.get("targets") or []) - 1
+    markup = _disabled_vote_kb() if closed else (_manual_next_kb(last) if v.get("mode") == MANUAL else InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast")))
+    try:
+        await main.bot.edit_message_text(_vote_message_text(main, v, target), chat_id=_gid(main), message_id=int(mid), parse_mode="HTML", reply_markup=markup)
+    except Exception:
+        logging.exception("VOTE MESSAGE UPDATE FAILED game=%s message=%s", _gid(main), mid)
 
 
 async def _start_target(main):
     v = _v(main)
-    targets = list(v.get("targets") or [])
+    targets = [int(x) for x in (v.get("targets") or [])]
     idx = int(v.get("target_index") or 0)
     if idx >= len(targets):
         return await _finish_round(main)
-    target = int(targets[idx])
-    rows = {int(x["player_id"]): x for x in _players(main)}
-    name = _name(main, target, rows.get(target, {}).get("seat"))
+    target = targets[idx]
     now = time.time()
-    deadline = None if v.get("mode") == MANUAL else now + int(v["vote_seconds"])
-    v["phase"], v["started_at"], v["deadline"] = "voting", now, deadline
-    v.setdefault("votes", {}).setdefault(str(target), [])
-    v["target_vote_ended"] = False
-    _put(main, v)
-    markup = InlineKeyboardMarkup(row_width=1).add(
-        InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast")
-    ) if v.get("mode") == AUTO else _manual_next_kb(idx >= len(targets) - 1)
-    sent = await main.bot.send_message(
-        _gid(main),
-        _vote_message_text(main, v, target),
-        parse_mode="HTML",
-        reply_markup=markup,
+    v.update(
+        phase="voting",
+        started_at=now,
+        deadline=None if v.get("mode") == MANUAL else now + int(v.get("vote_seconds", 20)),
+        target_vote_ended=False,
+        vote_message_id=None,
+        eligible_voters=sorted(_current_voters(main, v)),
     )
+    _put(main, v)
+    markup = _manual_next_kb(idx >= len(targets) - 1) if v.get("mode") == MANUAL else InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast"))
+    sent = await main.bot.send_message(_gid(main), _vote_message_text(main, v, target), parse_mode="HTML", reply_markup=markup)
     v["vote_message_id"] = int(sent.message_id)
     _put(main, v)
-    main._voting_task = None
-
-
-async def _timer(main, deadline, expected):
-    await asyncio.sleep(max(0, float(deadline) - time.time()))
-    v = _v(main)
-    if v.get("phase") == expected and v.get("deadline") == deadline:
-        await (_start_target(main) if expected == "waiting" else _end_target(main))
+    logging.info("VOTE TARGET START game=%s round=%s index=%s target=%s mode=%s deadline=%s", _gid(main), int(v.get("round") or 1), idx, target, v.get("mode"), v.get("deadline"))
 
 
 async def _start_wait(main):
     v = _v(main)
-    v.update(target_index=0, votes={})
+    round_no = int(v.get("round") or 1)
+    v.update(target_index=0, deadline=None, started_at=None, target_vote_ended=False, vote_message_id=None, eligible_voters=sorted(_current_voters(main, v)))
+    game = _game(main)
+    if game:
+        _VOTES.clear_round(game["id"], round_no)
     if v.get("mode") == MANUAL:
-        v.update(phase="manual_ready", started_at=None, deadline=None)
+        v["phase"] = "manual_ready"
         _put(main, v)
-        await main.bot.send_message(
-            _gid(main),
-            "🗳 <b>شروع رای‌گیری</b>\n\nرای‌گیری دستی آماده است. با زدن دکمه زیر توسط گرداننده، رای‌گیری نفر اول شروع می‌شود.",
-            parse_mode="HTML",
-            reply_markup=_manual_start_kb(),
-        )
-        main._voting_task = None
+        await main.bot.send_message(_gid(main), "🗳 <b>شروع رای‌گیری</b>\n\nرای‌گیری دستی آماده است. با زدن دکمه زیر توسط گرداننده، رای‌گیری نفر اول شروع می‌شود.", parse_mode="HTML", reply_markup=_manual_start_kb())
         return
-    deadline = time.time() + int(v["wait_seconds"])
-    v.update(phase="waiting", started_at=time.time(), deadline=deadline)
+    now = time.time()
+    v.update(phase="waiting", started_at=now, deadline=now + int(v.get("wait_seconds", 20)))
     _put(main, v)
     blocked = _active_rights(v)
-    names = [_row_name(main, r) for r in _players(main) if int(r["player_id"]) in blocked]
-    blocked_text = "\n".join(f"• {html.escape(x)}" for x in names) if names else "• هیچ‌کس"
-    await main.bot.send_message(_gid(main), f"🗳 <b>رای‌گیری پس از {int(v['wait_seconds'])} ثانیه شروع می‌شود.</b>\nبرای رای به هر بازیکن {int(v['vote_seconds'])} ثانیه فرصت دارید.\n\n🚫 <b>بازیکنانی که حق رای ندارند:</b>\n{blocked_text}", parse_mode="HTML")
-    main._voting_task = None
-    await asyncio.sleep(max(0, float(deadline) - time.time()))
-    current = _v(main)
-    if current.get("phase") == "waiting" and current.get("deadline") == deadline:
-        await _start_target(main)
+    rows = _row_map(main)
+    blocked_text = "\n".join(f"• {html.escape(_row_name(main, rows[uid]))}" for uid in sorted(blocked) if uid in rows) or "• هیچ‌کس"
+    await main.bot.send_message(_gid(main), f"🗳 <b>رأی‌گیری دور {round_no} پس از {int(v['wait_seconds'])} ثانیه شروع می‌شود.</b>\nبرای هر هدف {int(v['vote_seconds'])} ثانیه فرصت دارید.\n\n🚫 <b>بازیکنانی که حق رای ندارند:</b>\n{blocked_text}", parse_mode="HTML")
+    logging.info("VOTE WAIT START game=%s round=%s deadline=%s", _gid(main), round_no, v["deadline"])
 
 
-async def _end_target(main):
+async def _close_target(main):
     v = _v(main)
-    targets = list(v.get("targets") or [])
+    targets = [int(x) for x in (v.get("targets") or [])]
     idx = int(v.get("target_index") or 0)
     if idx >= len(targets):
         return await _finish_round(main)
-    target = int(targets[idx])
-    message_id = v.get("vote_message_id")
+    target = targets[idx]
     v["target_vote_ended"] = True
     _put(main, v)
-    if message_id:
-        try:
-            await main.bot.edit_message_text(
-                _vote_message_text(main, v, target),
-                chat_id=_gid(main),
-                message_id=int(message_id),
-                parse_mode="HTML",
-                reply_markup=_disabled_vote_kb(),
-            )
-        except Exception:
-            pass
-    v["target_index"], v["started_at"], v["deadline"] = idx + 1, None, None
+    await _edit_vote_message(main, v, target, closed=True)
+    v.update(target_index=idx + 1, started_at=None, deadline=None, vote_message_id=None)
     _put(main, v)
-    await _start_target(main)
+    if idx + 1 < len(targets):
+        await _start_target(main)
+    else:
+        await _finish_round(main)
+
 
 async def _finish_round(main):
     v = _v(main)
-    v["phase"], v["deadline"] = "round_finished", None
+    round_no = int(v.get("round") or 1)
+    v.update(phase="round_finished", deadline=None, vote_message_id=None)
+    if round_no == 1 and _game(main):
+        rules = _rules(main)
+        threshold = _threshold(rules, len(_players(main)))
+        counts = _VOTES.counts(_game(main)["id"], round_no)
+        v.update(
+            defense_threshold=threshold,
+            defense_candidates=[int(x) for x in (v.get("targets") or []) if counts.get(int(x), 0) >= int(threshold or 0)],
+            selected_round_two=[],
+            round2_targets=[],
+        )
     _put(main, v)
-    await main.bot.send_message(_gid(main), f"✅ رای‌گیری دور {int(v.get('round') or 1)} به پایان رسید.", reply_markup=InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🔄 شروع رای دوم", callback_data="vote:round2"), InlineKeyboardButton("🌙 پایان رای‌گیری", callback_data="vote:end")))
+    if round_no == 1:
+        candidates = [int(x) for x in (v.get("defense_candidates") or [])]
+        if candidates:
+            rows = _row_map(main)
+            lines = "\n".join(f"• {html.escape(_name(main, uid, rows.get(uid, {}).get('seat')))}" for uid in candidates)
+            text = f"✅ <b>رأی‌گیری دور ۱ به پایان رسید.</b>\n\nحدنصاب: <b>{int(v.get('defense_threshold') or 0)}</b> رأی\n🛡 <b>واجدین شرایط دفاع:</b>\n{lines}"
+            kb = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🔄 شروع رای دوم", callback_data="vote:round2"), InlineKeyboardButton("🌌 شروع فاز شب", callback_data="start_night"), InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"))
+        else:
+            text = "✅ <b>رأی‌گیری دور ۱ به پایان رسید.</b>\n\n🛡 هیچ بازیکنی به حدنصاب دفاع نرسید."
+            kb = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🌌 شروع فاز شب", callback_data="start_night"), InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"))
+    else:
+        text = "🏁 <b>رأی‌گیری دور ۲ به پایان رسید.</b>\n\nمرحله بعد را انتخاب کنید."
+        kb = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🌌 شروع فاز شب", callback_data="start_night"), InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"))
+    await main.bot.send_message(_gid(main), text, parse_mode="HTML", reply_markup=kb)
 
 
-async def _round2(main, callback):
+async def _round2_message(main, callback=None):
     v = _v(main)
-    await callback.message.edit_text("🔄 <b>بازیکنان رای دوم را انتخاب کنید.</b>\n\nانتخاب هدف‌های دور دوم مستقل از حق رای است. برای گرفتن حق رای از «🚫 گرفتن حق رای» استفاده کنید؛ این فهرست شامل همه بازیکنان حاضر است.", reply_markup=_round2_kb(main, v), parse_mode="HTML")
-    await callback.answer()
+    rules = _rules(main)
+    candidates = [int(x) for x in (v.get("defense_candidates") or [])]
+    if not candidates:
+        text = "🛡 <b>هیچ بازیکنی به حدنصاب دفاع نرسیده است.</b>"
+        kb = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🌌 شروع فاز شب", callback_data="start_night"), InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"))
+    elif _round2_mode(rules) == "automatic":
+        selected = _round2_targets_automatic(rules, candidates, len(_players(main)))
+        v.update(round=2, round2_targets=selected, selected_round_two=selected, phase="round2_settings", eligible_voters=sorted(_round2_voters(main, v, rules)))
+        _put(main, v)
+        return await _round2_settings(main, callback)
+    else:
+        selected = {int(x) for x in (v.get("round2_targets") or v.get("selected_round_two") or [])}
+        kb = InlineKeyboardMarkup(row_width=1)
+        rows = _row_map(main)
+        for uid in candidates:
+            name = await _resolve_name(main, uid, rows.get(uid, {}).get("seat"))
+            kb.add(InlineKeyboardButton(f"{name}" + (" ✅" if uid in selected else ""), callback_data=f"vote:r2pick:{uid}"))
+        kb.add(InlineKeyboardButton("🚫 گرفتن حق رای", callback_data="vote:rights"))
+        kb.add(InlineKeyboardButton("✅ تایید بازیکنان دفاع", callback_data="vote:r2confirm"))
+        kb.add(InlineKeyboardButton("⬅️ بازگشت", callback_data="vote:r2back"))
+        text = "🔄 <b>انتخاب بازیکنان دفاع دور ۲</b>\n\nفقط بازیکنانی که در دور ۱ به حدنصاب رسیده‌اند در این فهرست هستند.\nانتخاب هدف‌های دور ۲ مستقل از حق رأی است."
+    if callback is not None:
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    else:
+        await main.bot.send_message(_gid(main), text, reply_markup=kb, parse_mode="HTML")
+
+
+async def _round2_settings(main, callback=None):
+    v = _v(main)
+    rules = _rules(main)
+    targets = [int(x) for x in (v.get("round2_targets") or v.get("selected_round_two") or [])]
+    voters = _round2_voters(main, v, rules)
+    rows = _row_map(main)
+    target_names = "\n".join(f"• {html.escape(_name(main, uid, rows.get(uid, {}).get('seat')))}" for uid in targets) or "• هیچ‌کس"
+    voter_names = "\n".join(f"• {html.escape(_name(main, uid, rows.get(uid, {}).get('seat')))}" for uid in sorted(voters)) or "• هیچ‌کس"
+    defenders_vote = "دارند" if bool((rules.get("r2") or {}).get("defenders_can_vote", True)) else "ندارند"
+    text = f"⚙️ <b>تنظیمات رأی‌گیری دور ۲</b>\n\n🛡 <b>هدف‌های دور ۲:</b>\n{target_names}\n\n🗳 <b>رأی‌دهندگان دور ۲:</b> {len(voters)} نفر\n{voter_names}\n\n👤 بازیکنان داخل دفاع حق رأی {defenders_vote}.\n⏱ زمان انتظار: {int(v.get('wait_seconds', 20))} ثانیه\n⏱ زمان هر رأی: {int(v.get('vote_seconds', 20))} ثانیه"
+    kb = InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton(f"⏱ زمان انتظار: {int(v.get('wait_seconds', 20))} ثانیه", callback_data="vote:wait"), InlineKeyboardButton(f"⏱ زمان هر رأی: {int(v.get('vote_seconds', 20))} ثانیه", callback_data="vote:duration"), InlineKeyboardButton("▶️ شروع رأی‌گیری دور ۲", callback_data="vote:start"), InlineKeyboardButton("⬅️ بازگشت به انتخاب دفاع", callback_data="vote:round2"))
+    if callback is not None:
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    else:
+        await main.bot.send_message(_gid(main), text, reply_markup=kb, parse_mode="HTML")
+
+
+async def _settings(main, callback):
+    v = _v(main)
+    if int(v.get("round") or 1) == 2 and v.get("phase") == "round2_settings":
+        await _round2_settings(main, callback)
+        return
+    text = f"🗳 <b>تنظیمات رأی‌گیری دور ۱</b>\n\n⏱ زمان انتظار: {int(v.get('wait_seconds', 20))} ثانیه\n⏱ زمان هر رأی: {int(v.get('vote_seconds', 20))} ثانیه\n🚫 بدون حق رأی: {len(v.get('vote_rights_taken', []))} نفر\n🗳 نوع رأی‌گیری: {'خودکار' if v.get('mode') == AUTO else 'دستی'}"
+    await callback.message.edit_text(text, reply_markup=_settings_kb(v), parse_mode="HTML")
+
+
+def _is_mod(main, callback):
+    try:
+        return int(callback.from_user.id) == int(getattr(main, "moderator_id", -1) or -1)
+    except Exception:
+        return False
+
+
+async def _deny(callback):
+    try:
+        await callback.answer("⛔ فقط گرداننده دسترسی دارد.", show_alert=True)
+    except Exception:
+        pass
+    raise CancelHandler()
+
+
+async def _cast(main, callback):
+    v = _v(main)
+    uid = int(callback.from_user.id)
+    if v.get("phase") != "voting":
+        await callback.answer("⏳ زمان رأی‌گیری این هدف تمام شده است.", show_alert=True)
+        raise CancelHandler()
+    deadline = v.get("deadline")
+    if deadline is not None and time.time() >= float(deadline):
+        await _close_target(main)
+        await callback.answer("⏱ زمان رأی‌گیری تمام شد.", show_alert=True)
+        raise CancelHandler()
+    eligible = {int(x) for x in (v.get("eligible_voters") or _current_voters(main, v))}
+    if uid not in eligible:
+        await callback.answer("🚫 شما در این دور حق رأی ندارید.", show_alert=True)
+        raise CancelHandler()
+    targets = [int(x) for x in (v.get("targets") or [])]
+    idx = int(v.get("target_index") or 0)
+    if idx >= len(targets):
+        await callback.answer("⏳ این رأی‌گیری تمام شده است.", show_alert=True)
+        raise CancelHandler()
+    target = targets[idx]
+    if uid == target and not _rules(main).get("self_vote", False):
+        await callback.answer("🚫 نمی‌توانید به خودتان رأی بدهید.", show_alert=True)
+        raise CancelHandler()
+    try:
+        await callback.answer("⏳ رأی شما در حال ثبت است...")
+    except Exception:
+        logging.exception("VOTE CALLBACK ACK FAILED game=%s voter=%s", _gid(main), uid)
+    game = _game(main)
+    if not game:
+        raise CancelHandler()
+    inserted = _VOTES.cast(game["id"], int(v.get("round") or 1), target, uid, _timestamp())
+    if not inserted:
+        logging.info("VOTE DUPLICATE game=%s round=%s target=%s voter=%s", _gid(main), int(v.get("round") or 1), target, uid)
+        return
+    logging.info("VOTE CAST game=%s round=%s target=%s voter=%s mode=%s", _gid(main), int(v.get("round") or 1), target, uid, v.get("mode"))
+    await _edit_vote_message(main, v, target)
+
+
+async def _manual_start(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    v = _v(main)
+    if v.get("mode") != MANUAL or v.get("phase") != "manual_ready":
+        await callback.answer("⛔ رأی‌گیری دستی آماده نیست.", show_alert=True)
+        raise CancelHandler()
+    await callback.answer("▶️ رأی‌گیری نفر اول شروع شد.")
+    await _start_target(main)
+    raise CancelHandler()
+
+
+async def _manual_next(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    v = _v(main)
+    if v.get("mode") != MANUAL or v.get("phase") != "voting":
+        await callback.answer("⛔ رأی‌گیری دستی فعال نیست.", show_alert=True)
+        raise CancelHandler()
+    await callback.answer("➡️ نفر بعدی")
+    await _close_target(main)
+    raise CancelHandler()
+
+
+async def _manual_end(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    v = _v(main)
+    if v.get("mode") != MANUAL or v.get("phase") != "voting":
+        await callback.answer("⛔ رأی‌گیری دستی فعال نیست.", show_alert=True)
+        raise CancelHandler()
+    await callback.answer("🏁 رأی‌گیری این دور به پایان رسید.")
+    v["target_index"] = len(list(v.get("targets") or []))
+    v["deadline"] = None
+    v["target_vote_ended"] = True
+    _put(main, v)
+    await _finish_round(main)
+    raise CancelHandler()
+
+
+async def _round2_pick(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    uid = int(str(callback.data).split(":")[-1])
+    v = _v(main)
+    allowed = {int(x) for x in (v.get("defense_candidates") or [])}
+    if uid not in allowed:
+        await callback.answer("⛔ این بازیکن به حدنصاب دفاع نرسیده است.", show_alert=True)
+        raise CancelHandler()
+    selected = {int(x) for x in (v.get("round2_targets") or v.get("selected_round_two") or [])}
+    if uid in selected:
+        selected.remove(uid)
+    else:
+        selected.add(uid)
+    v["round2_targets"] = sorted(selected)
+    v["selected_round_two"] = sorted(selected)
+    _put(main, v)
+    await _round2_message(main, callback)
+    await callback.answer("")
+
+
+async def _round2_confirm(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    v = _v(main)
+    rules = _rules(main)
+    selected = [int(x) for x in (v.get("round2_targets") or v.get("selected_round_two") or [])]
+    if not selected:
+        await callback.answer("حداقل یک بازیکن را برای دفاع انتخاب کنید.", show_alert=True)
+        raise CancelHandler()
+    max_count = (rules.get("r2") or {}).get("max_targets")
+    if max_count is not None:
+        try:
+            if len(selected) > int(max_count):
+                await callback.answer(f"حداکثر {int(max_count)} بازیکن قابل انتخاب است.", show_alert=True)
+                raise CancelHandler()
+        except ValueError:
+            pass
+    v.update(round=2, round2_targets=selected, selected_round_two=selected, target_index=0, phase="round2_settings", deadline=None, vote_message_id=None, eligible_voters=sorted(_round2_voters(main, v, rules)))
+    _put(main, v)
+    game = _game(main)
+    if game:
+        _VOTES.clear_round(game["id"], 2)
+    await callback.answer("🔄 رای دوم آماده شد.")
+    await _round2_settings(main, callback)
+    raise CancelHandler()
+
+
+async def _start(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    v = _v(main)
+    if v.get("phase") in {"waiting", "voting"}:
+        await callback.answer("⏳ رای‌گیری در حال اجراست.", show_alert=True)
+        raise CancelHandler()
+    round_no = int(v.get("round") or 1)
+    if round_no == 2 and not (v.get("round2_targets") or v.get("selected_round_two")):
+        await callback.answer("⛔ ابتدا بازیکنان دفاع دور ۲ را انتخاب کنید.", show_alert=True)
+        raise CancelHandler()
+    v.update(
+        target_index=0,
+        phase="settings",
+        deadline=None,
+        vote_message_id=None,
+        targets=([int(x["player_id"]) for x in _players(main)] if round_no == 1 else [int(x) for x in (v.get("round2_targets") or v.get("selected_round_two") or [])]),
+        eligible_voters=sorted(_current_voters(main, v)),
+    )
+    _put(main, v)
+    game = _game(main)
+    if game:
+        _VOTES.clear_round(game["id"], round_no)
+    rt, gid = _rt(main), _gid(main)
+    if rt and gid:
+        try:
+            rt.days.set_phase(gid, "voting", extra={"voting": dict(v)})
+        except Exception:
+            logging.exception("VOTE set_phase failed")
+    await callback.answer("🗳 رای‌گیری آماده شد.")
+    await _start_wait(main)
+    raise CancelHandler()
+
+
+async def _set_menu(main, callback, title, prefix, values, current):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    await callback.message.edit_text(title, reply_markup=_choices(prefix, values, current), parse_mode="HTML")
+    await callback.answer("")
+
+
+async def _set_value(main, callback, field, allowed):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    raw = str(callback.data).split(":")[-1]
+    value = raw if field == "mode" else int(raw)
+    if value not in allowed:
+        await callback.answer("⛔ گزینه نامعتبر است.", show_alert=True)
+        raise CancelHandler()
+    v = _v(main)
+    v[field] = value
+    _put(main, v)
+    await _settings(main, callback)
+    await callback.answer("")
+
+
+async def _settings_handler(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    await _settings(main, callback)
+    await callback.answer("")
+
+
+async def _round2_handler(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    await _round2_message(main, callback)
+    await callback.answer("")
+
+
+async def _rights_handler(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    await callback.message.edit_text("🚫 <b>بازیکنان بدون حق رای</b>", reply_markup=_rights_kb(main, _v(main)), parse_mode="HTML")
+    await callback.answer("")
+
+
+async def _right_toggle(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    uid = int(str(callback.data).split(":")[-1])
+    v = _v(main)
+    rights = _active_rights(v)
+    rights.remove(uid) if uid in rights else rights.add(uid)
+    v["vote_rights_taken"] = sorted(rights)
+    _put(main, v)
+    await _rights_handler(main, callback)
+
+
+async def _mode_handler(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    await callback.message.edit_text("🗳 <b>نوع رای‌گیری</b>", reply_markup=_choices("mode", (AUTO, MANUAL), _v(main).get("mode")), parse_mode="HTML")
+    await callback.answer("")
+
+
+async def _end(main, callback):
+    if not _is_mod(main, callback):
+        return await _deny(callback)
+    v = _v(main)
+    v.update(phase="finished", deadline=None, vote_message_id=None)
+    _put(main, v)
+    await callback.message.edit_text("🏁 <b>رأی‌گیری به پایان رسید.</b>", parse_mode="HTML")
+    await callback.answer("")
+
+
+async def _noop(callback):
+    await callback.answer("این پیام مربوط به مرحله قبلی رأی‌گیری است.")
+
+
+async def handle_callback(main, callback):
+    data = str(getattr(callback, "data", "") or "")
+    if not data.startswith("vote:"):
+        return False
+    try:
+        if data == "vote:settings":
+            await _settings_handler(main, callback)
+        elif data == "vote:wait":
+            await _set_menu(main, callback, "⏱ <b>زمان انتظار را انتخاب کنید.</b>", "wait", WAIT_OPTIONS, int(_v(main).get("wait_seconds", 20)))
+        elif data.startswith("vote:wait:"):
+            await _set_value(main, callback, "wait_seconds", WAIT_OPTIONS)
+        elif data == "vote:duration":
+            await _set_menu(main, callback, "⏱ <b>زمان هر رای را انتخاب کنید.</b>", "duration", VOTE_OPTIONS, int(_v(main).get("vote_seconds", 20)))
+        elif data.startswith("vote:duration:"):
+            await _set_value(main, callback, "vote_seconds", VOTE_OPTIONS)
+        elif data == "vote:rights":
+            await _rights_handler(main, callback)
+        elif data.startswith("vote:right:"):
+            await _right_toggle(main, callback)
+        elif data == "vote:mode":
+            await _mode_handler(main, callback)
+        elif data.startswith("vote:mode:"):
+            await _set_value(main, callback, "mode", (AUTO, MANUAL))
+        elif data == "vote:start":
+            await _start(main, callback)
+        elif data == "vote:manual_start":
+            await _manual_start(main, callback)
+        elif data == "vote:manual_next":
+            await _manual_next(main, callback)
+        elif data == "vote:manual_end":
+            await _manual_end(main, callback)
+        elif data in {"vote:cast", "vote:autocast"}:
+            await _cast(main, callback)
+        elif data == "vote:noop":
+            await _noop(callback)
+        elif data == "vote:round2":
+            await _round2_handler(main, callback)
+        elif data.startswith("vote:r2pick:"):
+            await _round2_pick(main, callback)
+        elif data in {"vote:r2confirm", "vote:r2confirm_v2"}:
+            await _round2_confirm(main, callback)
+        elif data in {"vote:r2back", "vote:settings_round2"}:
+            await _round2_handler(main, callback)
+        elif data == "vote:end":
+            await _end(main, callback)
+        else:
+            return False
+    except CancelHandler:
+        pass
+    except Exception:
+        logging.exception("VOTE CALLBACK FAILED data=%s game=%s", data, _gid(main))
+        try:
+            await callback.answer("❌ خطا در پردازش رأی‌گیری.", show_alert=True)
+        except Exception:
+            pass
+    return True
+
+
+async def tick(main):
+    v = _v(main)
+    if v.get("mode") != AUTO:
+        return False
+    changed = False
+    for _ in range(32):
+        v = _v(main)
+        phase, deadline = v.get("phase"), v.get("deadline")
+        if phase not in {"waiting", "voting"} or deadline is None or time.time() < float(deadline):
+            break
+        if phase == "waiting":
+            await _start_target(main)
+        else:
+            await _close_target(main)
+        changed = True
+    return changed
 
 
 def install(main):
@@ -378,264 +830,18 @@ def install(main):
     dp = getattr(main, "dp", None)
     if dp is None:
         return False
-
-    async def only_mod(c):
-        if int(c.from_user.id) != int(getattr(main, "moderator_id", -1) or -1):
-            await c.answer("⛔ فقط گرداننده دسترسی دارد.", show_alert=True)
-            raise CancelHandler()
-
-    async def settings(c):
-        await only_mod(c)
-        await _settings(main, c)
-
-    async def wait_menu(c):
-        await only_mod(c)
-        v = _v(main)
-        await c.message.edit_text("⏱ <b>زمان انتظار را انتخاب کنید.</b>", reply_markup=_choices("wait", WAIT_OPTIONS, v["wait_seconds"]), parse_mode="HTML")
-        await c.answer()
-
-    async def wait_set(c):
-        await only_mod(c)
-        v = _v(main)
-        v["wait_seconds"] = int(c.data.split(":")[-1])
-        _put(main, v)
-        await _settings(main, c)
-
-    async def duration_menu(c):
-        await only_mod(c)
-        v = _v(main)
-        await c.message.edit_text("⏱ <b>زمان هر رای را انتخاب کنید.</b>", reply_markup=_choices("duration", VOTE_OPTIONS, v["vote_seconds"]), parse_mode="HTML")
-        await c.answer()
-
-    async def duration_set(c):
-        await only_mod(c)
-        v = _v(main)
-        v["vote_seconds"] = int(c.data.split(":")[-1])
-        _put(main, v)
-        await _settings(main, c)
-
-    async def rights(c):
-        await only_mod(c)
-        v = _v(main)
-        await c.message.edit_text("🚫 <b>بازیکنان بدون حق رای</b>", reply_markup=_rights_kb(main, v), parse_mode="HTML")
-        await c.answer()
-
-    async def right_toggle(c):
-        await only_mod(c)
-        uid = int(c.data.split(":")[-1])
-        v = _v(main)
-        rights_set = _active_rights(v)
-        if uid in rights_set:
-            rights_set.remove(uid)
-        else:
-            rights_set.add(uid)
-        v["vote_rights_taken"] = sorted(rights_set)
-        _put(main, v)
-        await rights(c)
-
-    async def mode_menu(c):
-        await only_mod(c)
-        v = _v(main)
-        await c.message.edit_text("🗳 <b>نوع رای‌گیری</b>", reply_markup=_choices("mode", (AUTO, MANUAL), v.get("mode")), parse_mode="HTML")
-        await c.answer()
-
-    async def mode_set(c):
-        await only_mod(c)
-        v = _v(main)
-        v["mode"] = c.data.split(":")[-1]
-        _put(main, v)
-        await _settings(main, c)
-
-    async def start(c):
-        await only_mod(c)
-        v = _v(main)
-        if v.get("phase") in {"waiting", "voting"}:
-            await c.answer("⏳ رای‌گیری در حال اجراست.", show_alert=True)
-            raise CancelHandler()
-        fresh = _default(main)
-        fresh.update(wait_seconds=int(v.get("wait_seconds", 20)), vote_seconds=int(v.get("vote_seconds", 20)), mode=v.get("mode", AUTO), vote_rights_taken=list(v.get("vote_rights_taken") or []), selected_round_two=list(v.get("selected_round_two") or []))
-        v = fresh
-        payload = _state(main)
-        payload["voting"] = v
-        _save(main, payload)
-        rt = _rt(main)
-        gid = _gid(main)
-        if rt and gid:
-            rt.days.set_phase(gid, "voting", extra={"voting": fresh})
-        await c.answer("🗳 رای‌گیری آماده شد.")
-        await _start_wait(main)
+    async def router(callback):
+        await handle_callback(main, callback)
         raise CancelHandler()
-
-    async def manual_start(c):
-        await only_mod(c)
-        v = _v(main)
-        if v.get("mode") != MANUAL or v.get("phase") != "manual_ready":
-            await c.answer("⛔ رای‌گیری دستی آماده نیست.", show_alert=True)
-            raise CancelHandler()
-        await c.answer("▶️ رای‌گیری نفر اول شروع شد.")
-        await _start_target(main)
-        raise CancelHandler()
-
-    async def manual_next(c):
-        await only_mod(c)
-        v = _v(main)
-        if v.get("mode") != MANUAL or v.get("phase") != "voting":
-            await c.answer("⛔ رای‌گیری دستی فعال نیست.", show_alert=True)
-            raise CancelHandler()
-        idx = int(v.get("target_index") or 0)
-        targets = list(v.get("targets") or [])
-        message_id = v.get("vote_message_id")
-        if message_id:
+    dp.register_callback_query_handler(router, lambda c: str(c.data or "").startswith("vote:"), state="*")
+    registry = getattr(getattr(dp, "callback_query_handlers", None), "handlers", None)
+    if registry is not None:
+        ours = [x for x in list(registry) if getattr(getattr(x, "handler", None), "__module__", "") == __name__]
+        for item in reversed(ours):
             try:
-                await main.bot.edit_message_reply_markup(
-                    chat_id=_gid(main),
-                    message_id=int(message_id),
-                    reply_markup=_disabled_vote_kb(),
-                )
-            except Exception:
+                registry.remove(item)
+            except ValueError:
                 pass
-        v["target_index"] = idx + 1
-        v["started_at"], v["deadline"] = None, None
-        _put(main, v)
-        await c.answer("➡️ نفر بعدی")
-        await _start_target(main)
-        raise CancelHandler()
-
-    async def manual_end(c):
-        await only_mod(c)
-        v = _v(main)
-        if v.get("mode") != MANUAL or v.get("phase") != "voting":
-            await c.answer("⛔ رای‌گیری دستی فعال نیست.", show_alert=True)
-            raise CancelHandler()
-        message_id = v.get("vote_message_id")
-        if message_id:
-            try:
-                await main.bot.edit_message_reply_markup(
-                    chat_id=_gid(main),
-                    message_id=int(message_id),
-                    reply_markup=_disabled_vote_kb(),
-                )
-            except Exception:
-                pass
-        v["target_index"] = len(list(v.get("targets") or []))
-        v["started_at"], v["deadline"] = None, None
-        _put(main, v)
-        await c.answer("🏁 رای‌گیری این دور به پایان رسید.")
-        await _finish_round(main)
-        raise CancelHandler()
-
-    async def noop(c):
-        await c.answer("این پیام مربوط به مرحله قبلی رای‌گیری است.")
-
-    async def cast(c):
-        v = _v(main)
-        if v.get("phase") != "voting":
-            await c.answer("⏳ زمان رای‌گیری این هدف تمام شده است.", show_alert=True)
-            raise CancelHandler()
-        uid = int(c.from_user.id)
-        if uid in _active_rights(v):
-            await c.answer("🚫 حق رای شما گرفته شده است.", show_alert=True)
-            raise CancelHandler()
-        target = int(list(v.get("targets") or [])[int(v.get("target_index") or 0)])
-        bucket = list((v.setdefault("votes", {})).setdefault(str(target), []))
-        existing = _vote_records(v, target)
-        if uid in {int(x["user_id"]) for x in existing}:
-            await c.answer("⚠️ رای شما قبلاً ثبت شده است.", show_alert=True)
-            raise CancelHandler()
-        bucket.append({"user_id": uid, "voted_at": _vote_timestamp()})
-        v["votes"][str(target)] = bucket
-        _put(main, v)
-        message_id = v.get("vote_message_id")
-        if message_id:
-            try:
-                await main.bot.edit_message_text(
-                    _vote_message_text(main, v, target),
-                    chat_id=_gid(main),
-                    message_id=int(message_id),
-                    parse_mode="HTML",
-                    reply_markup=InlineKeyboardMarkup(row_width=1).add(
-                        InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast")
-                    ) if v.get("mode") == AUTO else None,
-                )
-            except Exception:
-                pass
-        await c.answer("✅ رای شما ثبت شد.")
-
-    async def r2(c):
-        await only_mod(c)
-        await _round2(main, c)
-
-    async def r2pick(c):
-        await only_mod(c)
-        uid = int(c.data.split(":")[-1])
-        v = _v(main)
-        selected = {int(x) for x in (v.get("selected_round_two") or [])}
-        if uid in selected:
-            selected.remove(uid)
-        else:
-            selected.add(uid)
-        v["selected_round_two"] = sorted(selected)
-        _put(main, v)
-        await _round2(main, c)
-
-    async def r2confirm(c):
-        await only_mod(c)
-        v = _v(main)
-        selected = [int(x) for x in (v.get("selected_round_two") or [])]
-        if not selected:
-            await c.answer("حداقل یک بازیکن را انتخاب کنید.", show_alert=True)
-            raise CancelHandler()
-        v["round"] = 2
-        v["targets"] = selected
-        v["target_index"] = 0
-        v["votes"] = {}
-        v["phase"] = "waiting"
-        v["deadline"] = None
-        _put(main, v)
-        await c.answer("🔄 رای دوم آماده شد.")
-        await _start_wait(main)
-        raise CancelHandler()
-
-    async def end(c):
-        await only_mod(c)
-        v = _v(main)
-        v["phase"], v["deadline"] = "finished", None
-        _put(main, v)
-        await c.message.edit_text("🏁 <b>رای‌گیری به پایان رسید.</b>", parse_mode="HTML")
-        await c.answer()
-
-    async def night(c):
-        await only_mod(c)
-        rt = _rt(main)
-        gid = _gid(main)
-        if rt and gid:
-            rt.days.start_night(gid)
-        await c.answer("🌌 فاز شب شروع شد.")
-        raise CancelHandler()
-
-    handlers = [
-        (lambda c: c.data == "vote:settings", settings),
-        (lambda c: c.data == "vote:wait", wait_menu),
-        (lambda c: c.data.startswith("vote:wait:"), wait_set),
-        (lambda c: c.data == "vote:duration", duration_menu),
-        (lambda c: c.data.startswith("vote:duration:"), duration_set),
-        (lambda c: c.data == "vote:rights", rights),
-        (lambda c: c.data.startswith("vote:right:"), right_toggle),
-        (lambda c: c.data == "vote:mode", mode_menu),
-        (lambda c: c.data.startswith("vote:mode:"), mode_set),
-        (lambda c: c.data == "vote:start", start),
-        (lambda c: c.data == "vote:manual_start", manual_start),
-        (lambda c: c.data == "vote:manual_next", manual_next),
-        (lambda c: c.data == "vote:manual_end", manual_end),
-        (lambda c: c.data == "vote:noop", noop),
-        (lambda c: c.data == "vote:cast", cast),
-        (lambda c: c.data == "vote:round2", r2),
-        (lambda c: c.data.startswith("vote:r2pick:"), r2pick),
-        (lambda c: c.data == "vote:r2confirm", r2confirm),
-        (lambda c: c.data == "vote:end", end),
-        (lambda c: c.data == "start_night", night),
-    ]
-    for predicate, handler in handlers:
-        dp.register_callback_query_handler(handler, predicate, state="*")
+            registry.insert(0, item)
     main._voting_runtime_installed = True
     return True
