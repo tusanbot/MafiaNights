@@ -178,7 +178,7 @@ async def _durable_start_wait(main):
     voting_runtime._put(main, v)
     rows = _row_map(main)
     names = [await _resolve_name(main, uid, rows.get(uid, {}).get("seat")) for uid in sorted(voters)]
-    blocked = _active_rights(v)
+    blocked = voting_runtime._active_rights(v)
     blocked_names = [await _resolve_name(main, uid, rows.get(uid, {}).get("seat")) for uid in sorted(blocked)]
     blocked_text = "\n".join(f"• {html.escape(x)}" for x in blocked_names) if blocked_names else "• هیچ‌کس"
     await main.bot.send_message(
