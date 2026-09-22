@@ -137,8 +137,18 @@ async def _send_round2_settings(main, callback=None):
     voters = _round2_voters(main, v, rules)
     targets = [int(x) for x in (v.get("round2_targets") or v.get("selected_round_two") or [])]
     rows = _row_map(main)
-    target_text = "\n".join(f"• {html.escape(await _resolve_name(main, uid, rows.get(uid, {}).get('seat')))}" for uid in targets) or "• هیچ‌کس"
-    voter_text = "\n".join(f"• {html.escape(await _resolve_name(main, uid, rows.get(uid, {}).get('seat')))}" for uid in sorted(voters)) or "• هیچ‌کس"
+    target_names = []
+    for uid in targets:
+        target_names.append(
+            f"• {html.escape(await _resolve_name(main, uid, rows.get(uid, {}).get('seat')))}"
+        )
+    voter_names = []
+    for uid in sorted(voters):
+        voter_names.append(
+            f"• {html.escape(await _resolve_name(main, uid, rows.get(uid, {}).get('seat')))}"
+        )
+    target_text = "\n".join(target_names) or "• هیچ‌کس"
+    voter_text = "\n".join(voter_names) or "• هیچ‌کس"
     defender_vote = "دارند" if bool((rules.get("r2") or {}).get("defenders_can_vote", True)) else "ندارند"
     text = (
         "⚙️ <b>تنظیمات رأی‌گیری دور ۲</b>\n\n"
@@ -230,7 +240,7 @@ async def _start_target(main):
     v["eligible_voters"] = sorted(_current_voters(main, v))
     voting_runtime._put(main, v)
     markup = (
-        InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رأی می‌دهم", callback_data="vote:cast"))
+        InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رأی می‌دهم", callback_data="vote:auto_cast_v2"))
         if v.get("mode") == voting_runtime.AUTO
         else voting_runtime._manual_next_kb(idx >= len(targets) - 1)
     )
@@ -648,6 +658,11 @@ def install(main):
     async def cast(c):
         await _cast(main, c)
 
+    async def auto_cast(c):
+        # Dedicated automatic-vote callback. Keep automatic voting isolated
+        # from the legacy/manual vote callback routers.
+        await _cast(main, c)
+
     async def r2(c):
         await only_mod(c); await _round2(main, c)
 
@@ -676,6 +691,7 @@ def install(main):
         (lambda c: c.data == "vote:manual_next", lambda c: _manual_next(main, c)),
         (lambda c: c.data == "vote:manual_end", lambda c: _manual_end(main, c)),
         (lambda c: c.data == "vote:noop", _vote_noop),
+        (lambda c: c.data == "vote:auto_cast_v2", auto_cast),
         (lambda c: c.data in {"vote:cast", "vote:autocast"}, cast),
         (lambda c: c.data == "vote:round2", r2),
         (lambda c: c.data.startswith("vote:r2pick:"), r2pick),
