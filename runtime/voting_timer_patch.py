@@ -240,7 +240,7 @@ async def _start_target(main):
     v["eligible_voters"] = sorted(_current_voters(main, v))
     voting_runtime._put(main, v)
     markup = (
-        InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رأی می‌دهم", callback_data="vote:auto_cast_v2"))
+        InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رأی می‌دهم", callback_data="vote:cast"))
         if v.get("mode") == voting_runtime.AUTO
         else voting_runtime._manual_next_kb(idx >= len(targets) - 1)
     )
@@ -685,11 +685,6 @@ def install(main):
     async def cast(c):
         await _cast(main, c)
 
-    async def auto_cast(c):
-        # Dedicated automatic-vote callback. Keep automatic voting isolated
-        # from the legacy/manual vote callback routers.
-        await _cast(main, c)
-
     async def r2(c):
         await only_mod(c); await _round2(main, c)
 
@@ -718,7 +713,6 @@ def install(main):
         (lambda c: c.data == "vote:manual_next", lambda c: _manual_next(main, c)),
         (lambda c: c.data == "vote:manual_end", lambda c: _manual_end(main, c)),
         (lambda c: c.data == "vote:noop", _vote_noop),
-        (lambda c: c.data == "vote:auto_cast_v2", auto_cast),
         (lambda c: c.data in {"vote:cast", "vote:autocast"}, cast),
         (lambda c: c.data == "vote:round2", r2),
         (lambda c: c.data.startswith("vote:r2pick:"), r2pick),
