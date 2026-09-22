@@ -186,7 +186,12 @@ async def _durable_start_wait(main):
         f"🗳 <b>رأی‌گیری دور {int(v.get('round') or 1)} پس از {int(v['wait_seconds'])} ثانیه شروع می‌شود.</b>\nبرای هر هدف {int(v['vote_seconds'])} ثانیه فرصت دارید.\n\n👥 <b>افراد دارای حق رأی:</b> {len(names)} نفر\n🚫 <b>حق رأی گرفته‌شده:</b>\n{blocked_text}",
         parse_mode="HTML",
     )
-    main._voting_task = asyncio.create_task(voting_runtime._timer(main, float(v["deadline"]), "waiting"))
+    # Vercel webhooks are ephemeral; keep this invocation alive through the configured wait.
+    await asyncio.sleep(max(0, float(v["deadline"]) - time.time()))
+    current = voting_runtime._v(main)
+    if current.get("phase") == "waiting" and current.get("deadline") == v["deadline"]:
+        await _start_target(main)
+    main._voting_task = None
 
 
 async def _start_target(main):
@@ -299,9 +304,10 @@ async def _cast(main, callback):
                 reply_markup=(
                     voting_runtime._manual_next_kb(idx >= len(targets) - 1)
                     if v.get("mode") == voting_runtime.MANUAL
-                    else InlineKeyboardMarkup(row_width=1).add(InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast"))
-                )
-            )
+                    else InlineKeyboardMarkup(row_width=1).add(
+                        InlineKeyboardButton("🗳 رای می‌دهم", callback_data="vote:cast")
+                    )
+                )            )
         except Exception: pass
     await callback.answer("✅ رأی شما ثبت شد.")
 
