@@ -253,6 +253,21 @@ async def _dispatch(payload: dict[str, Any]) -> None:
             )
             await callback.answer("🔐 ابتدا ثبت‌نام کنید.", show_alert=True)
             return
+    # Voting has its own canonical callback router. Route it before the
+    # aiogram dispatcher so generic callback handlers cannot consume a vote,
+    # and so the voting callback path stays independent of unrelated startup
+    # handlers.
+    if callback is not None and str(getattr(callback, "data", "") or "").startswith("vote:"):
+        from runtime import voting_runtime
+        handled = await voting_runtime.handle_callback(runtime_entry.main, callback)
+        if handled:
+            logging.info(
+                "WEBHOOK CANONICAL VOTE CALLBACK ROUTE user_id=%s data=%s",
+                getattr(getattr(callback, "from_user", None), "id", None),
+                getattr(callback, "data", None),
+            )
+            return
+
     if callback is not None and str(getattr(callback, "data", "") or "") in {"fl_new", "new_game"}:
         handler = getattr(runtime_entry.main, "_canonical_new_game_handler", None)
         if handler is not None:
