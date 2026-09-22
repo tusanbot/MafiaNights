@@ -1149,9 +1149,24 @@ async def _players_list_text(message: types.Message, app: Any) -> None:
         return
     rows = app.runtime.state.games.list_players(game["id"])
     rows = [r for r in rows if str(r.get("status") or "active") not in {"removed","dead","finished","kicked"}]
+    challenge_markers = set()
+    try:
+        settings = dict((game.get("state") or {}).get("challenge_settings") or {})
+        if bool(settings.get("show_player_status", True)):
+            from repositories.challenge_repository import ChallengeRepository
+            for challenge in ChallengeRepository().list_challenges(game["id"]):
+                status = str(challenge.get("status") or "").lower()
+                if status in {"pending", "active", "executed"}:
+                    target_id = challenge.get("target_id") or challenge.get("target_user_id")
+                    if target_id is not None:
+                        challenge_markers.add(int(target_id))
+    except Exception:
+        logging.exception("players list: failed to load challenge status")
     lines=["👥 <b>لیست بازیکنان</b>",""]
     for r in sorted(rows, key=lambda x:int(x.get("seat") or 999)):
         name = str(r.get("nickname") or r.get("first_name") or r.get("username") or r.get("player_id") or "بازیکن")
+        if int(r.get("player_id") or 0) in challenge_markers:
+            name = "🤏🏻 " + name
         seat = f"{int(r['seat']):02d}" if r.get("seat") is not None else "—"
         lines.append(f"{seat}. <a href='tg://user?id={int(r['player_id'])}'>{html.escape(name)}</a>")
     await message.reply("\n".join(lines), parse_mode="HTML")
