@@ -159,6 +159,30 @@ def install(app: Any) -> bool:
         moderator_row = next((r for r in rows if int(r.get("player_id") or 0) == moderator_id), None)
         moderator_label = name(moderator_row) if moderator_row else (str(moderator_id) if moderator_id else "❓")
 
+        # "نمایش وضعیت چالش" is a persisted game setting. Mark players who
+        # currently have a live challenge request/turn directly beside their
+        # name in the canonical player list.
+        challenge_status_by_target: dict[int, str] = {}
+        try:
+            settings = dict((game.get("state") or {}).get("challenge_settings") or {})
+            if bool(settings.get("show_player_status", True)):
+                from repositories.challenge_repository import ChallengeRepository
+                for challenge in ChallengeRepository().list_challenges(game["id"]):
+                    status = str(challenge.get("status") or "").lower()
+                    if status in {"pending", "active", "executed"}:
+                        target_id = challenge.get("target_id") or challenge.get("target_user_id")
+                        if target_id is not None:
+                            challenge_status_by_target[int(target_id)] = "🤏🏻"
+        except Exception:
+            logging.exception("lobby: failed to load challenge status markers")
+
+        def display_player_name(row: dict[str, Any] | None) -> str:
+            if not row:
+                return "❓"
+            label = name(row)
+            marker = challenge_status_by_target.get(int(row.get("player_id") or 0), "")
+            return f"{marker} {label}" if marker else label
+
         lines = [
             "༄ <b>لیست بازی Mafia Nights</b>",
             "",
@@ -175,7 +199,7 @@ def install(app: Any) -> bool:
         for seat_no in range(1, cap + 1):
             row = occupied.get(seat_no)
             if row:
-                lines.append(f"{seat_no:02d}. {mention(int(row['player_id']), name(row))}")
+                lines.append(f"{seat_no:02d}. {mention(int(row['player_id']), display_player_name(row))}")
             else:
                 lines.append(f"{seat_no:02d}. ⬜ آزاد")
         if waiting:
@@ -190,7 +214,7 @@ def install(app: Any) -> bool:
         # change their seat; an occupied seat is rejected for other users.
         for seat_no in range(1, cap + 1):
             row = occupied.get(seat_no)
-            label = f"{seat_no:02d} {name(row)[:10]}" if row else f"{seat_no:02d} ⬜"
+            label = f"{seat_no:02d} {display_player_name(row)[:10]}" if row else f"{seat_no:02d} ⬜"
             kb.insert(InlineKeyboardButton(label, callback_data=f"lobby:{int(game['id'])}:seat:{seat_no}"))
         kb.row(
             InlineKeyboardButton("✅ ورود", callback_data=f"lobby:{int(game['id'])}:join"),
