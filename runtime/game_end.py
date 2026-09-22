@@ -576,6 +576,18 @@ def install(app: Any) -> bool:
                 except Exception:
                     logging.exception("final game scoring failed game=%s", game_id)
             _stop_and_finalize_players(app, final_game, rows)
+            try:
+                from runtime.end_game_control import _clear_runtime_flags
+                _clear_runtime_flags(app)
+            except Exception:
+                logging.exception("failed to clear runtime flags after finalization game=%s", game_id)
+            try:
+                app.runtime.state.games._invalidate(
+                    group_chat_id=int(game.get("group_chat_id") or callback.message.chat.id),
+                    game_id=game_id,
+                )
+            except Exception:
+                logging.exception("failed to invalidate game caches after finalization game=%s", game_id)
             final_game = {**game, "state": state, "status": "finished", "finished_at": now}
             text = _final_text(final_game, rows)
             try:
