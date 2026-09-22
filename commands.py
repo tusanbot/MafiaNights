@@ -1419,6 +1419,41 @@ def register_commands(app: Any) -> bool:
             app.runtime.state.games.clear_game_players(game["id"])
         except Exception:
             logging.exception("cancel_text_confirm: failed to clear cancelled game players")
+
+        # A cancelled game is terminal. Clear all in-memory gameplay state as
+        # well, otherwise the next webhook can still believe the old game is
+        # running even though the DB row is cancelled.
+        for attr, value in (
+            ("player_slots", {}),
+            ("players", {}),
+            ("turn_order", []),
+            ("current_turn_index", 0),
+            ("game_running", False),
+            ("round_active", False),
+            ("challenge_mode", False),
+            ("pending_challenges", {}),
+            ("active_challenger_seats", set()),
+            ("_stable_extra_seats", set()),
+            ("_stable_extra_used", set()),
+            ("_stable_challenge_used", set()),
+            ("_stable_challenge_locked", set()),
+            ("_stable_day_active", False),
+            ("_stable_day_ended", False),
+        ):
+            try:
+                setattr(app, attr, value.copy() if isinstance(value, (dict, set, list)) else value)
+            except Exception:
+                pass
+        try:
+            app.reset_round_data()
+        except Exception:
+            pass
+        try:
+            app.runtime.state.games._active_cache.clear()
+            app.runtime.state.games._players_cache.clear()
+        except Exception:
+            pass
+
         await callback.message.edit_text(
             "🚫 <b>بازی لغو شد.</b>\n\nاین بازی در تاریخچه بازی‌های انجام‌شده ثبت نمی‌شود و امتیاز و سابقه بازیکنان تغییر نمی‌کند.",
             parse_mode="HTML",
