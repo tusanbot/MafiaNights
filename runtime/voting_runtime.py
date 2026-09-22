@@ -318,32 +318,23 @@ async def _end_target(main):
     if idx >= len(targets):
         return await _finish_round(main)
     target = int(targets[idx])
-    records = _vote_records(v, target)
-    voted = {int(x["user_id"]) for x in records}
-    rows = {int(x["player_id"]): x for x in _players(main)}
-    target_name = _name(main, target, rows.get(target, {}).get("seat"))
-    voter_text = _voter_lines(main, v, target)
     message_id = v.get("vote_message_id")
+    v["target_vote_ended"] = True
+    _put(main, v)
     if message_id:
         try:
-            await main.bot.edit_message_reply_markup(
+            await main.bot.edit_message_text(
+                _vote_message_text(main, v, target),
                 chat_id=_gid(main),
                 message_id=int(message_id),
+                parse_mode="HTML",
                 reply_markup=_disabled_vote_kb(),
             )
         except Exception:
             pass
-    await main.bot.send_message(
-        _gid(main),
-        f"📊 <b>نتیجه رای‌گیری برای {html.escape(target_name)}</b>\n\n"
-        f"🗳 تعداد رای: <b>{len(voted)}</b>\n"
-        f"👥 <b>رای‌دهندگان:</b>\n{voter_text}",
-        parse_mode="HTML",
-    )
     v["target_index"], v["started_at"], v["deadline"] = idx + 1, None, None
     _put(main, v)
     await _start_target(main)
-
 
 async def _finish_round(main):
     v = _v(main)
