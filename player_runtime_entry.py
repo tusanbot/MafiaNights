@@ -153,8 +153,6 @@ from runtime.game_flow_ui_v2 import install as install_game_flow_ui_v2
 install_game_flow_ui_v2(main)
 from runtime.game_flow_authority import install as install_game_flow_authority
 game_flow_authority = install_game_flow_authority(main)
-from runtime.challenge_authority import install as install_challenge_authority
-install_challenge_authority(main)
 from runtime.callback_authorization import install as install_callback_authorization
 install_callback_authorization(main)
 from runtime.final_runtime_guard import install as install_final_runtime_guard
@@ -211,7 +209,6 @@ install_turn_round_authority(main)
 
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.live_controls_v2 import install as install_live_controls_v2
-from runtime.lobby_challenge_v2 import install as install_lobby_challenge_v2
 from runtime.stable_round_policy import install as install_stable_round_policy
 from runtime.stable_challenge_button_guard import install as install_stable_challenge_button_guard
 from runtime.transition_ui_dedup import install as install_transition_ui_dedup
@@ -220,7 +217,6 @@ from runtime.voting_timer_patch import install as install_voting_timer_patch
 from runtime.player_scoring import install as install_player_scoring
 install_stable_round_engine(main)
 install_live_controls_v2(main)
-install_lobby_challenge_v2(main)
 install_stable_round_policy(main)
 install_stable_challenge_button_guard(main)
 install_transition_ui_dedup(main)
@@ -230,6 +226,9 @@ from runtime.phase_transition_authority import install as install_phase_transiti
 install_phase_transition_authority(main)
 install_player_scoring(main)
 
+# Final challenge cutover: only StableRoundEngine executes challenge lifecycle.
+_rearm_single_owner_challenge_handlers()
+
 from runtime.game_info_security_v2 import install as install_game_info_security_v2
 install_game_info_security_v2(main)
 
@@ -237,6 +236,50 @@ install_game_info_security_v2(main)
 # completed. No lobby/management implementation is installed here.
 from runtime import production_cutover_final
 production_cutover_final.install()
+
+
+def _rearm_single_owner_challenge_handlers():
+    """Leave the StableRoundEngine as the sole challenge executor.
+
+    Legacy challenge bridges used to persist/wrap the same callback lifecycle
+    a second time. The stable engine already owns durable request/accept/reject
+    state, so legacy request/response executors are removed from the dispatcher.
+    Policy/guard layers may still wrap the canonical engine handler.
+    """
+    registry = getattr(getattr(main.dp, "callback_query_handlers", None), "handlers", None)
+    if registry is None:
+        return
+    canonical_request = getattr(main, "_stable_challenge_request_handler", None)
+    canonical_choice = getattr(main, "_stable_challenge_choice_handler", None)
+    kept = []
+    removed = 0
+    for item in list(registry):
+        fn = getattr(item, "handler", None) or getattr(item, "callback", None)
+        name = getattr(fn, "__name__", "")
+        if name == "handle_challenge_response":
+            removed += 1
+            continue
+        if name == "challenge_request" and fn is not canonical_request:
+            removed += 1
+            continue
+        if name == "challenge_choice" and canonical_choice is not None and fn is not canonical_choice:
+            removed += 1
+            continue
+        kept.append(item)
+    registry[:] = kept
+    if canonical_request is not None:
+        for i, item in enumerate(registry):
+            fn = getattr(item, "handler", None) or getattr(item, "callback", None)
+            if fn is canonical_request:
+                registry.insert(0, registry.pop(i))
+                break
+    if canonical_choice is not None:
+        for i, item in enumerate(registry):
+            fn = getattr(item, "handler", None) or getattr(item, "callback", None)
+            if fn is canonical_choice:
+                registry.insert(0, registry.pop(i))
+                break
+    logging.info("SINGLE OWNER CHALLENGE rearmed canonical=%s removed=%s", bool(canonical_request), removed)
 
 
 def _rearm_canonical_new_game():
@@ -370,6 +413,7 @@ async def on_startup(dp):
     await install_private_ui_recovery_v8(main)
     # Private UI recovery layers register their own /start routes. Re-arm the single\n    # production owner after those installers so neither PV nor group /start can be shadowed.\n    _install_production_start()
     _rearm_canonical_new_game()
+    _rearm_single_owner_challenge_handlers()
     try:
         register_menu = getattr(main, "_register_telegram_commands", None)
         if register_menu is not None:

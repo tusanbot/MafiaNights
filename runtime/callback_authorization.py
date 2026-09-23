@@ -19,6 +19,7 @@ _ADMIN_OR_MOD_PREFIXES = ("remove_player:", "remove_")
 _MODERATOR_ONLY_EXACT = {
     "lv6_distribute", "distribute_roles", "start_round", "start_turn", "start_night",
     "start_new_day", "show_roles", "view_roles", "send_roles", "roles",
+    "choose_head", "challenge_toggle", "speaker_auto", "speaker_manual",
 }
 _MODERATOR_ONLY_PREFIXES = (
     "role:", "roles:", "show_role:", "view_role:", "send_role:", "distribute:",

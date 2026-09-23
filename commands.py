@@ -843,8 +843,8 @@ async def _player_state_action(message, app, action: str):
 
 async def _challenge_toggle_text(message, app, enabled: bool):
     game = _game(app, message)
-    if not game or not await _manager(app, message, game):
-        await message.reply("⛔ فقط گرداننده یا مدیر گروه.")
+    if not game or not _authorized(app, message):
+        await message.reply("⛔ فقط گرداننده بازی.")
         return
     gid = int(message.chat.id)
     if not hasattr(app, "challenge_enabled"): app.challenge_enabled = {}
