@@ -612,13 +612,8 @@ async def _set_lock(message: types.Message, app: Any, key: str, enabled: bool, l
         await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
         return
     if not _authorized(app, message):
-        try:
-            status = (await app.bot.get_chat_member(message.chat.id, int(message.from_user.id))).status
-        except Exception:
-            status = "left"
-        if status not in {"creator", "administrator"}:
-            await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند این قفل را تغییر دهد.")
-            return
+        await message.reply("⛔ فقط گرداننده بازی می‌تواند این قفل را تغییر دهد.")
+        return
     addons = getattr(app, "addons", None)
     if addons is None:
         await message.reply("❌ تنظیمات امکانات اضافه در دسترس نیست.")
@@ -663,8 +658,8 @@ async def _reply_target(message):
 
 async def _simple_phase(message, app, phase: str):
     game = _game(app, message)
-    if not game or not await _manager(app, message, game):
-        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند فاز را تغییر دهد.")
+    if not game or not _authorized(app, message):
+        await message.reply("⛔ فقط گرداننده بازی می‌تواند فاز را تغییر دهد.")
         return
     handler = getattr(app, "_start_night_handler" if phase == "night" else "_start_new_day_handler", None)
     if handler is None:
@@ -690,8 +685,8 @@ def _callback_proxy(message, data):
 
 async def _start_round_text(message, app):
     game = _game(app, message)
-    if not game or not await _manager(app, message, game):
-        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند دور را شروع کند.")
+    if not game or not _authorized(app, message):
+        await message.reply("⛔ فقط گرداننده بازی می‌تواند دور را شروع کند.")
         return
     handler = getattr(app, "_stable_round_start_handler", None)
     if handler is None:
@@ -729,8 +724,8 @@ async def _next_text(message, app):
 
 async def _end_game_text(message, app):
     game = _game(app, message)
-    if not game or not await _manager(app, message, game):
-        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند بازی را تمام کند.")
+    if not game or not _authorized(app, message):
+        await message.reply("⛔ فقط گرداننده بازی می‌تواند بازی را تمام کند.")
         return
     if str(game.get("status") or "") not in {"running","paused","turn"}:
         await message.reply("❌ فقط بازی در حال اجرا قابل اتمام است.")
@@ -744,8 +739,8 @@ async def _end_game_text(message, app):
 
 async def _cancel_game_text(message, app):
     game = _game(app, message)
-    if not game or not await _manager(app, message, game):
-        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند بازی را لغو کند.")
+    if not game or not _authorized(app, message):
+        await message.reply("⛔ فقط گرداننده بازی می‌تواند بازی را لغو کند.")
         return
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
     kb = InlineKeyboardMarkup(row_width=2).add(
@@ -761,8 +756,8 @@ async def _cancel_game_text(message, app):
 
 async def _player_state_action(message, app, action: str):
     game = _game(app, message)
-    if not game or not await _manager(app, message, game):
-        await message.reply("⛔ فقط گرداننده یا مدیر گروه.")
+    if not game or not _authorized(app, message):
+        await message.reply("⛔ فقط گرداننده بازی.")
         return
     target = await _reply_target(message)
     if not target:
@@ -1396,7 +1391,7 @@ def register_commands(app: Any) -> bool:
             return
         gid = int(callback.message.chat.id)
         game = _game(app, callback.message)
-        if not game or int(game.get("id") or 0) != int(parts[1]) or not await _cancel_callback_allowed(callback, game):
+        if not game or int(game.get("id") or 0) != int(parts[1]) or int(callback.from_user.id) != int(game.get("moderator_id") or 0):
             await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True)
             return
         status = str(game.get("status") or "")
