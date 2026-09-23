@@ -173,7 +173,29 @@ def test_new_day_clears_stale_challenge_runtime_and_requests():
 def test_accepted_challenge_removes_durable_request_before_runtime_creation():
     source = Path("runtime/stable_round_engine.py").read_text(encoding="utf-8")
     marker = 'state["challenge_runtime"] = {'
-    section = source[source.index("async def challenge_choice"):source.index("async def challenge_request")]
+    section = source[source.index("    async def challenge_choice"):source.index("    main._stable_round_start_handler")]
     assert 'requests = dict(state.get("challenge_requests") or {})' in section
     assert 'requests.pop(str(target_seat), None)' in section
     assert marker in section
+
+
+def test_challenge_request_requires_durable_write_before_local_lock():
+    source = Path("runtime/stable_round_engine.py").read_text(encoding="utf-8")
+    section = source[source.index("    async def challenge_request"):source.index("    async def challenge_choice")]
+    assert 'if not main.runtime.state.games.update_game(game["id"], state=state):' in section
+    assert section.index('update_game(game["id"], state=state)') < section.index("main._stable_challenge_requests[target_seat] = challenger_id")
+
+
+def test_challenge_choice_uses_durable_request_as_authority():
+    source = Path("runtime/stable_round_engine.py").read_text(encoding="utf-8")
+    section = source[source.index("    async def challenge_choice"):source.index("    main._stable_round_start_handler")]
+    assert 'persisted = dict((game or {}).get("state") or {}).get("challenge_requests") or {}' in section
+    assert "درخواست چالش منقضی یا پیدا نشد" in section
+
+
+def test_accepted_challenge_persists_runtime_before_local_activation():
+    source = Path("runtime/stable_round_engine.py").read_text(encoding="utf-8")
+    section = source[source.index("    async def challenge_choice"):source.index("    main._stable_round_start_handler")]
+    assert 'state["challenge_runtime"] = {' in section
+    assert 'if not main.runtime.state.games.update_game(game["id"], state=state):' in section
+    assert section.index('state["challenge_runtime"] = {') < section.index("main.challenge_mode = True")

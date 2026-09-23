@@ -51,15 +51,8 @@ def install(app: Any) -> bool:
             await callback.answer("⛔ فقط گرداننده می‌تواند فاز شب را شروع کند.", show_alert=True)
             raise CancelHandler()
         state = dict(game.get("state") or {})
-        round_phase = _phase(game)
         voting = state.get("voting") or {}
-        # A stale "start night" button must never skip the current day.
-        # Voting state alone is insufficient because an old Telegram message
-        # can survive into a later phase.
-        if round_phase not in {"day_finished", "voting", ""}:
-            await callback.answer("⚠️ ابتدا فاز روز و رأی‌گیری را به پایان برسانید.", show_alert=True)
-            raise CancelHandler()
-        if voting and str(voting.get("phase") or "") not in {"round_finished", "finished", ""}:
+        if voting and str(voting.get("phase") or "") not in {"round_finished", ""}:
             await callback.answer("⚠️ ابتدا رأی‌گیری را به پایان برسانید.", show_alert=True)
             raise CancelHandler()
         state["round_phase"] = "night"
@@ -67,11 +60,6 @@ def install(app: Any) -> bool:
         state["night_started_at"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
         state["stable_day_active"] = False
         state["stable_day_ended"] = True
-        # A night transition is a hard lifecycle boundary. Pending/active
-        # challenge runtime belongs to the finished day and must never be
-        # resurrected by a NEXT callback that lands on a fresh Vercel worker.
-        state.pop("challenge_requests", None)
-        state.pop("challenge_runtime", None)
         if not app.runtime.state.games.update_game(game["id"], state=state):
             await callback.answer("❌ ثبت فاز شب انجام نشد.", show_alert=True)
             raise CancelHandler()
@@ -116,11 +104,6 @@ def install(app: Any) -> bool:
         state["stable_day_ended"] = False
         state.pop("head_seat", None)
         state.pop("voting", None)
-        # Reset all durable challenge state from the previous day as part of
-        # the new-day boundary. Otherwise a stale callback can revive an old
-        # challenge/request after the day has been reset.
-        state.pop("challenge_requests", None)
-        state.pop("challenge_runtime", None)
         state["last_day_started_at"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
         if not app.runtime.state.games.update_game(game["id"], state=state):
             await callback.answer("❌ شروع روز جدید ثبت نشد.", show_alert=True)
