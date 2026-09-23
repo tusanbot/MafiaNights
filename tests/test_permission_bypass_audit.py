@@ -72,3 +72,29 @@ def test_legacy_cutover_does_not_remove_runtime_challenge_policy_wrappers():
     source = read("player_runtime_entry.py")
     block = source[source.index("def _rearm_single_owner_challenge_handlers"):source.index("def _rearm_single_owner_legacy_game_handlers")]
     assert 'module == "main1"' in block
+
+
+def test_text_command_surface_delegates_lobby_membership_to_canonical_authority():
+    source = read("commands.py")
+    for call in ("app.lobby_membership.join", "app.lobby_membership.leave", "app.lobby_membership.assign_seat", "app.lobby_membership.promote_waiting"):
+        assert call in source
+    assert "app.runtime.state.lobby.join" not in source
+    assert "app.runtime.state.lobby.leave" not in source
+    assert "app.runtime.state.lobby.assign_seat" not in source
+
+
+def test_text_cancel_is_a_thin_adapter_to_canonical_end_game_owner():
+    source = read("commands.py")
+    block = source[source.index("async def _cancel_game_text"):source.index("async def _player_state_action")]
+    assert "_confirm_cancel_game" in block
+    assert "update_game(" not in block
+    assert "clear_game_players" not in block
+    assert "cancel_text:" not in block
+
+
+def test_final_command_authority_cancel_is_also_a_thin_adapter():
+    source = read("runtime/command_authority_final.py")
+    block = source[source.index("async def _cancel_text"):source.index("\ndef install")]
+    assert "_confirm_cancel_game" in block
+    assert "update_game(" not in block
+    assert "get_chat_member" not in block
