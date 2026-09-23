@@ -228,6 +228,7 @@ install_player_scoring(main)
 
 # Final challenge cutover: only StableRoundEngine executes challenge lifecycle.
 _rearm_single_owner_challenge_handlers()
+_rearm_single_owner_legacy_game_handlers()
 
 from runtime.game_info_security_v2 import install as install_game_info_security_v2
 install_game_info_security_v2(main)
@@ -239,13 +240,7 @@ production_cutover_final.install()
 
 
 def _rearm_single_owner_challenge_handlers():
-    """Leave the StableRoundEngine as the sole challenge executor.
-
-    Legacy challenge bridges used to persist/wrap the same callback lifecycle
-    a second time. The stable engine already owns durable request/accept/reject
-    state, so legacy request/response executors are removed from the dispatcher.
-    Policy/guard layers may still wrap the canonical engine handler.
-    """
+    """Keep the canonical challenge executor and its policy/guard wrappers only."""
     registry = getattr(getattr(main.dp, "callback_query_handlers", None), "handlers", None)
     if registry is None:
         return
@@ -256,30 +251,75 @@ def _rearm_single_owner_challenge_handlers():
     for item in list(registry):
         fn = getattr(item, "handler", None) or getattr(item, "callback", None)
         name = getattr(fn, "__name__", "")
+        module = getattr(fn, "__module__", "")
         if name == "handle_challenge_response":
             removed += 1
             continue
-        if name == "challenge_request" and fn is not canonical_request:
+        # Stable policy/live-control/button-guard wrappers are canonical adapters;
+        # legacy main1 handlers are the only competing executors to remove.
+        if name == "challenge_request" and module == "main1":
             removed += 1
             continue
-        if name == "challenge_choice" and canonical_choice is not None and fn is not canonical_choice:
+        if name == "challenge_choice" and module == "main1":
             removed += 1
             continue
         kept.append(item)
     registry[:] = kept
-    if canonical_request is not None:
-        for i, item in enumerate(registry):
-            fn = getattr(item, "handler", None) or getattr(item, "callback", None)
-            if fn is canonical_request:
-                registry.insert(0, registry.pop(i))
-                break
-    if canonical_choice is not None:
-        for i, item in enumerate(registry):
-            fn = getattr(item, "handler", None) or getattr(item, "callback", None)
-            if fn is canonical_choice:
-                registry.insert(0, registry.pop(i))
-                break
-    logging.info("SINGLE OWNER CHALLENGE rearmed canonical=%s removed=%s", bool(canonical_request), removed)
+    # Prefer the canonical chain without destroying its policy wrappers.
+    preferred = []
+    rest = []
+    for item in list(registry):
+        fn = getattr(item, "handler", None) or getattr(item, "callback", None)
+        name = getattr(fn, "__name__", "")
+        if name in {"challenge_request", "challenge_choice"} and getattr(fn, "__module__", "").startswith("runtime."):
+            preferred.append(item)
+        else:
+            rest.append(item)
+    if preferred:
+        registry[:] = preferred + rest
+    logging.info("SINGLE OWNER CHALLENGE rearmed canonical=%s/%s removed=%s", bool(canonical_request), bool(canonical_choice), removed)
+
+
+def _rearm_single_owner_legacy_game_handlers():
+    """Remove obsolete main1 game executors after canonical authorities load.
+
+    The active production path is owned by the dedicated lobby, management,
+    turn/phase, voting, role-distribution and game-end authorities. These
+    main1 callbacks are retained in the source only for compatibility/reference;
+    they must not remain executable in the Production dispatcher.
+    """
+    registry = getattr(getattr(main.dp, "callback_query_handlers", None), "handlers", None)
+    messages = getattr(getattr(main.dp, "message_handlers", None), "handlers", None)
+    legacy_callbacks = {
+        "manage_scenarios", "add_scenario_start", "remove_scenario", "delete_scenario",
+        "manage_game_handler", "add_to_substitute_list", "replace_player_list_handler",
+        "choose_substitute_for_replace", "do_replace_handler", "remove_player_handler",
+        "remove_player_confirm", "birthday_player_handler", "birthday_player_confirm",
+        "cancel_game_handler", "start_game", "choose_scenario", "scenario_selected",
+        "choose_moderator", "moderator_selected", "join_game_callback", "leave_game_callback",
+        "join_waiting_handler", "leave_waiting_handler", "cancel_game", "confirm_cancel",
+        "back_to_lobby", "distribute_roles_callback", "start_round_handler", "start_play",
+        "choose_head", "speaker_auto", "speaker_manual", "head_set_handler",
+        "handle_start_turn", "challenge_off_handler", "challenge_toggle_handler",
+        "next_turn", "start_night", "start_new_day",
+        "manage_moderator_menu", "show_current_moderator", "change_moderator", "set_new_moderator",
+        "toggle_next_player_pm", "toggle_next_moderator_pm", "resend_roles_handler",
+    }
+    if registry is not None:
+        before = len(registry)
+        registry[:] = [
+            item for item in registry
+            if getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__name__", "") not in legacy_callbacks
+        ]
+        logging.info("SINGLE OWNER LEGACY CALLBACK CUTOVER removed=%s", before - len(registry))
+    if messages is not None:
+        legacy_messages = {"text_commands_handler", "global_message_control", "add_substitute"}
+        before = len(messages)
+        messages[:] = [
+            item for item in messages
+            if getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__name__", "") not in legacy_messages
+        ]
+        logging.info("SINGLE OWNER LEGACY MESSAGE CUTOVER removed=%s", before - len(messages))
 
 
 def _rearm_canonical_new_game():
@@ -414,6 +454,7 @@ async def on_startup(dp):
     # Private UI recovery layers register their own /start routes. Re-arm the single\n    # production owner after those installers so neither PV nor group /start can be shadowed.\n    _install_production_start()
     _rearm_canonical_new_game()
     _rearm_single_owner_challenge_handlers()
+    _rearm_single_owner_legacy_game_handlers()
     try:
         register_menu = getattr(main, "_register_telegram_commands", None)
         if register_menu is not None:

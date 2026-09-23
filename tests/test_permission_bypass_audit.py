@@ -54,4 +54,21 @@ def test_challenge_has_one_canonical_runtime_owner():
 def test_challenge_legacy_response_executor_is_removed_by_final_cutover():
     entry = read("player_runtime_entry.py")
     assert 'if name == "handle_challenge_response":' in entry
-    assert 'if name == "challenge_request" and fn is not canonical_request:' in entry
+    assert 'if name == "challenge_request" and module == "main1":' in entry
+
+
+def test_production_entry_cuts_legacy_main1_game_executors():
+    source = read("player_runtime_entry.py")
+    assert "_rearm_single_owner_legacy_game_handlers()" in source
+    assert '"start_round_handler"' in source
+    assert '"next_turn"' in source
+    assert '"start_night"' in source
+    assert '"start_new_day"' in source
+    assert '"global_message_control"' in source
+    assert '"text_commands_handler"' in source
+
+
+def test_legacy_cutover_does_not_remove_runtime_challenge_policy_wrappers():
+    source = read("player_runtime_entry.py")
+    block = source[source.index("def _rearm_single_owner_challenge_handlers"):source.index("def _rearm_single_owner_legacy_game_handlers")]
+    assert 'module == "main1"' in block
