@@ -190,6 +190,11 @@ def install(app: Any) -> bool:
         state["turn_order"] = [int(x) for x in turn_order]
         state["turn_order_source"] = "selected_speaker"
         state["current_turn_index"] = 0
+        # Starting a new day explicitly clears the previous day's lifecycle
+        # flags. Otherwise the round engine can restore the old day as ended.
+        state["stable_day_active"] = False
+        state["stable_day_ended"] = False
+        state["current_turn_seat"] = int(seat)
         if not app.runtime.state.games.update_game(
             game_id,
             state=state,
