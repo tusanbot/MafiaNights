@@ -6,6 +6,34 @@ from types import SimpleNamespace
 
 import main1 as main
 
+# Canonical player identity owner. Legacy nickname handlers from main1/nickname_patch
+# are disabled on the real Production dispatcher; commands.py owns the user-facing
+# nickname commands and runtime.registration owns private registration.
+from runtime.player_identity_authority import install as install_player_identity
+install_player_identity(main)
+
+
+def _disable_legacy_nickname_handlers() -> int:
+    registry = getattr(getattr(main.dp, "message_handlers", None), "handlers", None)
+    if registry is None:
+        return 0
+    legacy_names = {"set_nick_command", "delete_nick_command", "get_nick_command", "list_nick_command"}
+    kept = []
+    removed = 0
+    for item in list(registry):
+        callback = getattr(item, "handler", None) or getattr(item, "callback", None)
+        if getattr(callback, "__name__", "") in legacy_names and getattr(callback, "__module__", "") == "nickname_patch":
+            removed += 1
+            continue
+        kept.append(item)
+    registry[:] = kept
+    if removed:
+        logging.info("LEGACY NICKNAME HANDLERS DISABLED count=%s", removed)
+    return removed
+
+
+_disable_legacy_nickname_handlers()
+
 from runtime.production_bridge import install as install_persistent_bridge, startup as persistent_startup
 from player_service import player_service
 from runtime.webhook_safety import install_latency, install_safe_callback_answer
