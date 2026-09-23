@@ -27,9 +27,9 @@ COMMANDS = {
     "panel": {"پنل", "/panel"},
     # Group / moderator
     "start_round": {"شروع دور", "/start_round"},
-    "end_game": {"اتمام بازی", "پایان بازی", "/end"},
-    "night": {"فاز شب", "شروع فاز شب", "/night"},
-    "day": {"فاز روز", "شروع روز", "شروع فاز روز", "/day"},
+    "end_game": {"اتمام بازی", "پایان بازی", "/end", "/endgame"},
+    "night": {"فاز شب", "شروع فاز شب", "/night", "/startnight"},
+    "day": {"فاز روز", "شروع روز", "شروع فاز روز", "/day", "/startday"},
     "warning": {"تذکر", "/warning"},
     "warning_remove": {"حذف تذکر", "تذکر منفی", "/warning_remove"},
     "kick": {"کیک", "/kick"},
@@ -42,11 +42,11 @@ COMMANDS = {
     "challenge_limited": {"چالش محدود", "/challenge_limited"},
     "challenge_free": {"چالش آزاد", "/challenge_free"},
     "chatlock": {"قفل چت", "/chatlock"},
-    "chatunlock": {"بازکردن چت", "باز کردن چت", "/chatunlock"},
+    "chatunlock": {"بازکردن چت", "باز کردن چت", "/chatunlock", "/unlockchat"},
     "nightlock": {"قفل شب", "/nightlock"},
-    "nightunlock": {"بازکردن شب", "باز کردن شب", "/nightunlock"},
+    "nightunlock": {"بازکردن شب", "باز کردن شب", "/nightunlock", "/unlocknight"},
     "turnlock": {"قفل نوبت", "/turnlock"},
-    "turnunlock": {"بازکردن نوبت", "باز کردن نوبت", "/turnunlock"},
+    "turnunlock": {"بازکردن نوبت", "باز کردن نوبت", "/turnunlock", "/unlockturn"},
     # Group manager
     "newgame": {"بازی جدید", "/newgame"},
     # Public group
@@ -176,11 +176,15 @@ COMMAND_REFERENCE = (
         ("تولد", "بازگردانی بازیکن حذف/مرده با ریپلای"),
         ("حذف بازیکن", "حذف بازیکن با ریپلای"),
         ("لغو بازی", "لغو بازی فعلی"),
+        ("بازی جدید", "ایجاد بازی جدید برای مدیران گروه"),
         ("چالش محدود", "فعال‌سازی محدودیت چالش"),
         ("چالش آزاد", "آزادسازی چالش"),
         ("قفل چت", "قفل پیام برای غیر بازیکنان"),
+        ("بازکردن چت", "بازکردن قفل چت"),
         ("قفل شب", "فقط گرداننده اجازه صحبت دارد"),
+        ("بازکردن شب", "بازکردن قفل شب"),
         ("قفل نوبت", "فقط صاحب نوبت یا گرداننده؛ دیگران فقط نماد/ایموجی"),
+        ("بازکردن نوبت", "بازکردن قفل نوبت"),
     )),
     ("🛡 گروه — مدیر", (
         ("بازی جدید", "ایجاد بازی جدید"),
@@ -200,6 +204,12 @@ COMMAND_REFERENCE = (
         ("رزرو", "رزرو پس از تکمیل ظرفیت"),
         ("لغو رزرو", "لغو رزرو"),
         ("صندلی عدد", "نمونه: صندلی 5"),
+        ("رأی‌گیری", "شروع رأی‌گیری"),
+        ("سردست", "تغییر سردست"),
+        ("تنظیم چالش", "تنظیمات چالش"),
+        ("تنظیم نکست", "تنظیمات نکست"),
+        ("لیست جایگزین", "لیست بازیکنان جایگزین"),
+        ("حذف جایگزین", "حذف بازیکن از لیست جایگزین"),
     )),
     ("🎯 صاحب ترن یا گرداننده", (
         ("نکست", "رفتن به نوبت بعدی"),
@@ -685,21 +695,7 @@ async def _start_round_text(message, app):
         return
     handler = getattr(app, "_stable_round_start_handler", None)
     if handler is None:
-        # The stable engine keeps the callback owner internal; reproduce its
-        # canonical entry state if the callback reference is unavailable.
-        state = dict(game.get("state") or {})
-        order = [int(r["seat"]) for r in app.runtime.state.games.list_players(game["id"])
-                 if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed","dead","finished","kicked"}]
-        if not order:
-            await message.reply("⚠️ بازیکن فعالی برای شروع دور وجود ندارد.")
-            return
-        app.turn_order = order
-        app.current_turn_index = 0
-        app._stable_day_active = True
-        app._stable_day_ended = False
-        state["turn_order"] = order
-        app.runtime.state.games.update_game(game["id"], state=state, current_turn_index=0)
-        await message.reply("✅ دور شروع شد.")
+        await message.reply("❌ مسیر اصلی شروع دور در دسترس نیست؛ ابتدا موتور دور را فعال کنید.")
         return
     cb = _callback_proxy(message, "start_round")
     await handler(cb)
@@ -710,20 +706,24 @@ async def _next_text(message, app):
     if not game:
         await message.reply("❌ بازی فعالی وجود ندارد.")
         return
-    order = list(getattr(app, "turn_order", []) or [])
-    if not order:
-        order = [int(r["seat"]) for r in app.runtime.state.games.list_players(game["id"])
-                 if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed","dead","finished","kicked"}]
-    if not order:
-        await message.reply("⚠️ نوبتی برای ادامه وجود ندارد.")
-        return
-    idx = int(getattr(app, "current_turn_index", 0) or 0)
-    seat = int(order[idx % len(order)])
     handler = getattr(app, "_stable_next_handler", None)
     if handler is None:
         await message.reply("⚠️ موتور نوبت در دسترس نیست.")
         return
-    cb = _callback_proxy(message, f"next_{seat}")
+    # Resolve only the callback target from the durable turn authority. The
+    # canonical NEXT handler remains the sole owner of permission and state
+    # transition logic.
+    try:
+        snapshot = app.turn_round_authority.snapshot(int(message.chat.id)) or {}
+        seat = snapshot.get("current_turn_seat")
+        if seat is None:
+            await message.reply("⚠️ نوبت فعالی وجود ندارد.")
+            return
+        cb = _callback_proxy(message, f"next_{int(seat)}")
+    except Exception:
+        logging.exception("text next: durable turn snapshot failed")
+        await message.reply("⚠️ وضعیت نوبت در دسترس نیست؛ دوباره تلاش کنید.")
+        return
     await handler(cb)
 
 
@@ -1530,8 +1530,11 @@ def register_commands(app: Any) -> bool:
                 BotCommand("challenge", "چالش"),
                 BotCommand("start_round", "شروع دور"),
                 BotCommand("end", "اتمام بازی"),
+                BotCommand("endgame", "اتمام بازی"),
                 BotCommand("night", "فاز شب"),
+                BotCommand("startnight", "فاز شب"),
                 BotCommand("day", "فاز روز"),
+                BotCommand("startday", "فاز روز"),
                 BotCommand("warning", "تذکر"),
                 BotCommand("warning_remove", "حذف تذکر"),
                 BotCommand("kick", "کیک"),
@@ -1544,8 +1547,11 @@ def register_commands(app: Any) -> bool:
                 BotCommand("challenge_limited", "چالش محدود"),
                 BotCommand("challenge_free", "چالش آزاد"),
                 BotCommand("chatlock", "قفل چت"),
+                BotCommand("chatunlock", "بازکردن چت"),
                 BotCommand("nightlock", "قفل شب"),
+                BotCommand("nightunlock", "بازکردن شب"),
                 BotCommand("turnlock", "قفل نوبت"),
+                BotCommand("turnunlock", "بازکردن نوبت"),
                 BotCommand("next", "نکست"),
                 BotCommand("role", "نقش من"),
                 BotCommand("panel", "پنل"),
