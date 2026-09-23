@@ -235,3 +235,30 @@ def test_chat_lock_precedence_is_night_then_turn_then_chat():
     section = source[source.index("    if night_lock:"):source.index("def install")]
     assert section.index("if night_lock:") < section.index("if turn_lock:")
     assert section.index("if turn_lock:") < section.index("if chat_lock:")
+
+
+def test_text_command_reference_includes_lock_unlock_commands():
+    source = Path("commands.py").read_text(encoding="utf-8")
+    assert '"chatunlock"' in source
+    assert '"nightunlock"' in source
+    assert '"turnunlock"' in source
+    assert 'BotCommand("chatunlock"' in source
+    assert 'BotCommand("nightunlock"' in source
+    assert 'BotCommand("turnunlock"' in source
+
+
+def test_start_round_text_command_has_no_local_state_fallback():
+    source = Path("commands.py").read_text(encoding="utf-8")
+    section = source[source.index("async def _start_round_text"):source.index("async def _next_text")]
+    assert 'app.runtime.state.games.update_game(game["id"], state=state, current_turn_index=0)' not in section
+    assert 'handler = getattr(app, "_stable_round_start_handler", None)' in section
+    assert 'مسیر اصلی شروع دور در دسترس نیست' in section
+
+
+def test_next_text_command_delegates_without_local_turn_authority():
+    source = Path("commands.py").read_text(encoding="utf-8")
+    section = source[source.index("async def _next_text"):source.index("async def _end_game_text")]
+    assert 'getattr(app, "turn_order"' not in section
+    assert 'getattr(app, "current_turn_index"' not in section
+    assert 'handler = getattr(app, "_stable_next_handler", None)' in section
+    assert 'next_canonical' in section
