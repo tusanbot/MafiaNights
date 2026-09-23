@@ -301,8 +301,7 @@ def _rearm_single_owner_legacy_game_handlers():
         "back_to_lobby", "distribute_roles_callback", "start_round_handler", "start_play",
         "choose_head", "speaker_auto", "speaker_manual", "head_set_handler",
         "handle_start_turn", "challenge_off_handler", "challenge_toggle_handler",
-        "next_turn", "start_night", "start_new_day", "challenge_choice",
-        "challenge_request", "handle_challenge_response",
+        "next_turn", "start_night", "start_new_day",
         "manage_moderator_menu", "show_current_moderator", "change_moderator", "set_new_moderator",
         "toggle_next_player_pm", "toggle_next_moderator_pm", "resend_roles_handler",
     }
