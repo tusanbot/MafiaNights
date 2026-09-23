@@ -502,18 +502,21 @@ def install(main):
         if callback.from_user.id != getattr(main, "moderator_id", None):
             await callback.answer("⛔ فقط گرداننده می‌تواند دور را شروع کند.", show_alert=True)
             raise CancelHandler()
-        if not getattr(main, "game_running", False):
-            await callback.answer("⚠️ بازی در حال اجرا نیست.", show_alert=True)
-            raise CancelHandler()
         _ensure(main)
 
-        # Always restore the durable player roster and speaker order before the
-        # round starts. The DB, not a warm Vercel worker, is the authority.
+        # The webhook may land on a fresh Vercel worker. Never use the
+        # process-local game_running flag as the authority for starting a round.
         try:
             game, _rows = _hydrate_runtime_players(main)
             _restore_persisted_turn_state(main, game)
         except Exception:
             logging.exception("stable round: failed to restore durable player/turn state")
+            game = _fresh_active_game(main)
+
+        if not game or str(game.get("status") or "") not in {"running", "paused"}:
+            await callback.answer("⚠️ بازی در حال اجرا نیست.", show_alert=True)
+            raise CancelHandler()
+        main.game_running = True
 
         if main._stable_day_ended:
             await callback.answer("ℹ️ فاز روز قبلاً تمام شده است.", show_alert=True)
