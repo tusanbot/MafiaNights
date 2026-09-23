@@ -101,11 +101,11 @@ def _restore_persisted_turn_state(main, game):
     if idx < 0 or idx >= len(main.turn_order):
         idx = 0
     main.current_turn_index = idx
-    # Day lifecycle flags are reset by the explicit head-selection action.
-    # A historical day-ended marker must never permanently block the next day.
-    main._stable_day_ended = False
-    main._stable_day_active = False
-    main._stable_phase = "normal"
+    # Lifecycle flags are persisted with the round. A fresh Vercel worker
+    # must not silently reopen a finished day or lose an active day.
+    main._stable_day_ended = bool(state.get("stable_day_ended", False))
+    main._stable_day_active = bool(state.get("stable_day_active", False))
+    main._stable_phase = "normal" if main._stable_day_active else ("ended" if main._stable_day_ended else "normal")
     return list(main.turn_order), idx
 
 def _seat(main, uid):
@@ -459,9 +459,12 @@ def install(main):
         if callback.message and callback.message.chat.type == "private":
             await callback.answer("این عملیات فقط داخل گروه انجام می‌شود.", show_alert=True)
             raise CancelHandler()
-        if callback.from_user.id != getattr(main, "moderator_id", None):
+        authoritative_game = main.turn_round_authority.game(int(callback.message.chat.id))
+        authoritative_moderator = int((authoritative_game or {}).get("moderator_id") or 0)
+        if int(callback.from_user.id) != authoritative_moderator:
             await callback.answer("⛔ فقط گرداننده می‌تواند دور را شروع کند.", show_alert=True)
             raise CancelHandler()
+        main.moderator_id = authoritative_moderator
         _ensure(main)
 
         # The webhook may land on a fresh Vercel worker. Never use the
@@ -599,7 +602,9 @@ def install(main):
         next_settings = dict((game or {}).get("state", {}).get("next_settings") or {})
         allow_players = bool(next_settings.get("allow_players_next", True))
         allow_moderator = bool(next_settings.get("allow_moderator_next", True))
-        is_moderator = uid == int(getattr(main, "moderator_id", -1) or -1)
+        authoritative_moderator = int(((game or {}).get("moderator_id")) or 0)
+        main.moderator_id = authoritative_moderator
+        is_moderator = uid == authoritative_moderator
         is_owner = uid == int(owner or -1)
         is_challenger = uid in challenger_uids
         if is_moderator and not allow_moderator:
