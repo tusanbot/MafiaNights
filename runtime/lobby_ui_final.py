@@ -96,7 +96,7 @@ def install(main):
             if seat_no in occupied:
                 continue
             try:
-                item = main.runtime.state.lobby.promote_waiting(g["id"], seat_no)
+                item = main.lobby_membership.promote_waiting(g["id"], seat_no)
             except ValueError:
                 continue
             if not item:
@@ -299,15 +299,15 @@ def install(main):
         active = [p for p in ps if p.get("seat") is not None and str(p.get("status") or "active") not in {"removed","dead"}]
         cap = len(r.get("roles") or [])
         if cur and cur.get("seat") is not None:
-            seat=int(cur["seat"]); main.runtime.state.lobby.leave(g["id"],uid)
+            seat=int(cur["seat"]); main.lobby_membership.leave(g["id"],uid)
             try: main.runtime.lobby.promote_waiting(c.message.chat.id,seat)
             except Exception: pass
             await render(c); await c.answer("🚪 از بازی خارج شدید"); return
         if cur and cur.get("seat") is None and str(cur.get("status") or "")=="waiting":
-            main.runtime.state.lobby.leave(g["id"],uid); await render(c); await c.answer("🎟 رزرو شما لغو شد"); return
+            main.lobby_membership.leave(g["id"],uid); await render(c); await c.answer("🎟 رزرو شما لغو شد"); return
         if len(active)>=cap: await c.answer("🎟 ظرفیت اصلی تکمیل است؛ از «رزرو / لغو رزرو» استفاده کنید.",show_alert=True); return
         occupied={int(p["seat"]) for p in active}; seat=next((n for n in range(1,cap+1) if n not in occupied),None)
-        main.runtime.state.lobby.join(g["id"],uid,seat); await render(c); await c.answer(f"✅ وارد بازی شدید؛ صندلی {seat}")
+        main.lobby_membership.join(g["id"],uid,seat); await render(c); await c.answer(f"✅ وارد بازی شدید؛ صندلی {seat}")
 
     async def seat_select(c):
         g = game(c.message.chat.id)
@@ -338,12 +338,12 @@ def install(main):
             except Exception:
                 pass
             try:
-                main.runtime.state.lobby.join(g["id"], uid, target, is_substitute=False)
+                main.lobby_membership.join(g["id"], uid, target, is_substitute=False)
             except Exception:
                 await c.answer("❌ ورود به صندلی انجام نشد؛ احتمالاً همزمان گرفته شده است.", show_alert=True); return
         else:
             try:
-                main.runtime.state.lobby.assign_seat(g["id"], uid, target)
+                main.lobby_membership.assign_seat(g["id"], uid, target)
             except Exception:
                 await c.answer("❌ تغییر صندلی انجام نشد.", show_alert=True); return
         await render(c)
@@ -359,7 +359,7 @@ def install(main):
         cap = len(r.get("roles") or [])
 
         if cur and cur.get("seat") is None and str(cur.get("status") or "") in {"waiting", "substitute"}:
-            main.runtime.state.lobby.leave(g["id"], uid)
+            main.lobby_membership.leave(g["id"], uid)
             await render(c); await c.answer("❌ رزرو شما لغو شد"); return
         if cur and cur.get("seat") is not None:
             await c.answer("ℹ️ شما داخل بازی هستید.", show_alert=True); return
@@ -371,7 +371,7 @@ def install(main):
         except Exception:
             pass
         try:
-            main.runtime.state.lobby.join(g["id"], uid, None, is_substitute=True)
+            main.lobby_membership.join(g["id"], uid, None, substitute=True)
         except Exception as exc:
             logging.exception("reserve failed")
             await c.answer("❌ ثبت رزرو انجام نشد. احتمالاً رزرو شما از قبل ثبت شده یا اطلاعات بازیکن تکراری است.", show_alert=True)
