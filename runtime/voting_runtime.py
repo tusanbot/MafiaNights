@@ -136,9 +136,10 @@ def _cache_key(main):
 
 
 def _v(main):
+    # Never treat process-local cache as authoritative. Webhook callbacks and
+    # cron ticks can run on different Vercel workers; every transition must
+    # begin from the durable game state.
     key = _cache_key(main)
-    if key and key in _VOTE_CACHE:
-        return _VOTE_CACHE[key]
     payload = _state(main)
     voting = payload.get("voting")
     if not isinstance(voting, dict):
@@ -150,7 +151,7 @@ def _v(main):
     voting.pop("round_two_vote_rights_taken", None)
     voting.setdefault("round2_targets", list(voting.get("selected_round_two") or []))
     if key:
-        _VOTE_CACHE[key] = voting
+        _VOTE_CACHE[key] = dict(voting)
     return voting
 
 
@@ -428,7 +429,11 @@ async def _close_target(main):
         return
     v["phase"] = "closing"
     v["target_vote_ended"] = True
-    _put_memory(main, v)
+    # Persist the closing marker before any Telegram edit/send. This makes the
+    # transition visible to another cron worker and prevents duplicate
+    # close/start-next races.
+    if not _put(main, v):
+        logging.warning("VOTE CLOSE STATE PERSIST FAILED game=%s round=%s index=%s", _gid(main), v.get("round"), v.get("target_index"))
     targets = [int(x) for x in (v.get("targets") or [])]
     idx = int(v.get("target_index") or 0)
     if idx >= len(targets):
