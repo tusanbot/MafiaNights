@@ -206,6 +206,9 @@ main._progress_features_runtime = _progress_features_runtime
 from runtime.user_stats import install as install_user_stats
 install_user_stats(main)
 
+from runtime.turn_round_authority import install as install_turn_round_authority
+install_turn_round_authority(main)
+
 from runtime.stable_round_engine import install as install_stable_round_engine
 from runtime.live_controls_v2 import install as install_live_controls_v2
 from runtime.lobby_challenge_v2 import install as install_lobby_challenge_v2
