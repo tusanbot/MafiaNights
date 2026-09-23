@@ -833,7 +833,15 @@ async def _end(main, callback):
     v = _v(main)
     v.update(phase="finished", deadline=None, vote_message_id=None)
     _put(main, v)
-    await callback.message.edit_text("🏁 <b>رأی‌گیری به پایان رسید.</b>", parse_mode="HTML")
+    kb = InlineKeyboardMarkup(row_width=1).add(
+        InlineKeyboardButton("🌌 شروع فاز شب", callback_data="start_night"),
+        InlineKeyboardButton("🏁 اتمام بازی", callback_data="end_game"),
+    )
+    await callback.message.edit_text(
+        "🏁 <b>رأی‌گیری به پایان رسید.</b>\n\nمرحله بعد را به‌صورت دستی انتخاب کنید.",
+        parse_mode="HTML",
+        reply_markup=kb,
+    )
     await callback.answer("")
 
 
