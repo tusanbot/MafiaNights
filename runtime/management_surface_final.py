@@ -98,7 +98,7 @@ def install(app: Any) -> bool:
         p = str(callback.data or "").split(":");
         if len(p) != 4: return
         gid = int(callback.message.chat.id); uid = int(p[3]); game = management._game(gid)
-        if not game or not await management._allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        if not game or not await management._gameplay_mutation_allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         row = next((r for r in management._rows(game) if int(r["player_id"]) == uid), None)
         if not row: await callback.answer("❌ بازیکن پیدا نشد.", show_alert=True); return
         games = app.runtime.state.games; games.set_player_seat(game["id"], uid, None); games.set_player_status(game["id"], uid, "kicked")
@@ -113,7 +113,7 @@ def install(app: Any) -> bool:
         p = str(callback.data or "").split(":");
         if len(p) != 4: return
         gid = int(callback.message.chat.id); uid = int(p[3]); game = management._game(gid)
-        if not game or not await management._allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        if not game or not await management._gameplay_mutation_allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         row = next((r for r in management._rows(game) if int(r["player_id"]) == uid), None)
         if not row: await callback.answer("❌ بازیکن پیدا نشد.", show_alert=True); return
         state = management._state(game); warnings = dict(state.get("warnings") or {}); count = int(warnings.get(str(uid), 0)) + 1; warnings[str(uid)] = count; management._save(game, warnings=warnings)
@@ -125,7 +125,7 @@ def install(app: Any) -> bool:
         p = str(callback.data or "").split(":");
         if len(p) != 4: return
         gid = int(callback.message.chat.id); uid = int(p[3]); game = management._game(gid)
-        if not game or not await management._allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        if not game or not await management._gameplay_mutation_allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         row = next((r for r in management._rows(game) if int(r["player_id"]) == uid), None)
         if not row: await callback.answer("❌ بازیکن پیدا نشد.", show_alert=True); return
         seat = int(row["seat"]); current = getattr(app, "_gm_extra_next_round", None)
@@ -139,7 +139,7 @@ def install(app: Any) -> bool:
         p = str(callback.data or "").split(":");
         if len(p) != 4: return
         gid = int(callback.message.chat.id); uid = int(p[3]); game = management._game(gid)
-        if not game or not await management._allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        if not game or not await management._gameplay_mutation_allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         row = next((r for r in management._rows(game) if int(r["player_id"]) == uid), None)
         if not row: await callback.answer("❌ بازیکن پیدا نشد.", show_alert=True); return
         seat = int(row["seat"]); muted = getattr(app, "_gm_muted_next_round", None)
@@ -153,7 +153,7 @@ def install(app: Any) -> bool:
         p = str(callback.data or "").split(":");
         if len(p) != 4: return
         gid = int(callback.message.chat.id); uid = int(p[3]); game = management._game(gid)
-        if not game or not await management._allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        if not game or not await management._gameplay_mutation_allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         row = next((r for r in management._rows(game) if int(r["player_id"]) == uid), None); seat = int(row["seat"]) if row and row.get("seat") is not None else None
         if seat is None: await callback.answer("❌ بازیکن پیدا نشد.", show_alert=True); return
         for attr in ("_gm_muted_next_round", "_gm_muted_active"):
@@ -176,7 +176,7 @@ def install(app: Any) -> bool:
 
     async def cancel(callback):
         gid = int(callback.message.chat.id); game = management._game(gid)
-        if not game or not await management._allowed(callback, gid, game):
+        if not game or not await management._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True); return
         confirmer = getattr(app, "_confirm_cancel_game", None)
         if confirmer:
@@ -186,7 +186,7 @@ def install(app: Any) -> bool:
 
     async def cancel_confirm(callback):
         gid = int(callback.message.chat.id); game = management._game(gid)
-        if not game or not await management._allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True); return
+        if not game or not await management._gameplay_mutation_allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True); return
         await management.cancel(callback)
 
     async def cancel_back(callback):
@@ -196,7 +196,7 @@ def install(app: Any) -> bool:
 
     async def back_lobby(callback):
         gid = int(callback.message.chat.id); game = management._game(gid)
-        if not game or not await management._allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True); return
+        if not game or not await management._gameplay_mutation_allowed(callback, gid, game): await callback.answer("⛔ دسترسی ندارید یا بازی فعال نیست.", show_alert=True); return
         if str(game.get("status") or "") != "lobby": await callback.answer("ℹ️ لابی فقط قبل از شروع بازی قابل نمایش است.", show_alert=True); return
         renderer = getattr(app, "_render_final_lobby", None)
         if not renderer: await callback.answer("❌ رندر لابی در دسترس نیست.", show_alert=True); return
