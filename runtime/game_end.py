@@ -421,8 +421,8 @@ def install(app: Any) -> bool:
             await callback.answer("❌ بازی فعال نیست.", show_alert=True); return
         if not await allowed(callback, game):
             await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True); return
-        if str(game.get("status") or "") != "running":
-            await callback.answer("❌ فقط بازی در حال اجرا قابل اتمام است.", show_alert=True); return
+        if str(game.get("status") or "") not in {"running", "paused", "turn"}:
+            await callback.answer("❌ فقط بازی فعال قابل اتمام است.", show_alert=True); return
         await open_finish(callback, game)
 
     async def end_game_legacy(callback: types.CallbackQuery):
@@ -433,8 +433,8 @@ def install(app: Any) -> bool:
             await callback.answer("❌ بازی فعالی وجود ندارد.", show_alert=True); return
         if not await allowed(callback, game):
             await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True); return
-        if str(game.get("status") or "") != "running":
-            await callback.answer("❌ فقط بازی در حال اجرا قابل اتمام است.", show_alert=True); return
+        if str(game.get("status") or "") not in {"running", "paused", "turn"}:
+            await callback.answer("❌ فقط بازی فعال قابل اتمام است.", show_alert=True); return
         await open_finish(callback, game)
 
     async def game_end(callback: types.CallbackQuery):
