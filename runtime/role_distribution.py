@@ -224,11 +224,12 @@ def install(app: Any) -> bool:
         canonical_game_id = getattr(callback, "_canonical_lobby_game_id", None)
         if canonical_game_id is not None and int(game["id"]) != int(canonical_game_id): await callback.answer("⚠️ این دکمه مربوط به بازی قبلی است.", show_alert=True); return
         if str(game.get("status") or "") != "lobby": await callback.answer("❌ لابی فعال نیست.", show_alert=True); return
+        # Role distribution belongs only to the designated game moderator.
+        # Group administrator status must not grant this game-control action.
         allowed = uid == int(game.get("moderator_id") or 0)
         if not allowed:
-            try: allowed = (await bot.get_chat_member(group_id, uid)).status in {"creator", "administrator"}
-            except Exception: allowed = False
-        if not allowed: await callback.answer("⛔ فقط گرداننده یا مدیر گروه می‌تواند نقش‌ها را پخش کند.", show_alert=True); return
+            await callback.answer("⛔ فقط گرداننده بازی می‌تواند نقش‌ها را پخش کند.", show_alert=True)
+            return
         scenario_id = game.get("scenario_id"); scenario = scenario_repo.get_by_id(scenario_id) if scenario_id is not None else None
         if not scenario: await callback.answer("❌ سناریوی بازی مشخص نیست.", show_alert=True); return
         roles = scenario.get("roles") or []
