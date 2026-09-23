@@ -72,6 +72,21 @@ def _moderator_id(main) -> int:
 
 
 def _current_turn_uid(main) -> int | None:
+    gid = _group_id(main)
+    try:
+        authority = getattr(main, "turn_round_authority", None)
+        if authority is not None and gid:
+            snapshot = authority.snapshot(gid) or {}
+            seat = snapshot.get("current_turn_seat")
+            if seat is not None:
+                game = main.runtime.state.active_game(gid)
+                if game:
+                    rows = main.runtime.state.games.list_players(game["id"])
+                    row = next((r for r in rows if int(r.get("seat") or 0) == int(seat)), None)
+                    if row:
+                        return int(row["player_id"])
+    except Exception:
+        logging.debug("chat locks: durable turn lookup failed", exc_info=True)
     try:
         order = list(getattr(main, "turn_order", []) or [])
         index = int(getattr(main, "current_turn_index", 0) or 0)
@@ -247,37 +262,29 @@ async def _message_guard(message: types.Message, main):
     if night_lock:
         if moderator:
             return
-        # Telegram default permissions already block regular members.
-        # Administrators are outside ChatPermissions, so remove their
-        # messages when possible to enforce the moderator-only rule.
         if _is_admin(status):
             try:
                 await message.delete()
             except Exception:
                 logging.debug("chat locks: could not delete admin message in night lock", exc_info=True)
-            raise CancelHandler()
-        raise CancelHandler()
-
-    if chat_lock:
-        allowed_players = _active_player_ids(main, gid)
-        if uid in allowed_players or moderator:
-            return
-        # Regular non-players should already be blocked by Telegram.
-        # This also cleans up a message that arrived before restrictions synced.
-        try:
-            await message.delete()
-        except Exception:
-            pass
         raise CancelHandler()
 
     if turn_lock:
         current_uid = _current_turn_uid(main)
         if moderator or uid == current_uid:
             return
-        # Turn lock intentionally permits only a reaction-like text made from
-        # emoji/symbols for everyone else. Text/media is removed.
         if getattr(message, "text", None) and _emoji_or_symbol_only(message.text):
             raise CancelHandler()
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        raise CancelHandler()
+
+    if chat_lock:
+        allowed_players = _active_player_ids(main, gid)
+        if uid in allowed_players or moderator:
+            return
         try:
             await message.delete()
         except Exception:
