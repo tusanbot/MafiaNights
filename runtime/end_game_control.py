@@ -106,12 +106,8 @@ def install(app: Any) -> bool:
         uid = int(message.from_user.id)
         allowed = uid == int(game.get("moderator_id") or 0)
         if not allowed:
-            try:
-                allowed = (await app.bot.get_chat_member(gid, uid)).status in {"creator", "administrator"}
-            except Exception:
-                allowed = False
-        if not allowed:
-            await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند بازی را تمام کند.")
+            await message.reply("⛔ فقط گرداننده بازی می‌تواند بازی را تمام کند.")
+            return
             return
         if str(game.get("status") or "") not in {"running", "paused", "turn"}:
             await message.reply("❌ فقط بازی در حال اجرا قابل اتمام است.")
@@ -125,13 +121,7 @@ def install(app: Any) -> bool:
         game = game or app.runtime.state.active_game(gid)
         if not game:
             return False
-        uid = int(obj.from_user.id)
-        if uid == int(game.get("moderator_id") or 0):
-            return True
-        try:
-            return (await app.bot.get_chat_member(gid, uid)).status in {"creator", "administrator"}
-        except Exception:
-            return False
+        return int(obj.from_user.id) == int(game.get("moderator_id") or 0)
 
     async def cancel_confirm(callback: types.CallbackQuery):
         gid = int(callback.message.chat.id)

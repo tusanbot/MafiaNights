@@ -17,8 +17,11 @@ def install(app):
         for k,v in ALIASES.items():
             if n in {norm(x) for x in v}: return k
     def game(gid): return app.runtime.state.active_game(int(gid))
+    async def moderator(m,g):
+        return int(m.from_user.id)==int(g.get("moderator_id") or -1)
+
     async def manager(m,g):
-        if int(m.from_user.id)==int(g.get("moderator_id") or -1): return True
+        if await moderator(m,g): return True
         try:return (await app.bot.get_chat_member(m.chat.id,m.from_user.id)).status in {"creator","administrator"}
         except Exception:return False
     async def command(m):
@@ -27,6 +30,8 @@ def install(app):
         if m.chat.type not in {"group","supergroup"}: await m.reply("ℹ️ این دستور فقط داخل گروه بازی است."); raise CancelHandler()
         g=game(m.chat.id)
         if not g or not await manager(m,g): await m.reply("⛔ بازی فعال نیست یا دسترسی ندارید."); raise CancelHandler()
+        if c in {"vote","end","chief","start"} and not await moderator(m,g):
+            await m.reply("⛔ این عملیات فقط برای گرداننده بازی مجاز است."); raise CancelHandler()
         if c=="vote":
             v=vr._v(app); await m.reply(f"🗳 <b>تنظیمات رای‌گیری</b>\n\n⏱ انتظار: {v['wait_seconds']} ثانیه\n⏱ هر رای: {v['vote_seconds']} ثانیه\n🚫 بدون حق رای: {len(v.get('vote_rights_taken',[]))}\n🗳 نوع: {'خودکار' if v.get('mode')==vr.AUTO else 'دستی'}",parse_mode="HTML",reply_markup=vr._settings_kb(v)); raise CancelHandler()
         if c=="end":
@@ -40,6 +45,8 @@ def install(app):
             app.runtime.state.games.update_game(g["id"],moderator_id=int(target.id)); app.moderator_id=int(target.id)
             await m.reply(f"🎩 سردست به <b>{html.escape(target.full_name)}</b> تغییر کرد.",parse_mode="HTML"); raise CancelHandler()
         if c=="remove":
+            if str(g.get("status") or "") != "lobby" and not await moderator(m,g):
+                await m.reply("⛔ حذف بازیکن در بازی فعال فقط توسط گرداننده مجاز است."); raise CancelHandler()
             target=m.reply_to_message.from_user if m.reply_to_message else None
             if not target: await m.reply("❗ برای حذف بازیکن روی پیام او ریپلای کنید."); raise CancelHandler()
             row=next((r for r in app.runtime.state.games.list_players(g['id']) if int(r['player_id'])==int(target.id)),None)

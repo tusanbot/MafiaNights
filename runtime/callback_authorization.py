@@ -12,8 +12,7 @@ _ADMIN_ONLY_PREFIXES = ("lv6_s:", "lv6_m:", "delete_scen_", "scenario_", "modera
 
 _ADMIN_OR_MOD_EXACT = {
     "lv6_manage", "lv6_cancel", "lv6_change_s", "lv6_change_m", "lv6_challenge",
-    "lv6_remove", "lv6_ready", "speaker_auto", "speaker_manual", "choose_head",
-    "challenge_toggle", "lv6_back_s",
+    "lv6_remove", "lv6_ready", "lv6_back_s",
 }
 _ADMIN_OR_MOD_PREFIXES = ("remove_player:", "remove_")
 
