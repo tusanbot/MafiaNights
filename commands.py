@@ -1025,7 +1025,7 @@ async def _reserve_text(message, app, cancel=False):
     )
     if cancel:
         if current and current.get("seat") is None and str(current.get("status") or "") in {"waiting", "substitute"}:
-            app.runtime.state.lobby.leave(game["id"], uid)
+            app.lobby_membership.leave(game["id"], uid)
             refresh = getattr(app, "_refresh_final_lobby_from_text", None)
             if refresh:
                 await refresh(message)
