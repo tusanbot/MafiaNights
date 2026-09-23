@@ -62,6 +62,8 @@ from runtime.production_fastpath import install as install_production_fastpath
 install_production_fastpath(main)
 
 # Canonical lobby owner.
+from runtime.lobby_membership_authority import install as install_lobby_membership
+install_lobby_membership(main)
 from runtime.lobby_ui_final import install as install_final_lobby
 install_final_lobby(main)
 
