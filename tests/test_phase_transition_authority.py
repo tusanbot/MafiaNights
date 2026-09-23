@@ -261,4 +261,6 @@ def test_next_text_command_delegates_without_local_turn_authority():
     assert 'getattr(app, "turn_order"' not in section
     assert 'getattr(app, "current_turn_index"' not in section
     assert 'handler = getattr(app, "_stable_next_handler", None)' in section
-    assert 'next_canonical' in section
+    assert 'turn_round_authority.snapshot(int(message.chat.id))' in section
+    assert 'f"next_{int(seat)}"' in section
+    assert 'next_canonical' not in section
