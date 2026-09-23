@@ -550,6 +550,26 @@ def _is_mod(main, callback):
         return False
 
 
+def _voting_phase_allowed(main):
+    """Voting may only be opened from the durable end-of-day state.
+    
+    The old UI can remain in Telegram after a phase transition, so relying
+    only on the callback prefix would allow a stale vote button to reopen
+    voting during night/day setup. Existing active voting remains valid.
+    """
+    game = _game(main)
+    if not game:
+        return False
+    phase = str((game.get("state") or {}).get("round_phase") or "").strip().lower()
+    voting = dict((game.get("state") or {}).get("voting") or {})
+    if phase in {"day_finished", "voting"}:
+        return True
+    # Compatibility for older games that predate durable round_phase.
+    return not phase and str(voting.get("phase") or "settings") in {
+        "settings", "waiting", "voting", "closing", "manual_ready", "round2_settings", "round_finished", "finished"
+    }
+
+
 async def _deny(callback):
     try:
         await callback.answer("⛔ فقط گرداننده دسترسی دارد.", show_alert=True)
@@ -734,6 +754,9 @@ async def _round2_confirm(main, callback):
 async def _start(main, callback):
     if not _is_mod(main, callback):
         return await _deny(callback)
+    if not _voting_phase_allowed(main):
+        await callback.answer("⚠️ رأی‌گیری فقط پس از پایان فاز روز قابل شروع است.", show_alert=True)
+        raise CancelHandler()
     v = _v(main)
     if v.get("phase") in {"waiting", "voting"}:
         await callback.answer("⏳ رای‌گیری در حال اجراست.", show_alert=True)
@@ -790,6 +813,9 @@ async def _set_value(main, callback, field, allowed):
 async def _settings_handler(main, callback):
     if not _is_mod(main, callback):
         return await _deny(callback)
+    if not _voting_phase_allowed(main):
+        await callback.answer("⚠️ تنظیمات رأی‌گیری در این مرحله در دسترس نیست.", show_alert=True)
+        raise CancelHandler()
     await _settings(main, callback)
     await callback.answer("")
 

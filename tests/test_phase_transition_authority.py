@@ -174,7 +174,7 @@ def test_accepted_challenge_removes_durable_request_before_runtime_creation():
     source = Path("runtime/stable_round_engine.py").read_text(encoding="utf-8")
     marker = 'state["challenge_runtime"] = {'
     section = source[source.index("    async def challenge_choice"):source.index("    main._stable_round_start_handler")]
-    assert 'requests = dict(state.get("challenge_requests") or {})' in section
+    assert 'requests = dict((state.get("challenge_requests") or {}))' in section
     assert 'requests.pop(str(target_seat), None)' in section
     assert marker in section
 
