@@ -957,6 +957,7 @@ def install(main):
     main._stable_round_start_handler = start_round
     main._stable_next_handler = next_handler
     main._stable_challenge_request_handler = challenge_request
+    main._stable_challenge_choice_handler = challenge_choice
     dp.register_callback_query_handler(start_round, lambda c: c.data == "start_round", state="*")
     dp.register_callback_query_handler(next_handler, lambda c: str(c.data).startswith(NEXT_PREFIX), state="*")
     dp.register_callback_query_handler(challenge_request, lambda c: str(c.data).startswith(CHALLENGE_REQUEST_PREFIX), state="*")
