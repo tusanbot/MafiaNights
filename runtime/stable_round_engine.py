@@ -61,39 +61,17 @@ def _fresh_active_game(main):
 
 
 def _hydrate_runtime_players(main, game=None):
-    """Rebuild process-local player/seat state from durable game rows."""
+    """Hydrate compatibility globals through the canonical turn/round authority."""
     gid = _gid(main)
     if not gid:
         return None, []
     try:
-        if game is None:
-            game = _fresh_active_game(main)
-        else:
-            try:
-                game = main.runtime.state.games.get_game(game["id"]) or game
-            except Exception:
-                pass
-        if not game:
-            return None, []
-        rows = [
-            row for row in main.runtime.state.games.list_players(game["id"])
-            if row.get("seat") is not None
-            and str(row.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
-        ]
-        slots, players = {}, {}
-        for row in rows:
-            try:
-                seat, uid = int(row["seat"]), int(row["player_id"])
-            except (TypeError, ValueError):
-                continue
-            if uid:
-                slots[seat] = uid
-                players[uid] = str(row.get("nickname") or row.get("first_name") or row.get("username") or uid)
-        main.player_slots = slots
-        main.players = players
-        return game, rows
+        authority = getattr(main, "turn_round_authority", None)
+        if authority is not None:
+            return authority.hydrate(gid)
+        return game, []
     except Exception:
-        logging.exception("stable round: failed to hydrate runtime players from DB")
+        logging.exception("stable round: failed to hydrate turn/round state")
         return game, []
 
 
@@ -318,15 +296,7 @@ async def _start_turn(main, seat, duration=120, is_challenge=False):
         game = _fresh_active_game(main)
         if game and not is_challenge:
             state = dict(game.get("state") or {})
-            state["turn_order"] = [int(x) for x in main.turn_order]
-            state["current_turn_index"] = int(main.current_turn_index)
-            state["current_turn_seat"] = int(seat)
-            main.runtime.state.games.update_game(
-                game["id"],
-                state=state,
-                current_turn_index=int(main.current_turn_index),
-                current_turn_seat=int(seat),
-            )
+            main.turn_round_authority.persist_position(_gid(main), order=main.turn_order, index=main.current_turn_index, seat=seat)
     except Exception:
         logging.exception("stable round: failed to persist active turn before send")
     msg = await main.bot.send_message(_gid(main), text, parse_mode="HTML", reply_markup=_keyboard(main, seat, is_challenge))
@@ -393,17 +363,7 @@ async def _end_day(main):
             game = _fresh_active_game(main)
             if game:
                 state = dict(game.get("state") or {})
-                state["turn_order"] = [int(x) for x in (getattr(main, "turn_order", []) or [])]
-                state["current_turn_index"] = int(main.current_turn_index)
-                state["current_turn_seat"] = None
-                state["stable_day_active"] = False
-                state["stable_day_ended"] = True
-                main.runtime.state.games.update_game(
-                    game["id"],
-                    state=state,
-                    current_turn_index=int(main.current_turn_index),
-                    current_turn_seat=None,
-                )
+                main.turn_round_authority.persist_position(_gid(main), order=getattr(main, "turn_order", []) or [], index=main.current_turn_index, seat=None, extra_state={"stable_day_active": False, "stable_day_ended": True})
         except Exception:
             logging.exception("stable round: failed to persist day-end state")
         await main.bot.send_message(
@@ -572,13 +532,7 @@ def install(main):
             game_now = main.runtime.state.active_game(_gid(main))
             if game_now:
                 state_now = dict(game_now.get("state") or {})
-                state_now["turn_order"] = [int(x) for x in base]
-                state_now["current_turn_index"] = 0
-                state_now["stable_day_active"] = True
-                state_now["stable_day_ended"] = False
-                main.runtime.state.games.update_game(
-                    game_now["id"], state=state_now, current_turn_index=0, current_turn_seat=int(base[0])
-                )
+                main.turn_round_authority.persist_position(_gid(main), order=base, index=0, seat=int(base[0]), extra_state={"stable_day_active": True, "stable_day_ended": False})
         except Exception:
             logging.exception("stable round: failed to persist initial turn state")
         roster = []
@@ -725,14 +679,7 @@ def install(main):
             game_now = main.runtime.state.active_game(_gid(main))
             if game_now:
                 state_now = dict(game_now.get("state") or {})
-                state_now["turn_order"] = [int(x) for x in main.turn_order]
-                state_now["current_turn_index"] = int(main.current_turn_index)
-                main.runtime.state.games.update_game(
-                    game_now["id"],
-                    state=state_now,
-                    current_turn_index=int(main.current_turn_index),
-                    current_turn_seat=(int(main.turn_order[main.current_turn_index]) if main.current_turn_index < len(main.turn_order) else None),
-                )
+                main.turn_round_authority.persist_position(_gid(main), order=main.turn_order, index=main.current_turn_index)
         except Exception:
             logging.exception("stable round: failed to persist next transition")
         return await _advance(main)
