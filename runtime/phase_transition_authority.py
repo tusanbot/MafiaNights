@@ -153,6 +153,8 @@ def install(app: Any) -> bool:
         try: registry.remove(item)
         except ValueError: pass
         registry.insert(0, item)
+    app._start_night_handler = start_night
+    app._start_new_day_handler = start_new_day
     app._phase_transition_authority_installed = True
     logging.info("PHASE TRANSITION AUTHORITY active: voting->night->next-day")
     return True
