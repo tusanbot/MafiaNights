@@ -252,6 +252,7 @@ def install(app: Any) -> bool:
         # while synchronous DB work and private-message delivery are running.
         await callback.answer("⏳ پخش نقش در حال انجام است...")
         random.shuffle(roles); game_id = int(game["id"]); role_map: dict[str, str] = {}; save_failures: list[int] = []
+        previous_roles = {int(p["player_id"]): p.get("role") for p in players}
         logging.info("role distribution started: game=%s players=%d", game_id, len(players))
         for player, role in zip(players, roles):
             player_id = int(player["player_id"])
@@ -275,7 +276,25 @@ def install(app: Any) -> bool:
             if not ok: save_failures.append(player_id)
             role_map[str(player_id)] = str(role)
         if save_failures:
-            await callback.answer("❌ ذخیره نقش‌ها کامل نشد؛ بازی شروع نشد.", show_alert=True); logging.error("role distribution failed players=%s game=%s", save_failures, game_id); return
+            # Role assignment is a pre-game transaction. Never leave a
+            # partially assigned role map behind when one durable write fails.
+            for player in players:
+                try:
+                    app.runtime.state.games.set_player_role(
+                        game_id,
+                        int(player["player_id"]),
+                        previous_roles.get(int(player["player_id"])),
+                        int(player["seat"]),
+                    )
+                except Exception:
+                    logging.exception(
+                        "role distribution rollback failed: game=%s player=%s",
+                        game_id,
+                        player["player_id"],
+                    )
+            await callback.answer("❌ ذخیره نقش‌ها کامل نشد؛ بازی شروع نشد و تغییرات نقش برگشت داده شد.", show_alert=True)
+            logging.error("role distribution failed players=%s game=%s; rolled back", save_failures, game_id)
+            return
 
         state = dict(game.get("state") or {})
         state.update({
