@@ -188,7 +188,7 @@ def install(main):
         main.game_running = False
         main.round_active = False
         try:
-            main.runtime.lobby.ensure(gid)
+            main.lobby_lifecycle.ensure(gid)
         except Exception:
             logging.exception("lobby ensure failed")
         kb = InlineKeyboardMarkup(row_width=3)
@@ -286,7 +286,7 @@ def install(main):
             moderator_name = main.display_name(uid, member.user.full_name)
         except Exception:
             moderator_name = main.display_name(uid, None) or str(uid)
-        main.runtime.lobby.set_moderator(gid,uid); main.moderator_id=uid; main.group_chat_id=gid; main.lobby_active=True; main.game_running=False; main.round_active=False
+        main.lobby_lifecycle.set_moderator(gid,uid,moderator_name); main.moderator_id=uid; main.group_chat_id=gid; main.lobby_active=True; main.game_running=False; main.round_active=False
         g = game(gid)
         if g:
             save(g, moderator_name=str(moderator_name))
