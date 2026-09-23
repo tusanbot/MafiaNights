@@ -582,14 +582,16 @@ async def _cast(main, callback):
     if uid == target and not _rules(main).get("self_vote", False):
         await callback.answer("🚫 نمی‌توانید به خودتان رأی بدهید.", show_alert=True)
         raise CancelHandler()
-    # Answer the Telegram callback before touching the database. A slow DB connection
-    # must never leave the user's button in the infinite loading state.
+    # Durable DB state is authoritative. Acknowledge the callback with a
+    # non-final status first, then only show the vote as registered after the
+    # database accepts it.
     try:
-        await callback.answer("⏳ رأی شما ثبت شد.")
+        await callback.answer("⏳ در حال ثبت رأی...")
     except Exception:
         logging.exception("VOTE CALLBACK ACK FAILED game=%s voter=%s", _gid(main), uid)
     game = _game(main)
     if not game:
+        await callback.answer("❌ بازی فعال پیدا نشد.", show_alert=True)
         raise CancelHandler()
 
     round_no = int(v.get("round") or 1)
@@ -601,36 +603,45 @@ async def _cast(main, callback):
         for x in votes
     ):
         logging.info("VOTE DUPLICATE LOCAL game=%s round=%s target=%s voter=%s", _gid(main), round_no, target, uid)
+        await callback.answer("ℹ️ رأی شما قبلاً ثبت شده است.", show_alert=True)
+        raise CancelHandler()
+
+    voted_at = _timestamp()
+    try:
+        inserted = _VOTES.cast(game["id"], round_no, target, uid, voted_at)
+        logging.info("VOTE DB PERSIST game=%s round=%s target=%s voter=%s inserted=%s", _gid(main), round_no, target, uid, inserted)
+    except Exception:
+        logging.exception("VOTE DB PERSIST FAILED game=%s round=%s target=%s voter=%s", _gid(main), round_no, target, uid)
+        await callback.answer("❌ ثبت رأی انجام نشد؛ لطفاً دوباره تلاش کنید.", show_alert=True)
+        raise CancelHandler()
+
+    if not inserted:
+        await callback.answer("ℹ️ رأی شما قبلاً ثبت شده است.", show_alert=True)
         raise CancelHandler()
 
     record = {
         "round": round_no,
         "target_player_id": target,
         "voter_player_id": uid,
-        "voted_at": _timestamp().isoformat(),
+        "voted_at": voted_at.isoformat(),
     }
     votes.append(record)
     v["votes"] = votes
     _put_memory(main, v)
 
     logging.info("VOTE CAST game=%s round=%s target=%s voter=%s mode=%s", _gid(main), round_no, target, uid, v.get("mode"))
-    # The live message is updated before any synchronous database operation.
     await _edit_vote_message(main, v, target)
-
-    # Persistence is best-effort and intentionally comes last. A slow DB must
-    # never prevent the voter from seeing the vote immediately.
-    try:
-        inserted = _VOTES.cast(game["id"], round_no, target, uid, _timestamp())
-        logging.info("VOTE DB PERSIST game=%s round=%s target=%s voter=%s inserted=%s", _gid(main), round_no, target, uid, inserted)
-    except Exception:
-        logging.exception("VOTE DB PERSIST FAILED game=%s round=%s target=%s voter=%s", _gid(main), round_no, target, uid)
 
     try:
         _persist(main, v)
     except Exception:
-        logging.exception("VOTE STATE SAVE AFTER UI FAILED game=%s", _gid(main))
-    raise CancelHandler()
+        logging.exception("VOTE STATE SAVE AFTER DB INSERT FAILED game=%s", _gid(main))
 
+    try:
+        await callback.answer("✅ رأی شما ثبت شد.")
+    except Exception:
+        logging.exception("VOTE FINAL CALLBACK ACK FAILED game=%s voter=%s", _gid(main), uid)
+    raise CancelHandler()
 
 async def _manual_start(main, callback):
     if not _is_mod(main, callback):
