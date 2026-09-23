@@ -123,10 +123,11 @@ def _restore_persisted_turn_state(main, game):
     if idx < 0 or idx >= len(main.turn_order):
         idx = 0
     main.current_turn_index = idx
-    main._stable_day_ended = bool(state.get("stable_day_ended", False))
-    main._stable_day_active = bool(state.get("stable_day_active", False)) and not main._stable_day_ended
-    if main._stable_day_ended:
-        main._stable_phase = "ended"
+    # Day lifecycle flags are reset by the explicit head-selection action.
+    # A historical day-ended marker must never permanently block the next day.
+    main._stable_day_ended = False
+    main._stable_day_active = False
+    main._stable_phase = "normal"
     return list(main.turn_order), idx
 
 def _seat(main, uid):
