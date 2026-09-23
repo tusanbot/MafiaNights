@@ -199,3 +199,39 @@ def test_accepted_challenge_persists_runtime_before_local_activation():
     assert 'state["challenge_runtime"] = {' in section
     assert 'if not main.runtime.state.games.update_game(game["id"], state=state):' in section
     assert section.index('state["challenge_runtime"] = {') < section.index("main.challenge_mode = True")
+
+
+def test_text_phase_commands_delegate_to_canonical_phase_authority():
+    source = Path("commands.py").read_text(encoding="utf-8")
+    section = source[source.index("async def _simple_phase"):source.index("async def _callback_answer")]
+    assert "_start_night_handler" in section
+    assert "_start_new_day_handler" in section
+    assert "app.runtime.days.start_night" not in section
+    assert "app.runtime.days.start_new_day" not in section
+
+
+def test_phase_authority_exposes_canonical_text_entry_handlers():
+    source = Path("runtime/phase_transition_authority.py").read_text(encoding="utf-8")
+    assert "app._start_night_handler = start_night" in source
+    assert "app._start_new_day_handler = start_new_day" in source
+
+
+def test_challenge_toggle_persists_durable_game_state_before_success():
+    source = Path("commands.py").read_text(encoding="utf-8")
+    section = source[source.index("async def _challenge_toggle_text"):source.index("async def _attendance_text")]
+    assert 'state["challenge_enabled"] = bool(enabled)' in section
+    assert 'if not app.runtime.state.games.update_game(game["id"], state=state):' in section
+
+
+def test_chat_lock_uses_durable_turn_authority_before_local_fallback():
+    source = Path("runtime/chat_locks.py").read_text(encoding="utf-8")
+    section = source[source.index("def _current_turn_uid"):source.index("def _full_permissions")]
+    assert "authority = getattr(main, "turn_round_authority", None)" in section
+    assert "snapshot = authority.snapshot(gid)" in section
+
+
+def test_chat_lock_precedence_is_night_then_turn_then_chat():
+    source = Path("runtime/chat_locks.py").read_text(encoding="utf-8")
+    section = source[source.index("    if night_lock:"):source.index("def install")]
+    assert section.index("if night_lock:") < section.index("if turn_lock:")
+    assert section.index("if turn_lock:") < section.index("if chat_lock:")
