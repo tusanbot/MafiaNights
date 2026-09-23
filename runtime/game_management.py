@@ -37,6 +37,7 @@ class GameManagement:
         return bool(self.app.runtime.state.games.update_game(game["id"], state=state))
 
     async def _allowed(self, obj: Any, gid: int, game=None) -> bool:
+        """General management/view permission: moderator or group admin."""
         game = game or self._game(gid)
         if not game:
             return False
@@ -47,6 +48,19 @@ class GameManagement:
             return (await self.app.bot.get_chat_member(gid, uid)).status in {"creator", "administrator"}
         except Exception:
             return False
+
+    @staticmethod
+    def _moderator_only(game: dict[str, Any], user_id: int) -> bool:
+        return int(user_id) == int(game.get("moderator_id") or 0)
+
+    async def _gameplay_mutation_allowed(self, obj: Any, gid: int, game=None) -> bool:
+        """Lobby admins may manage setup; once running, gameplay mutations belong to moderator."""
+        game = game or self._game(gid)
+        if not game:
+            return False
+        if str(game.get("status") or "") == "lobby":
+            return await self._allowed(obj, gid, game)
+        return self._moderator_only(game, int(obj.from_user.id))
 
     @staticmethod
     def _name(row):
@@ -192,7 +206,7 @@ class GameManagement:
         p = self._parts(callback, "scenario_pick", 4)
         if not p: return
         gid = int(callback.message.chat.id); game = self._game(gid); sid = int(p[3])
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         row = self.scenarios.get_by_id(sid)
         if not row or not row.get("is_active", True):
@@ -208,7 +222,7 @@ class GameManagement:
         p = self._parts(callback, "moderator_pick", 4)
         if not p: return
         gid = int(callback.message.chat.id); game = self._game(gid); uid = int(p[3])
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         if uid not in {int(a.user.id) for a in await self.app.bot.get_chat_administrators(gid)}:
             await callback.answer("❌ کاربر مدیر گروه نیست.", show_alert=True); return
@@ -241,7 +255,7 @@ class GameManagement:
         p = self._parts(callback, "remove_pick", 4)
         if not p: return
         gid = int(callback.message.chat.id); game = self._game(gid); uid = int(p[3])
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         row = next((r for r in self._rows(game) if int(r["player_id"]) == uid), None)
         if not row:
@@ -275,7 +289,7 @@ class GameManagement:
         p = self._parts(callback, "unreserve_pick", 4)
         if not p: return
         gid = int(callback.message.chat.id); game = self._game(gid); uid = int(p[3])
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         self.app.runtime.state.games.remove_player(game["id"], uid)
         await callback.message.edit_text("✅ رزرو بازیکن لغو شد.", reply_markup=self.panel(game["id"]))
@@ -290,7 +304,7 @@ class GameManagement:
         p = self._parts(callback, "replace_sub", 4)
         if not p: return
         gid = int(callback.message.chat.id); game = self._game(gid)
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         rows = [r for r in self._rows(game) if r.get("seat") is not None and str(r.get("status") or "") not in {"removed"}]
         kb = InlineKeyboardMarkup(row_width=2)
@@ -304,7 +318,7 @@ class GameManagement:
         p = str(callback.data or "").split(":")
         if len(p) != 5 or p[0] != "mgmt" or p[2] != "replace_target": return
         gid = int(callback.message.chat.id); game = self._game(gid); sub = int(p[3]); old = int(p[4])
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         rows = self._rows(game)
         a = next((r for r in rows if int(r["player_id"]) == old), None)
@@ -397,7 +411,7 @@ class GameManagement:
         if not p:
             return
         gid = int(callback.message.chat.id); game = self._game(gid)
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         try:
             await callback.message.delete()
@@ -426,7 +440,7 @@ class GameManagement:
         p = self._parts(callback, "birthday_pick", 4)
         if not p: return
         gid = int(callback.message.chat.id); game = self._game(gid); uid = int(p[3])
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         row = next((r for r in self._rows(game) if int(r.get("player_id") or 0) == uid), None)
         if not row:
@@ -489,7 +503,7 @@ class GameManagement:
         gid = int(callback.message.chat.id); game = self._game(gid)
         parts = str(callback.data or "").split(":")
         context = parts[3] if len(parts) >= 4 else "management"
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         if not hasattr(self.app, "challenge_enabled"): self.app.challenge_enabled = {}
         enabled = not bool(self.app.challenge_enabled.get(gid, True))
@@ -505,7 +519,7 @@ class GameManagement:
         gid = int(callback.message.chat.id); game = self._game(gid)
         parts = str(callback.data or "").split(":")
         context = parts[3] if len(parts) >= 4 else "management"
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         state = self._state(game); settings = dict(state.get("challenge_settings") or {})
         settings["show_player_status"] = not bool(settings.get("show_player_status", True))
@@ -516,7 +530,7 @@ class GameManagement:
 
     async def challenge_back(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         parts = str(callback.data or "").split(":")
         context = parts[3] if len(parts) >= 4 else "management"
@@ -536,7 +550,7 @@ class GameManagement:
 
     async def back_lobby(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         renderer = getattr(self.app, "_render_final_lobby", None) or getattr(self.app, "_render_production_lobby", None)
         if renderer:
@@ -562,7 +576,7 @@ class GameManagement:
         p = self._parts(callback, "next_toggle", 4)
         if not p: return
         gid = int(callback.message.chat.id); game = self._game(gid)
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         allowed = {"allow_players_next", "allow_moderator_next", "anti_spam"}
         if p[3] not in allowed:
@@ -575,7 +589,7 @@ class GameManagement:
 
     async def cancel(self, callback):
         gid = int(callback.message.chat.id); game = self._game(gid)
-        if not game or not await self._allowed(callback, gid, game):
+        if not game or not await self._gameplay_mutation_allowed(callback, gid, game):
             await callback.answer("⛔ دسترسی ندارید.", show_alert=True)
             return
         confirmer = getattr(self.app, "_confirm_cancel_game", None)
