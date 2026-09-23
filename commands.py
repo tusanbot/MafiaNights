@@ -1198,10 +1198,13 @@ async def _nickname_set_text(message: types.Message, app: Any) -> None:
     if not valid_persian_name(nickname):
         await message.reply("❌ نام مستعار نامعتبر است. فقط حروف فارسی و فاصله مجاز است و حداکثر ۳۲ نویسه.")
         return
-    from player_repository import PlayerRepository
-    repo = PlayerRepository()
-    repo.upsert(target.id, target.full_name, target.username)
-    if not repo.set_nickname(target.id, nickname):
+    identity = getattr(app, "player_identity", None)
+    if identity is None:
+        from runtime.player_identity_authority import PlayerIdentityAuthority
+        identity = PlayerIdentityAuthority()
+        app.player_identity = identity
+    identity.ensure(target)
+    if not identity.set_nickname(target.id, nickname, ensure=False):
         await message.reply("❌ ثبت نام مستعار انجام نشد.")
         return
     await message.reply(
@@ -1218,8 +1221,12 @@ async def _nickname_del_text(message: types.Message, app: Any) -> None:
     if not target:
         await message.reply("❗ روی پیام کاربر ریپلای کنید.")
         return
-    from player_repository import PlayerRepository
-    if not PlayerRepository().delete_nickname(target.id):
+    identity = getattr(app, "player_identity", None)
+    if identity is None:
+        from runtime.player_identity_authority import PlayerIdentityAuthority
+        identity = PlayerIdentityAuthority()
+        app.player_identity = identity
+    if not identity.delete_nickname(target.id):
         await message.reply("ℹ️ نام مستعاری برای این کاربر ثبت نشده است.")
         return
     await message.reply("🗑 نام مستعار حذف شد.")
@@ -1230,8 +1237,12 @@ async def _nickname_get_text(message: types.Message, app: Any) -> None:
         await message.reply("⚠️ این دستور فقط داخل گروه قابل استفاده است.")
         return
     target = message.reply_to_message.from_user if message.reply_to_message else message.from_user
-    from player_repository import PlayerRepository
-    row = PlayerRepository().get(target.id)
+    identity = getattr(app, "player_identity", None)
+    if identity is None:
+        from runtime.player_identity_authority import PlayerIdentityAuthority
+        identity = PlayerIdentityAuthority()
+        app.player_identity = identity
+    row = identity.get(target.id)
     nickname = (row or {}).get("nickname")
     await message.reply(
         f"📛 نام مستعار: <b>{html.escape(str(nickname))}</b>" if nickname else "ℹ️ نام مستعاری برای این کاربر ثبت نشده است.",
@@ -1250,8 +1261,12 @@ async def _nickname_list_text(message: types.Message, app: Any) -> None:
     if status not in {"creator", "administrator"} and int(message.from_user.id) != int(getattr(app, "moderator_id", 0) or 0):
         await message.reply("⛔ فقط مدیر گروه.")
         return
-    from player_repository import PlayerRepository
-    rows = PlayerRepository().all_nicknames()
+    identity = getattr(app, "player_identity", None)
+    if identity is None:
+        from runtime.player_identity_authority import PlayerIdentityAuthority
+        identity = PlayerIdentityAuthority()
+        app.player_identity = identity
+    rows = identity.all_nicknames()
     if not rows:
         await message.reply("📛 نام مستعاری ثبت نشده است.")
         return
