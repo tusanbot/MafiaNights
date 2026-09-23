@@ -179,17 +179,29 @@ def install(main):
 
     async def new(c):
         gid = int(c.message.chat.id)
-        if getattr(main, "game_running", False) or getattr(main, "round_active", False):
+        # Lifecycle state comes from the persistent game row, never from legacy globals.
+        existing = main.lobby_lifecycle.get(gid)
+        if existing and str(existing.get("status") or "").lower() in {"running", "paused", "turn"}:
             await c.answer("⚠️ بازی در حال اجراست.", show_alert=True)
+            return
+        # The lifecycle owner creates/rehydrates the lobby atomically through the
+        # existing persistent repository. Legacy globals below are compatibility
+        # cache only and are never consulted to decide whether a game exists.
+        try:
+            lifecycle_game = main.lobby_lifecycle.create(gid)
+            if not lifecycle_game:
+                raise RuntimeError("lobby creation returned no game")
+        except RuntimeError as exc:
+            await c.answer(f"⚠️ {exc}", show_alert=True)
+            return
+        except Exception:
+            logging.exception("canonical lobby creation failed")
+            await c.answer("❌ ایجاد لابی انجام نشد.", show_alert=True)
             return
         main.group_chat_id = gid
         main.lobby_active = True
         main.game_running = False
         main.round_active = False
-        try:
-            main.lobby_lifecycle.ensure(gid)
-        except Exception:
-            logging.exception("lobby ensure failed")
         kb = InlineKeyboardMarkup(row_width=3)
         rows = repo.list_active()
         popular = {"پدرخوانده-جک", "پدرخوانده-شرلوک", "پدرخوانده-نوسترا", "کلاسیک 12", "کلاسیک 13", "قمار باز", "زودیاک", "کاپو"}
