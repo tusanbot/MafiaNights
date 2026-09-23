@@ -237,7 +237,13 @@ def install(app: Any) -> bool:
             try: roles = json.loads(roles)
             except Exception: roles = [x.strip() for x in roles.split(",") if x.strip()]
         roles = list(roles)
-        players = [r for r in app.runtime.lobby_snapshot(group_id).get("players", []) if r.get("seat") is not None and str(r.get("status") or "active") not in {"removed", "dead"}]
+        # Use the durable game-player rows for role distribution as well;
+        # the lobby snapshot is process-local and can be stale on Vercel.
+        players = [
+            r for r in app.runtime.state.games.list_players(game["id"])
+            if r.get("seat") is not None
+            and str(r.get("status") or "active") not in {"removed", "dead", "finished", "kicked"}
+        ]
         players.sort(key=lambda row: int(row.get("seat") or 999))
         if not players: await callback.answer("❌ بازیکنی در لابی نیست.", show_alert=True); return
         if len(players) != len(roles): await callback.answer(f"❌ تعداد بازیکنان ({len(players)}) با ظرفیت سناریو ({len(roles)}) برابر نیست.", show_alert=True); return
