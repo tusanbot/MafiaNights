@@ -230,16 +230,13 @@ def install(main):
         not in {"distribute_roles_callback"}
     ]
 
-    # Register cleanup-owned callbacks. They are intentionally moved to the
-    # front so stale legacy handlers cannot produce duplicate messages.
-    dp.register_callback_query_handler(start_round_clean, lambda c: c.data == "start_round")
-    dp.register_callback_query_handler(start_turn_clean, lambda c: c.data == "start_turn")
-    dp.register_callback_query_handler(start_night_clean, lambda c: c.data == "start_night")
-    dp.register_callback_query_handler(start_new_day_clean, lambda c: c.data == "start_new_day")
+    # Transition ownership belongs to the canonical durable authorities:
+    # stable_round_engine owns start_round, phase_transition_authority owns
+    # start_night/start_new_day. This UI layer must not register competing
+    # transition callbacks, otherwise the first matching aiogram handler can
+    # bypass durable state and reintroduce process-local turn bugs.
     dp.register_callback_query_handler(challenge_status, lambda c: c.data == "lv6_challenge_status")
-
-    for fn in (start_round_clean, start_turn_clean, start_night_clean, start_new_day_clean, challenge_status):
-        front(fn)
+    front(challenge_status)
 
     # Replace the existing next-turn callback in-place so persistence logic is
     # preserved while the previous turn message is removed first.

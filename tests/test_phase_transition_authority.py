@@ -264,3 +264,18 @@ def test_next_text_command_delegates_without_local_turn_authority():
     assert 'turn_round_authority.snapshot(int(message.chat.id))' in section
     assert 'f"next_{int(seat)}"' in section
     assert 'next_canonical' not in section
+
+
+def test_round_flow_ui_does_not_register_competing_transition_handlers():
+    source = Path("runtime/game_flow_ui_v2.py").read_text(encoding="utf-8")
+    assert 'dp.register_callback_query_handler(start_round_clean' not in source
+    assert 'dp.register_callback_query_handler(start_turn_clean' not in source
+    assert 'dp.register_callback_query_handler(start_night_clean' not in source
+    assert 'dp.register_callback_query_handler(start_new_day_clean' not in source
+    assert 'stable_round_engine owns start_round' in source
+
+
+def test_management_round_menu_uses_canonical_start_round_callback():
+    source = Path("runtime/game_management.py").read_text(encoding="utf-8")
+    assert 'InlineKeyboardButton("▶️ شروع دور", callback_data="start_round")' in source
+    assert 'InlineKeyboardButton("▶️ شروع دور", callback_data="start_turn")' not in source

@@ -529,7 +529,7 @@ class GameManagement:
             kb.add(InlineKeyboardButton("🎲 انتخاب خودکار", callback_data="speaker_auto"))
             kb.add(InlineKeyboardButton("✋ انتخاب دستی", callback_data="speaker_manual"))
             kb.add(InlineKeyboardButton("⚔ وضعیت چالش", callback_data=f"mgmt:{int(game['id'])}:challenge:round"))
-            kb.add(InlineKeyboardButton("▶️ شروع دور", callback_data="start_turn"))
+            kb.add(InlineKeyboardButton("▶️ شروع دور", callback_data="start_round"))
             await callback.message.edit_text("🌞 <b>منوی دور</b>\n\nسر صحبت را انتخاب کنید:", reply_markup=kb, parse_mode="HTML")
             await callback.answer("⬅️ به منوی دور برگشتید."); return
         await self.open(callback)
