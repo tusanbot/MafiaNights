@@ -32,3 +32,27 @@ def test_next_day_clears_stale_voting_and_head_state():
     assert 'state.pop("head_seat", None)' in section
     assert 'state.pop("voting", None)' in section
     assert 'state["round_phase"] = "day_setup"' in section
+
+
+def test_manual_end_game_accepts_active_runtime_statuses():
+    source = Path("runtime/game_end.py").read_text(encoding="utf-8")
+    assert 'not in {"running", "paused", "turn"}' in source
+    assert 'callback_data="end_game"' in Path("runtime/voting_runtime.py").read_text(encoding="utf-8")
+
+
+def test_voting_end_does_not_finalize_game_automatically():
+    source = Path("runtime/voting_runtime.py").read_text(encoding="utf-8")
+    start = source.index("async def _end(main, callback):")
+    end = source.index("async def _noop", start)
+    block = source[start:end]
+    assert 'status="finished"' not in block
+    assert 'update_game' not in block
+    assert 'callback_data="end_game"' in block
+    assert 'callback_data="start_night"' in block
+
+
+def test_manual_end_game_command_remains_available():
+    source = Path("runtime/end_game_control.py").read_text(encoding="utf-8")
+    assert '"/endgame"' in source
+    assert '"اتمام بازی"' in source
+    assert 'status") or "") not in {"running", "paused", "turn"}' in source
