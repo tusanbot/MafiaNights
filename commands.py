@@ -656,24 +656,18 @@ async def _simple_phase(message, app, phase: str):
     if not game or not await _manager(app, message, game):
         await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند فاز را تغییر دهد.")
         return
+    handler = getattr(app, "_start_night_handler" if phase == "night" else "_start_new_day_handler", None)
+    if handler is None:
+        await message.reply("❌ مسیر اصلی تغییر فاز در دسترس نیست.")
+        return
     try:
-        if phase == "night":
-            snapshot = app.runtime.days.start_night(int(message.chat.id), extra={"phase_changed_by": int(message.from_user.id)})
-        else:
-            snapshot = app.runtime.days.start_new_day(int(message.chat.id), extra={
-                "phase_changed_by": int(message.from_user.id),
-                "turn_order": [],
-                "current_turn_index": 0,
-            })
-        app._stable_day_active = False
-        app._stable_day_ended = False
-        app._stable_phase = "ended" if phase == "night" else "normal"
+        cb = _callback_proxy(message, "start_night" if phase == "night" else "start_new_day")
+        await handler(cb)
+    except CancelHandler:
+        return
     except Exception as exc:
         logging.exception("text phase transition failed")
         await message.reply(f"❌ تغییر فاز انجام نشد: {type(exc).__name__}: {exc}")
-        return
-    title = "🌙 فاز شب" if phase == "night" else "☀️ فاز روز"
-    await message.reply(f"✅ <b>{title}</b> فعال شد.", parse_mode="HTML")
 
 
 async def _callback_answer(*args, **kwargs):
@@ -851,10 +845,25 @@ async def _challenge_toggle_text(message, app, enabled: bool):
     if not game or not await _manager(app, message, game):
         await message.reply("⛔ فقط گرداننده یا مدیر گروه.")
         return
+    gid = int(message.chat.id)
     if not hasattr(app, "challenge_enabled"): app.challenge_enabled = {}
-    app.challenge_enabled[int(message.chat.id)] = bool(enabled)
-    state = dict(game.get("state") or {}); state["challenge_enabled"] = bool(enabled)
-    app.runtime.state.games.update_game(game["id"], state=state)
+    app.challenge_enabled[gid] = bool(enabled)
+    state = dict(game.get("state") or {})
+    state["challenge_enabled"] = bool(enabled)
+    if not app.runtime.state.games.update_game(game["id"], state=state):
+        await message.reply("❌ تغییر وضعیت چالش ثبت نشد.")
+        return
+    addons = getattr(app, "addons", None)
+    if addons is not None:
+        try:
+            settings = addons.get_group_settings(gid)
+            settings.setdefault("challenge", {})["enabled"] = bool(enabled)
+            addons.set_group_settings(gid, settings)
+            addons.settings = settings
+        except Exception:
+            logging.exception("challenge toggle: addon persistence failed")
+            await message.reply("❌ وضعیت چالش در تنظیمات پایدار ثبت نشد.")
+            return
     await message.reply("⚔️ چالش آزاد شد." if enabled else "⚔️ چالش محدود شد.")
 
 
