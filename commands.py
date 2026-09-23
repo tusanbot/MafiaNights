@@ -176,11 +176,15 @@ COMMAND_REFERENCE = (
         ("تولد", "بازگردانی بازیکن حذف/مرده با ریپلای"),
         ("حذف بازیکن", "حذف بازیکن با ریپلای"),
         ("لغو بازی", "لغو بازی فعلی"),
+        ("بازی جدید", "ایجاد بازی جدید برای مدیران گروه"),
         ("چالش محدود", "فعال‌سازی محدودیت چالش"),
         ("چالش آزاد", "آزادسازی چالش"),
         ("قفل چت", "قفل پیام برای غیر بازیکنان"),
+        ("بازکردن چت", "بازکردن قفل چت"),
         ("قفل شب", "فقط گرداننده اجازه صحبت دارد"),
+        ("بازکردن شب", "بازکردن قفل شب"),
         ("قفل نوبت", "فقط صاحب نوبت یا گرداننده؛ دیگران فقط نماد/ایموجی"),
+        ("بازکردن نوبت", "بازکردن قفل نوبت"),
     )),
     ("🛡 گروه — مدیر", (
         ("بازی جدید", "ایجاد بازی جدید"),
@@ -200,6 +204,12 @@ COMMAND_REFERENCE = (
         ("رزرو", "رزرو پس از تکمیل ظرفیت"),
         ("لغو رزرو", "لغو رزرو"),
         ("صندلی عدد", "نمونه: صندلی 5"),
+        ("رأی‌گیری", "شروع رأی‌گیری"),
+        ("سردست", "تغییر سردست"),
+        ("تنظیم چالش", "تنظیمات چالش"),
+        ("تنظیم نکست", "تنظیمات نکست"),
+        ("لیست جایگزین", "لیست بازیکنان جایگزین"),
+        ("حذف جایگزین", "حذف بازیکن از لیست جایگزین"),
     )),
     ("🎯 صاحب ترن یا گرداننده", (
         ("نکست", "رفتن به نوبت بعدی"),
@@ -700,8 +710,20 @@ async def _next_text(message, app):
     if handler is None:
         await message.reply("⚠️ موتور نوبت در دسترس نیست.")
         return
-    # The canonical NEXT handler rehydrates durable turn position itself.
-    cb = _callback_proxy(message, "next_canonical")
+    # Resolve only the callback target from the durable turn authority. The
+    # canonical NEXT handler remains the sole owner of permission and state
+    # transition logic.
+    try:
+        snapshot = app.turn_round_authority.snapshot(int(message.chat.id)) or {}
+        seat = snapshot.get("current_turn_seat")
+        if seat is None:
+            await message.reply("⚠️ نوبت فعالی وجود ندارد.")
+            return
+        cb = _callback_proxy(message, f"next_{int(seat)}")
+    except Exception:
+        logging.exception("text next: durable turn snapshot failed")
+        await message.reply("⚠️ وضعیت نوبت در دسترس نیست؛ دوباره تلاش کنید.")
+        return
     await handler(cb)
 
 
@@ -1508,8 +1530,11 @@ def register_commands(app: Any) -> bool:
                 BotCommand("challenge", "چالش"),
                 BotCommand("start_round", "شروع دور"),
                 BotCommand("end", "اتمام بازی"),
+                BotCommand("endgame", "اتمام بازی"),
                 BotCommand("night", "فاز شب"),
+                BotCommand("startnight", "فاز شب"),
                 BotCommand("day", "فاز روز"),
+                BotCommand("startday", "فاز روز"),
                 BotCommand("warning", "تذکر"),
                 BotCommand("warning_remove", "حذف تذکر"),
                 BotCommand("kick", "کیک"),
