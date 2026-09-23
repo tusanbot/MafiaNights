@@ -56,3 +56,11 @@ def test_manual_end_game_command_remains_available():
     assert '"/endgame"' in source
     assert '"اتمام بازی"' in source
     assert 'status") or "") not in {"running", "paused", "turn"}' in source
+
+
+def test_next_day_controls_use_canonical_head_and_round_callbacks():
+    source = Path("runtime/phase_transition_authority.py").read_text(encoding="utf-8")
+    assert 'callback_data=f"day:{int(game[\'id\'])}:head"' in source
+    assert 'callback_data="start_round"' in source
+    assert 'callback_data="choose_head"' not in source
+    assert 'callback_data="start_turn"' not in source
