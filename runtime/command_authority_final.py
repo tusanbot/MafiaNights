@@ -30,21 +30,26 @@ def _is_manager(message, game):
     return int(message.from_user.id) == int(game.get("moderator_id") or 0)
 
 async def _cancel_text(message, app):
+    """Thin text adapter: delegate cancellation to the canonical end-game owner."""
     if message.chat.type not in {"group", "supergroup"}:
-        await message.reply("ℹ️ لغو بازی فقط داخل گروه بازی قابل استفاده است."); return
+        await message.reply("ℹ️ لغو بازی فقط داخل گروه بازی قابل استفاده است.")
+        return
     game = app.runtime.state.active_game(message.chat.id)
     if not game:
-        await message.reply("ℹ️ بازی فعالی وجود ندارد."); return
-    allowed = _is_manager(message, game)
-    if not allowed:
-        try: allowed = (await app.bot.get_chat_member(message.chat.id, message.from_user.id)).status in {"creator", "administrator"}
-        except Exception: allowed = False
-    if not allowed:
-        await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند بازی را لغو کند."); return
-    await message.reply("⚠️ <b>تأیید لغو بازی</b>\n\nاین عملیات قابل بازگشت نیست.", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(row_width=2).add(
-        InlineKeyboardButton("🚫 بله، لغو بازی", callback_data=f"mgmt:{int(game['id'])}:cancel_confirm"),
-        InlineKeyboardButton("❌ انصراف", callback_data=f"mgmt:{int(game['id'])}:open"),
-    ))
+        await message.reply("ℹ️ بازی فعالی وجود ندارد.")
+        return
+    confirmer = getattr(app, "_confirm_cancel_game", None)
+    if confirmer is None:
+        await message.reply("⚠️ مسیر لغو بازی در دسترس نیست.")
+        return
+    from types import SimpleNamespace
+    callback = SimpleNamespace(
+        message=message,
+        from_user=message.from_user,
+        data=f"mgmt:{int(game['id'])}:cancel",
+        answer=message.answer,
+    )
+    await confirmer(callback)
 
 
 def install(app: Any) -> bool:
