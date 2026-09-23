@@ -226,6 +226,8 @@ install_stable_challenge_button_guard(main)
 install_transition_ui_dedup(main)
 install_voting_runtime(main)
 install_voting_timer_patch(main)
+from runtime.phase_transition_authority import install as install_phase_transition_authority
+install_phase_transition_authority(main)
 install_player_scoring(main)
 
 from runtime.game_info_security_v2 import install as install_game_info_security_v2
