@@ -4,7 +4,7 @@ from __future__ import annotations
 import html
 
 from runtime import voting_runtime
-from runtime.voting_timer_patch import _resolve_name, _row_map
+from runtime.voting_runtime import _resolve_name, _row_map
 
 
 def install(main):
