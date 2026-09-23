@@ -64,3 +64,18 @@ def test_next_day_controls_use_canonical_head_and_round_callbacks():
     assert 'callback_data="start_round"' in source
     assert 'callback_data="choose_head"' not in source
     assert 'callback_data="start_turn"' not in source
+
+
+def test_role_distribution_rolls_back_partial_persistence():
+    source = Path("runtime/role_distribution.py").read_text(encoding="utf-8")
+    assert 'previous_roles = {int(p["player_id"]): p.get("role") for p in players}' in source
+    assert "if save_failures:" in source
+    assert "Role assignment is a pre-game transaction" in source
+    assert "rolled back" in source
+
+
+def test_role_distribution_never_enters_running_before_all_role_writes_succeed():
+    source = Path("runtime/role_distribution.py").read_text(encoding="utf-8")
+    failure = source.index("if save_failures:")
+    running = source.index('status="running"')
+    assert failure < running
