@@ -12,7 +12,7 @@ def install(main):
         return False
 
     async def only_mod(c):
-        if int(c.from_user.id) != int(getattr(main, "moderator_id", -1) or -1):
+        if int(c.from_user.id) != int((voting_runtime._game(main) or {}).get("moderator_id") or getattr(main, "moderator_id", -1) or -1):
             await c.answer("⛔ فقط گرداننده دسترسی دارد.", show_alert=True)
             raise CancelHandler()
 
