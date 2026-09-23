@@ -24,6 +24,11 @@ SIDE_ICONS = {"city": "🏘", "mafia": "🌃", "independent": "🥷"}
 WIN_SCORE = 1
 DRAW_SCORE = 0
 
+
+def _is_moderator_id(game: dict[str, Any], user_id: int) -> bool:
+    """Return whether the user owns the durable moderator role for this game."""
+    return int(user_id) == int(game.get("moderator_id") or 0)
+
 ROLE_SIDE_HINTS = {
     "پدرخوانده": "mafia", "ماتادور": "mafia", "گودمن": "mafia", "مافیا": "mafia",
     "دکتر واتسون": "city", "همشهری کین": "city", "نوستراداموس": "city", "کنستانتین": "city",
@@ -387,13 +392,17 @@ def install(app: Any) -> bool:
     # Management UI ownership is final: management_surface_final owns the panel.
     # The end-game runtime only owns the finish callback and result/history screens.
 
-    async def allowed(callback: types.CallbackQuery, game: dict[str, Any]) -> bool:
-        uid = int(callback.from_user.id)
-        if uid == int(game.get("moderator_id") or 0):
+    def _is_moderator(callback: types.CallbackQuery, game: dict[str, Any]) -> bool:
+        """Sensitive game mutations are owned exclusively by the durable moderator."""
+        return _is_moderator_id(game, int(callback.from_user.id))
+
+    async def allowed_view(callback: types.CallbackQuery, game: dict[str, Any]) -> bool:
+        """Allow the moderator or a group admin to inspect game/history screens."""
+        if _is_moderator(callback, game):
             return True
         try:
             group_id = int(game.get("group_chat_id") or callback.message.chat.id)
-            return (await app.bot.get_chat_member(group_id, uid)).status in {"creator", "administrator"}
+            return (await app.bot.get_chat_member(group_id, int(callback.from_user.id))).status in {"creator", "administrator"}
         except Exception:
             return False
 
@@ -419,8 +428,8 @@ def install(app: Any) -> bool:
         game = app.runtime.state.active_game(gid)
         if not game or int(game.get("id")) != int(parts[1]):
             await callback.answer("❌ بازی فعال نیست.", show_alert=True); return
-        if not await allowed(callback, game):
-            await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True); return
+        if not _is_moderator(callback, game):
+            await callback.answer("⛔ فقط گرداننده بازی می‌تواند بازی را مدیریت و تمام کند.", show_alert=True); return
         if str(game.get("status") or "") not in {"running", "paused", "turn"}:
             await callback.answer("❌ فقط بازی فعال قابل اتمام است.", show_alert=True); return
         await open_finish(callback, game)
@@ -444,9 +453,14 @@ def install(app: Any) -> bool:
         game = get_game(game_id)
         if not game:
             await callback.answer("❌ بازی پیدا نشد.", show_alert=True); return
-        if not await allowed(callback, game):
-            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         action = parts[2]
+        if action in {"menu", "winner", "winner_set", "finalize", "confirm_final"} and not _is_moderator(callback, game):
+            await callback.answer("⛔ فقط گرداننده بازی می‌تواند این عملیات را انجام دهد.", show_alert=True); return
+        if action in {"close", "events", "info", "result"}:
+            if not await allowed_view(callback, game):
+                await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+        elif action not in {"menu", "winner", "winner_set", "finalize", "confirm_final"} and not await allowed_view(callback, game):
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         state = dict(game.get("state") or {})
         events = _events_state(game)
 
@@ -624,8 +638,8 @@ def install(app: Any) -> bool:
         game = get_game(game_id)
         if not game or int(game.get("group_chat_id") or 0) != group_id:
             await callback.answer("❌ بازی پیدا نشد.", show_alert=True); return
-        if not await allowed(callback, game):
-            await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True); return
+        if not _is_moderator(callback, game):
+            await callback.answer("⛔ فقط گرداننده بازی می‌تواند وضعیت اتفاقات را تغییر دهد.", show_alert=True); return
         if action not in {"enable", "disable"}:
             await callback.answer("❌ عملیات نامعتبر است.", show_alert=True); return
         state = dict(game.get("state") or {})
@@ -648,8 +662,8 @@ def install(app: Any) -> bool:
         reference = get_game(reference_id)
         if not reference:
             await callback.answer("❌ بازی پیدا نشد.", show_alert=True); return
-        if not await allowed(callback, reference):
-            await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True); return
+        if not await allowed_view(callback, reference):
+            await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
         group_id = int(reference.get("group_chat_id") or callback.message.chat.id)
         if action == "list":
             games = app.runtime.state.games.list_finished_games(group_id, limit=20)
