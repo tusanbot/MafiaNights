@@ -154,3 +154,26 @@ def test_start_night_accepts_finished_voting_without_requiring_day_active():
     section = source[source.index("async def start_night"):source.index("    async def start_new_day")]
     assert 'round_phase not in {"day_finished", "voting", ""}' in section
     assert 'not in {"round_finished", "finished", ""}' in section
+
+
+def test_night_transition_clears_stale_challenge_runtime():
+    source = Path("runtime/phase_transition_authority.py").read_text(encoding="utf-8")
+    section = source[source.index("async def start_night"):source.index("    async def start_new_day")]
+    assert 'state.pop("challenge_requests", None)' in section
+    assert 'state.pop("challenge_runtime", None)' in section
+
+
+def test_new_day_clears_stale_challenge_runtime_and_requests():
+    source = Path("runtime/phase_transition_authority.py").read_text(encoding="utf-8")
+    section = source[source.index("async def start_new_day"):source.index("    # Remove legacy owners")]
+    assert 'state.pop("challenge_requests", None)' in section
+    assert 'state.pop("challenge_runtime", None)' in section
+
+
+def test_accepted_challenge_removes_durable_request_before_runtime_creation():
+    source = Path("runtime/stable_round_engine.py").read_text(encoding="utf-8")
+    marker = 'state["challenge_runtime"] = {'
+    section = source[source.index("async def challenge_choice"):source.index("async def challenge_request")]
+    assert 'requests = dict(state.get("challenge_requests") or {})' in section
+    assert 'requests.pop(str(target_seat), None)' in section
+    assert marker in section

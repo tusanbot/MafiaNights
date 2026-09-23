@@ -910,6 +910,10 @@ def install(main):
         try:
             game = main.runtime.state.active_game(_gid(main))
             state = dict((game or {}).get("state") or {})
+            # Keep the durable request map aligned with the accepted request.
+            requests = dict(state.get("challenge_requests") or {})
+            requests.pop(str(target_seat), None)
+            state["challenge_requests"] = requests
             state["challenge_runtime"] = {
                 "target_seat": int(target_seat),
                 "challenger_seat": int(challenger_seat),
