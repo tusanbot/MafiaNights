@@ -540,6 +540,11 @@ async def _settings(main, callback):
 
 def _is_mod(main, callback):
     try:
+        game = _game(main)
+        authoritative = game.get("moderator_id") if game else None
+        if authoritative is not None:
+            return int(callback.from_user.id) == int(authoritative)
+        # Compatibility fallback only when an older game record has no moderator.
         return int(callback.from_user.id) == int(getattr(main, "moderator_id", -1) or -1)
     except Exception:
         return False
