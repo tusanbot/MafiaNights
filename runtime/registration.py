@@ -43,26 +43,27 @@ def valid_persian_name(value: str | None) -> bool:
     return all(char in _PERSIAN_LETTERS for part in parts for char in part)
 
 
-def is_registered(user_id: int) -> bool:
-    """Return True when the player has a persisted nickname.
+def _identity(app: Any):
+    authority = getattr(app, "player_identity", None)
+    if authority is None:
+        from runtime.player_identity_authority import PlayerIdentityAuthority
+        authority = PlayerIdentityAuthority()
+        app.player_identity = authority
+    return authority
 
-    Deliberately uses only the long-standing nickname column so the
-    registration gate cannot be broken by an optional migration column.
-    """
+
+def is_registered(user_id: int, app: Any | None = None) -> bool:
+    """Return whether the canonical player identity has a persisted nickname."""
     try:
+        if app is not None:
+            return bool(_identity(app).is_registered(int(user_id)))
         with PlayerRepository().SessionLocal() as session:
             from sqlalchemy import text
-            row = session.execute(
-                text("""
-                    select 1
-                    from public.mafia_players
-                    where id=:id
-                      and nickname is not null
-                      and trim(nickname) <> ''
-                    limit 1
-                """),
-                {"id": int(user_id)},
-            ).scalar()
+            row = session.execute(text("""
+                select 1 from public.mafia_players
+                where id=:id and nickname is not null and trim(nickname) <> ''
+                limit 1
+            """), {"id": int(user_id)}).scalar()
             return row is not None
     except Exception:
         logging.exception("registration: failed to check registration for %s", user_id)
@@ -123,7 +124,7 @@ async def start(app: Any, message: types.Message) -> bool:
     parameter = ""
     if " " in raw:
         parameter = raw.split(" ", 1)[1].strip().casefold()
-    if is_registered(int(message.from_user.id)) and parameter != "register":
+    if is_registered(int(message.from_user.id), app) and parameter != "register":
         return False
     if is_registered(int(message.from_user.id)):
         await message.answer(
@@ -163,7 +164,7 @@ async def save_name(message: types.Message, state: FSMContext) -> None:
         )
         return
     try:
-        PlayerRepository().register(
+        _identity(app).register(
             user_id=int(message.from_user.id),
             nickname=value,
             username=message.from_user.username,
