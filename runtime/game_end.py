@@ -24,6 +24,11 @@ SIDE_ICONS = {"city": "🏘", "mafia": "🌃", "independent": "🥷"}
 WIN_SCORE = 1
 DRAW_SCORE = 0
 
+
+def _is_moderator_id(game: dict[str, Any], user_id: int) -> bool:
+    """Return whether the user owns the durable moderator role for this game."""
+    return int(user_id) == int(game.get("moderator_id") or 0)
+
 ROLE_SIDE_HINTS = {
     "پدرخوانده": "mafia", "ماتادور": "mafia", "گودمن": "mafia", "مافیا": "mafia",
     "دکتر واتسون": "city", "همشهری کین": "city", "نوستراداموس": "city", "کنستانتین": "city",
@@ -389,7 +394,7 @@ def install(app: Any) -> bool:
 
     def _is_moderator(callback: types.CallbackQuery, game: dict[str, Any]) -> bool:
         """Sensitive game mutations are owned exclusively by the durable moderator."""
-        return int(callback.from_user.id) == int(game.get("moderator_id") or 0)
+        return _is_moderator_id(game, int(callback.from_user.id))
 
     async def allowed_view(callback: types.CallbackQuery, game: dict[str, Any]) -> bool:
         """Allow the moderator or a group admin to inspect game/history screens."""
