@@ -5,7 +5,6 @@ from aiogram.types import InlineKeyboardMarkup
 from runtime.ui_theme import button as ui_button
 InlineKeyboardButton = ui_button
 from repositories.scenario_repository import ScenarioRepository
-from runtime.scenario_runtime import ScenarioRuntime
 from runtime.tag_display import custom_emoji_enabled_for_app, tagged_name_html
 
 
@@ -267,7 +266,8 @@ def install(main):
         g = game(c.message.chat.id)
         if not g: await c.answer("❌ بازی فعال پیدا نشد.",show_alert=True); return
         try:
-            ScenarioRuntime(main).apply_to_game(str(g["id"]), sid)
+            if not main.lobby_lifecycle.set_scenario(gid, str(sid)):
+                raise RuntimeError("scenario persistence failed")
             main.selected_scenario = str(r["name"]); main.MAX_SEATS = len(r.get("roles") or [])
         except Exception:
             logging.exception("scenario save failed"); await c.answer("❌ ذخیره سناریو انجام نشد.",show_alert=True); return
@@ -300,7 +300,7 @@ def install(main):
         cap = len(r.get("roles") or [])
         if cur and cur.get("seat") is not None:
             seat=int(cur["seat"]); main.lobby_membership.leave(g["id"],uid)
-            try: main.runtime.lobby.promote_waiting(c.message.chat.id,seat)
+            try: main.lobby_membership.promote_waiting(g["id"],seat)
             except Exception: pass
             await render(c); await c.answer("🚪 از بازی خارج شدید"); return
         if cur and cur.get("seat") is None and str(cur.get("status") or "")=="waiting":
