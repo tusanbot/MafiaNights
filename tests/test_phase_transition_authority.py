@@ -92,3 +92,37 @@ def test_start_round_treats_day_setup_as_authoritative():
 def test_day_end_persists_terminal_phase():
     source = Path("runtime/stable_round_engine.py").read_text(encoding="utf-8")
     assert '"round_phase": "day_finished"' in source
+
+
+def test_head_selection_is_moderator_only():
+    source = Path("runtime/role_distribution.py").read_text(encoding="utf-8")
+    assert 'فقط گرداننده بازی می‌تواند سردست را انتخاب کند' in source
+    assert 'get_chat_member(group_id, int(callback.from_user.id))' not in source
+
+
+def test_role_distribution_is_moderator_only():
+    source = Path("runtime/role_distribution.py").read_text(encoding="utf-8")
+    block = source[source.index("    async def distribute_roles"):source.index("    app._role_distribution_handler")]
+    assert 'allowed = uid == int(game.get("moderator_id") or 0)' in block
+    assert 'فقط گرداننده بازی می‌تواند نقش‌ها را پخش کند' in block
+    assert 'status not in {"creator", "administrator"}' not in block
+
+
+def test_role_distribution_rolls_back_if_game_transition_fails():
+    source = Path("runtime/role_distribution.py").read_text(encoding="utf-8")
+    transition = source.index('status="running"')
+    rollback = source.index("role distribution rollback after status transition failure")
+    assert transition < rollback
+
+
+def test_round_start_uses_durable_challenge_setting():
+    source = Path("runtime/stable_round_engine.py").read_text(encoding="utf-8")
+    assert 'main.challenge_active = bool(settings.get("enabled", True))' in source
+    assert 'main.challenge_active = bool(getattr(main, "challenge_enabled"' not in source
+
+
+def test_next_restores_active_challenge_from_durable_state():
+    source = Path("runtime/stable_round_engine.py").read_text(encoding="utf-8")
+    assert 'runtime_state = dict((game or {}).get("state") or {}).get("challenge_runtime") or {}' in source
+    assert 'main.challenge_mode = True' in source
+    assert 'main.active_challenger_seats = {int(challenger_seat)}' in source

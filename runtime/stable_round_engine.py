@@ -539,7 +539,9 @@ def install(main):
         main._stable_challenge_locked = set()
         main._stable_challenge_requests = {}
         main._stable_challenge_request_messages = {}
-        main.challenge_active = bool(getattr(main, "challenge_enabled", {}).get(_gid(main), True))
+        # Durable game state is authoritative. The process-local
+        # challenge_enabled map is only a compatibility cache for old games.
+        main.challenge_active = bool(settings.get("enabled", True))
         main.challenge_mode = False
         main.pending_challenges = {}
         main.active_challenger_seats = set()
@@ -596,6 +598,23 @@ def install(main):
             _restore_persisted_turn_state(main, game)
         except Exception:
             logging.exception("stable round: failed to hydrate turn state for NEXT")
+
+        # Active challenge state is durable because the NEXT callback may hit
+        # another Vercel worker. Restore it before validating who may advance.
+        try:
+            runtime_state = dict((game or {}).get("state") or {}).get("challenge_runtime") or {}
+            if runtime_state:
+                main.challenge_mode = True
+                main.paused_main_player = int(runtime_state.get("target_seat"))
+                main.post_challenge_advance = bool(runtime_state.get("post_challenge_advance", False))
+                challenger_seat = runtime_state.get("challenger_seat")
+                main.active_challenger_seats = {int(challenger_seat)} if challenger_seat is not None else set()
+                main._stable_phase = "challenge"
+            else:
+                main.challenge_mode = False
+                main.active_challenger_seats = set()
+        except Exception:
+            logging.exception("stable challenge: failed to restore durable challenge runtime")
 
         if main._stable_day_ended:
             await callback.answer("ℹ️ فاز روز قبلاً تمام شده است.", show_alert=True)

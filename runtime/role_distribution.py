@@ -133,10 +133,8 @@ def install(app: Any) -> bool:
         if not game or int(game.get("id")) != game_id or str(game.get("status") or "") != "running":
             await callback.answer("❌ بازی فعال نیست.", show_alert=True); return
         if int(callback.from_user.id) != int(game.get("moderator_id") or 0):
-            try:
-                if (await bot.get_chat_member(group_id, int(callback.from_user.id))).status not in {"creator", "administrator"}: raise PermissionError
-            except Exception:
-                await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True); return
+            await callback.answer("⛔ فقط گرداننده بازی می‌تواند سردست را انتخاب کند.", show_alert=True)
+            return
         rows = [
             r for r in app.runtime.state.games.list_players(game_id)
             if r.get("seat") is not None
@@ -157,10 +155,8 @@ def install(app: Any) -> bool:
         if not game or int(game.get("id")) != game_id or str(game.get("status") or "") != "running":
             await callback.answer("❌ بازی فعال نیست.", show_alert=True); return
         if int(callback.from_user.id) != int(game.get("moderator_id") or 0):
-            try:
-                if (await bot.get_chat_member(group_id, int(callback.from_user.id))).status not in {"creator", "administrator"}: raise PermissionError
-            except Exception:
-                await callback.answer("⛔ فقط گرداننده یا مدیر گروه.", show_alert=True); return
+            await callback.answer("⛔ فقط گرداننده بازی می‌تواند سردست را انتخاب کند.", show_alert=True)
+            return
         # Always read the authoritative seat list from the durable game-player
         # rows. lobby_snapshot can be stale on a new Vercel instance and was
         # the source of intermittent "invalid seat" errors.
@@ -313,7 +309,24 @@ def install(app: Any) -> bool:
             "turn_order": [int(row["seat"]) for row in players], "current_turn_index": 0, "head_seat": None,
         })
         if not app.runtime.state.games.update_game(game_id, status="running", state=state, current_turn_index=0, current_turn_seat=None):
-            await callback.answer("❌ انتقال بازی به مرحله اجرا انجام نشد.", show_alert=True); return
+            # The durable role writes above must not survive a failed lobby→running
+            # transition; otherwise a later retry sees a half-started game.
+            for player in players:
+                try:
+                    app.runtime.state.games.set_player_role(
+                        game_id,
+                        int(player["player_id"]),
+                        previous_roles.get(int(player["player_id"])),
+                        int(player["seat"]),
+                    )
+                except Exception:
+                    logging.exception(
+                        "role distribution rollback after status transition failure: game=%s player=%s",
+                        game_id,
+                        player["player_id"],
+                    )
+            await callback.answer("❌ انتقال بازی به مرحله اجرا انجام نشد؛ نقش‌ها برگشت داده شدند.", show_alert=True)
+            return
         game = app.runtime.state.active_game(group_id) or game; _sync_gameplay_bridge(app, group_id, game, players)
 
         sent = 0; delivery_failures: list[int] = []; scenario_name = str(scenario.get("name") or scenario_id)
