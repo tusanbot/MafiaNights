@@ -362,8 +362,17 @@ async def _end_day(main):
         try:
             game = _fresh_active_game(main)
             if game:
-                state = dict(game.get("state") or {})
-                main.turn_round_authority.persist_position(_gid(main), order=getattr(main, "turn_order", []) or [], index=main.current_turn_index, seat=None, extra_state={"stable_day_active": False, "stable_day_ended": True})
+                main.turn_round_authority.persist_position(
+                    _gid(main),
+                    order=getattr(main, "turn_order", []) or [],
+                    index=main.current_turn_index,
+                    seat=None,
+                    extra_state={
+                        "stable_day_active": False,
+                        "stable_day_ended": True,
+                        "round_phase": "day_finished",
+                    },
+                )
         except Exception:
             logging.exception("stable round: failed to persist day-end state")
         await main.bot.send_message(
@@ -481,7 +490,16 @@ def install(main):
             raise CancelHandler()
         main.game_running = True
 
-        if main._stable_day_ended:
+        round_phase = str((game.get("state") or {}).get("round_phase") or "").strip().lower()
+        # A newly opened day is explicitly represented as day_setup. Treat that
+        # durable phase as authoritative over stale compatibility flags restored
+        # from an older worker. This closes the historical "فاز روز تمام شده"
+        # false-positive after start_new_day.
+        if round_phase == "day_setup":
+            main._stable_day_ended = False
+            main._stable_day_active = False
+            main._stable_phase = "normal"
+        elif main._stable_day_ended:
             await callback.answer("ℹ️ فاز روز قبلاً تمام شده است.", show_alert=True)
             raise CancelHandler()
 
@@ -535,7 +553,17 @@ def install(main):
             game_now = main.runtime.state.active_game(_gid(main))
             if game_now:
                 state_now = dict(game_now.get("state") or {})
-                main.turn_round_authority.persist_position(_gid(main), order=base, index=0, seat=int(base[0]), extra_state={"stable_day_active": True, "stable_day_ended": False})
+                main.turn_round_authority.persist_position(
+                    _gid(main),
+                    order=base,
+                    index=0,
+                    seat=int(base[0]),
+                    extra_state={
+                        "stable_day_active": True,
+                        "stable_day_ended": False,
+                        "round_phase": "day_active",
+                    },
+                )
         except Exception:
             logging.exception("stable round: failed to persist initial turn state")
         roster = []
