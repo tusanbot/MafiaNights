@@ -74,6 +74,8 @@ def install(app):
         g=game(m.chat.id)
         if not g or not await manager(m,g): await m.reply("⛔ بازی فعال نیست یا دسترسی ندارید."); return
         st=dict(g.get("state") or {})
+        if cmd in {"night","day","mute","unmute","extra","next_settings"} and int(m.from_user.id) != int(g.get("moderator_id") or 0):
+            await m.reply("⛔ این عملیات فقط برای گرداننده بازی مجاز است."); return
         if cmd in {"mute","unmute","extra"}:
             target=m.reply_to_message.from_user if m.reply_to_message else None
             if not target: await m.reply("❗ روی پیام بازیکن ریپلای کنید."); return
