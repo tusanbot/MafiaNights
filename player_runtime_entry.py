@@ -240,13 +240,7 @@ production_cutover_final.install()
 
 
 def _rearm_single_owner_challenge_handlers():
-    """Leave the StableRoundEngine as the sole challenge executor.
-
-    Legacy challenge bridges used to persist/wrap the same callback lifecycle
-    a second time. The stable engine already owns durable request/accept/reject
-    state, so legacy request/response executors are removed from the dispatcher.
-    Policy/guard layers may still wrap the canonical engine handler.
-    """
+    """Keep the canonical challenge executor and its policy/guard wrappers only."""
     registry = getattr(getattr(main.dp, "callback_query_handlers", None), "handlers", None)
     if registry is None:
         return
@@ -257,30 +251,33 @@ def _rearm_single_owner_challenge_handlers():
     for item in list(registry):
         fn = getattr(item, "handler", None) or getattr(item, "callback", None)
         name = getattr(fn, "__name__", "")
+        module = getattr(fn, "__module__", "")
         if name == "handle_challenge_response":
             removed += 1
             continue
-        if name == "challenge_request" and fn is not canonical_request:
+        # Stable policy/live-control/button-guard wrappers are canonical adapters;
+        # legacy main1 handlers are the only competing executors to remove.
+        if name == "challenge_request" and module == "main1":
             removed += 1
             continue
-        if name == "challenge_choice" and canonical_choice is not None and fn is not canonical_choice:
+        if name == "challenge_choice" and module == "main1":
             removed += 1
             continue
         kept.append(item)
     registry[:] = kept
-    if canonical_request is not None:
-        for i, item in enumerate(registry):
-            fn = getattr(item, "handler", None) or getattr(item, "callback", None)
-            if fn is canonical_request:
-                registry.insert(0, registry.pop(i))
-                break
-    if canonical_choice is not None:
-        for i, item in enumerate(registry):
-            fn = getattr(item, "handler", None) or getattr(item, "callback", None)
-            if fn is canonical_choice:
-                registry.insert(0, registry.pop(i))
-                break
-    logging.info("SINGLE OWNER CHALLENGE rearmed canonical=%s removed=%s", bool(canonical_request), removed)
+    # Prefer the canonical chain without destroying its policy wrappers.
+    preferred = []
+    rest = []
+    for item in list(registry):
+        fn = getattr(item, "handler", None) or getattr(item, "callback", None)
+        name = getattr(fn, "__name__", "")
+        if name in {"challenge_request", "challenge_choice"} and getattr(fn, "__module__", "").startswith("runtime."):
+            preferred.append(item)
+        else:
+            rest.append(item)
+    if preferred:
+        registry[:] = preferred + rest
+    logging.info("SINGLE OWNER CHALLENGE rearmed canonical=%s/%s removed=%s", bool(canonical_request), bool(canonical_choice), removed)
 
 
 def _rearm_single_owner_legacy_game_handlers():
