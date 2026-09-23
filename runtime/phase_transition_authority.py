@@ -51,8 +51,15 @@ def install(app: Any) -> bool:
             await callback.answer("⛔ فقط گرداننده می‌تواند فاز شب را شروع کند.", show_alert=True)
             raise CancelHandler()
         state = dict(game.get("state") or {})
+        round_phase = _phase(game)
         voting = state.get("voting") or {}
-        if voting and str(voting.get("phase") or "") not in {"round_finished", ""}:
+        # A stale "start night" button must never skip the current day.
+        # Voting state alone is insufficient because an old Telegram message
+        # can survive into a later phase.
+        if round_phase not in {"day_finished", "voting", ""}:
+            await callback.answer("⚠️ ابتدا فاز روز و رأی‌گیری را به پایان برسانید.", show_alert=True)
+            raise CancelHandler()
+        if voting and str(voting.get("phase") or "") not in {"round_finished", "finished", ""}:
             await callback.answer("⚠️ ابتدا رأی‌گیری را به پایان برسانید.", show_alert=True)
             raise CancelHandler()
         state["round_phase"] = "night"

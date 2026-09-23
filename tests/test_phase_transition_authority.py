@@ -126,3 +126,31 @@ def test_next_restores_active_challenge_from_durable_state():
     assert 'runtime_state = dict((game or {}).get("state") or {}).get("challenge_runtime") or {}' in source
     assert 'main.challenge_mode = True' in source
     assert 'main.active_challenger_seats = {int(challenger_seat)}' in source
+
+
+def test_voting_start_requires_durable_day_finished_phase():
+    source = Path("runtime/voting_runtime.py").read_text(encoding="utf-8")
+    assert "def _voting_phase_allowed(main):" in source
+    assert 'phase in {"day_finished", "voting"}' in source
+    assert 'رأی‌گیری فقط پس از پایان فاز روز قابل شروع است' in source
+
+
+def test_voting_settings_reject_stale_buttons_outside_day():
+    source = Path("runtime/voting_runtime.py").read_text(encoding="utf-8")
+    section = source[source.index("async def _settings_handler"):source.index("async def _round2_handler")]
+    assert "_voting_phase_allowed(main)" in section
+    assert "تنظیمات رأی‌گیری در این مرحله در دسترس نیست" in section
+
+
+def test_start_night_rejects_stale_button_from_wrong_round_phase():
+    source = Path("runtime/phase_transition_authority.py").read_text(encoding="utf-8")
+    section = source[source.index("async def start_night"):source.index("    async def start_new_day")]
+    assert 'round_phase not in {"day_finished", "voting", ""}' in section
+    assert "stale" in section
+
+
+def test_start_night_accepts_finished_voting_without_requiring_day_active():
+    source = Path("runtime/phase_transition_authority.py").read_text(encoding="utf-8")
+    section = source[source.index("async def start_night"):source.index("    async def start_new_day")]
+    assert 'round_phase not in {"day_finished", "voting", ""}' in section
+    assert 'not in {"round_finished", "finished", ""}' in section
