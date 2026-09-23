@@ -29,15 +29,8 @@ def install(app: Any) -> bool:
 
         uid = int(message.from_user.id)
         moderator = int(game.get("moderator_id") or 0)
-        allowed = uid == moderator
-        if not allowed:
-            try:
-                member = await app.bot.get_chat_member(gid, uid)
-                allowed = member.status in {"creator", "administrator"}
-            except Exception:
-                allowed = False
-        if not allowed:
-            await message.reply("⛔ فقط گرداننده یا مدیر گروه می‌تواند بازی را لغو کند.")
+        if uid != moderator:
+            await message.reply("⛔ فقط گرداننده بازی می‌تواند بازی را لغو کند.")
             return
 
         status = str(game.get("status") or "")
