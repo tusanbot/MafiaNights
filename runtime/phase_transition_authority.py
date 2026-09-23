@@ -124,9 +124,9 @@ def install(app: Any) -> bool:
             f"🌞 <b>روز {day_no} شروع شد!</b>\n\nسر صحبت را انتخاب کنید:",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(row_width=1).add(
-                InlineKeyboardButton("🗣 انتخاب سر صحبت", callback_data="choose_head"),
+                InlineKeyboardButton("🎩 انتخاب سردست", callback_data=f"day:{int(game['id'])}:head"),
                 InlineKeyboardButton("⚔ چالش روشن", callback_data="challenge_toggle"),
-                InlineKeyboardButton("▶️ شروع دور", callback_data="start_turn"),
+                InlineKeyboardButton("▶️ شروع دور", callback_data="start_round"),
             ),
         )
         await callback.answer("🌞 روز جدید شروع شد.")
