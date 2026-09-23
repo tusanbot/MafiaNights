@@ -79,3 +79,16 @@ def test_role_distribution_never_enters_running_before_all_role_writes_succeed()
     failure = source.index("if save_failures:")
     running = source.index('status="running"')
     assert failure < running
+
+
+def test_start_round_treats_day_setup_as_authoritative():
+    source = Path("runtime/stable_round_engine.py").read_text(encoding="utf-8")
+    assert 'round_phase = str((game.get("state") or {}).get("round_phase") or "").strip().lower()' in source
+    assert 'if round_phase == "day_setup":' in source
+    assert 'main._stable_day_ended = False' in source
+    assert '"round_phase": "day_active"' in source
+
+
+def test_day_end_persists_terminal_phase():
+    source = Path("runtime/stable_round_engine.py").read_text(encoding="utf-8")
+    assert '"round_phase": "day_finished"' in source
