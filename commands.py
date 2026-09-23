@@ -601,10 +601,16 @@ async def _leave(message: types.Message, app: Any) -> None:
 
 
 def _authorized(app: Any, message: types.Message) -> bool:
+    """Sensitive text-command ownership comes from the durable active game."""
     uid = int(message.from_user.id)
-    if uid == int(getattr(app, "moderator_id", 0) or 0):
-        return True
-    return False
+    try:
+        if message.chat.type in {"group", "supergroup"}:
+            game = app.runtime.state.active_game(int(message.chat.id))
+            if game:
+                return uid == int(game.get("moderator_id") or 0)
+    except Exception:
+        logging.exception("text command: durable moderator lookup failed")
+    return uid == int(getattr(app, "moderator_id", 0) or 0)
 
 
 async def _set_lock(message: types.Message, app: Any, key: str, enabled: bool, label: str) -> None:
