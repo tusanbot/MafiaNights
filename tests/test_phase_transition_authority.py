@@ -226,7 +226,7 @@ def test_challenge_toggle_persists_durable_game_state_before_success():
 def test_chat_lock_uses_durable_turn_authority_before_local_fallback():
     source = Path("runtime/chat_locks.py").read_text(encoding="utf-8")
     section = source[source.index("def _current_turn_uid"):source.index("def _full_permissions")]
-    assert "authority = getattr(main, "turn_round_authority", None)" in section
+    assert 'authority = getattr(main, "turn_round_authority", None)' in section
     assert "snapshot = authority.snapshot(gid)" in section
 
 
