@@ -98,3 +98,27 @@ def test_final_command_authority_cancel_is_also_a_thin_adapter():
     assert "_confirm_cancel_game" in block
     assert "update_game(" not in block
     assert "get_chat_member" not in block
+
+
+def test_final_production_cutover_does_not_install_duplicate_game_end_executor():
+    source = read("runtime/production_cutover_final.py")
+    assert "production_consistency_loader" not in source
+    assert "production_consistency_v4" not in source
+    assert "game-end=single" in source
+
+
+def test_private_scenario_crud_is_the_live_scenario_form_owner():
+    entry = read("player_runtime_entry.py")
+    source = read("runtime/private_scenario_crud.py")
+    form = read("runtime/scenario_form_v5.py")
+    assert "install_private_scenario_crud(main)" in entry
+    assert "ScenarioFormV5" in source
+    assert "ScenarioManagementV3" in form
+    assert "FeatureParityV" not in entry
+
+
+def test_scenario_persistence_patch_is_adapter_only():
+    source = read("runtime/scenario_persistence_patch.py")
+    assert "ScenarioRepository" in source
+    assert "register_callback_query_handler" not in source
+    assert "register_message_handler" not in source
