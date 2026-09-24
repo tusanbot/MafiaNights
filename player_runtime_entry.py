@@ -300,6 +300,7 @@ def _rearm_single_owner_legacy_game_handlers():
         "next_turn", "start_night", "start_new_day",
         "manage_moderator_menu", "show_current_moderator", "change_moderator", "set_new_moderator",
         "toggle_next_player_pm", "toggle_next_moderator_pm", "resend_roles_handler",
+        "list_players_pv", "show_substitute_list", "choose_substitute", "challenge_status_pv", "send_roles_panel",
     }
     if registry is not None:
         before = len(registry)
@@ -310,7 +311,41 @@ def _rearm_single_owner_legacy_game_handlers():
                 and getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__module__", "") == "main1"
             )
         ]
-        logging.info("SINGLE OWNER LEGACY CALLBACK CUTOVER removed=%s", before - len(registry))
+
+        # main1 still contains two historical registrations whose executor is a
+        # lambda around a legacy function. Match the filter source as well so
+        # those callbacks cannot outrank the canonical production owners.
+        import inspect
+        residual_legacy_filters = (
+            'c.data == "resend_roles"',
+            'c.data == "list_players"',
+        )
+        kept = []
+        residual_removed = 0
+        for item in registry:
+            fn = getattr(item, "handler", None) or getattr(item, "callback", None)
+            if getattr(fn, "__module__", "") != "main1" or getattr(fn, "__name__", "") != "<lambda>":
+                kept.append(item)
+                continue
+            source = ""
+            try:
+                filters = getattr(item, "filters", None) or []
+                source = "\n".join(
+                    inspect.getsource(getattr(f, "callback", None) or getattr(f, "filter", None) or f)
+                    for f in filters
+                )
+            except Exception:
+                pass
+            if any(marker in source for marker in residual_legacy_filters):
+                residual_removed += 1
+                continue
+            kept.append(item)
+        registry[:] = kept
+        logging.info(
+            "SINGLE OWNER LEGACY CALLBACK CUTOVER removed=%s residual_lambda_removed=%s",
+            before - len(registry) + residual_removed,
+            residual_removed,
+        )
     if messages is not None:
         legacy_messages = {"text_commands_handler", "global_message_control", "add_substitute"}
         before = len(messages)
