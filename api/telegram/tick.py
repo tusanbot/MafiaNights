@@ -87,8 +87,14 @@ async def _tick():
     global _startup_complete
     runtime_entry = _runtime()
     if not _startup_complete:
-        await runtime_entry.on_startup(runtime_entry.main.dp)
-        _startup_complete = True
+        try:
+            await runtime_entry.on_startup(runtime_entry.main.dp)
+        except Exception:
+            # Startup helpers are best-effort for the scheduler. Do not retry
+            # the entire production bootstrap on every 5-second tick.
+            logging.exception("VOTING TICK STARTUP FAILED; continuing")
+        finally:
+            _startup_complete = True
     from runtime import voting_runtime
     return bool(await voting_runtime.tick(runtime_entry.main))
 
