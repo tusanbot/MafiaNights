@@ -7,6 +7,9 @@ import logging
 import os
 import time
 from typing import Any
+
+from sqlalchemy import text
+from repositories.base import DatabaseRepository
 from urllib.request import Request, urlopen
 
 _PRODUCTION_WEBHOOK_HOST = "mafia-nights-tusanbots-projects.vercel.app"
@@ -15,6 +18,8 @@ _last_webhook_check = 0.0
 _runtime_module: Any = None
 _startup_complete = False
 _loop: asyncio.AbstractEventLoop | None = None
+_last_tick_at = 0.0
+_MIN_TICK_INTERVAL = float(os.getenv("TICK_MIN_INTERVAL", "4"))
 
 
 def _response(body, status="200 OK"):
@@ -55,6 +60,21 @@ def _repair_webhook_if_needed() -> dict:
     return {"checked": True, "changed": bool(result.get("ok")), "target": target}
 
 
+def _has_due_vote() -> bool:
+    """Cheap database gate: avoid booting the full bot for idle cron ticks."""
+    repo = DatabaseRepository()
+    with repo.engine.begin() as conn:
+        row = conn.execute(text("""
+            select 1
+            from public.mafia_games
+            where coalesce(state->'voting'->>'phase', '') in ('waiting', 'voting')
+              and nullif(state->'voting'->>'deadline', '') is not null
+              and (state->'voting'->>'deadline')::double precision <= extract(epoch from now())
+            limit 1
+        """)).first()
+        return row is not None
+
+
 def _runtime():
     global _runtime_module
     if _runtime_module is None:
@@ -82,13 +102,26 @@ def _run(coro):
 
 
 def app(environ, start_response):
+    global _last_tick_at
     result = {}
+    now = time.monotonic()
+    if now - _last_tick_at < _MIN_TICK_INTERVAL:
+        result.update({"ok": True, "processed": False, "skipped": "rate_limited"})
+        status, headers, body = _response(result)
+        start_response(status, headers)
+        return [body]
+    _last_tick_at = now
     try:
         result["webhook_repair"] = _repair_webhook_if_needed()
     except Exception as exc:
         result["webhook_repair"] = {"checked": False, "error": f"{type(exc).__name__}: {exc}"}
 
     try:
+        if not _has_due_vote():
+            result.update({"ok": True, "processed": False, "skipped": "no_due_vote"})
+            status, headers, body = _response(result)
+            start_response(status, headers)
+            return [body]
         changed = _run(_tick())
         result.update({"ok": True, "processed": changed})
     except Exception as exc:
