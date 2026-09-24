@@ -305,7 +305,10 @@ def _rearm_single_owner_legacy_game_handlers():
         before = len(registry)
         registry[:] = [
             item for item in registry
-            if getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__name__", "") not in legacy_callbacks
+            if not (
+                getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__name__", "") in legacy_callbacks
+                and getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__module__", "") == "main1"
+            )
         ]
         logging.info("SINGLE OWNER LEGACY CALLBACK CUTOVER removed=%s", before - len(registry))
     if messages is not None:
@@ -313,7 +316,10 @@ def _rearm_single_owner_legacy_game_handlers():
         before = len(messages)
         messages[:] = [
             item for item in messages
-            if getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__name__", "") not in legacy_messages
+            if not (
+                getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__name__", "") in legacy_messages
+                and getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__module__", "") == "main1"
+            )
         ]
         logging.info("SINGLE OWNER LEGACY MESSAGE CUTOVER removed=%s", before - len(messages))
 
