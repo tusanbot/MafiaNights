@@ -226,10 +226,6 @@ from runtime.phase_transition_authority import install as install_phase_transiti
 install_phase_transition_authority(main)
 install_player_scoring(main)
 
-# Final challenge cutover: only StableRoundEngine executes challenge lifecycle.
-_rearm_single_owner_challenge_handlers()
-_rearm_single_owner_legacy_game_handlers()
-
 from runtime.game_info_security_v2 import install as install_game_info_security_v2
 install_game_info_security_v2(main)
 
@@ -320,6 +316,14 @@ def _rearm_single_owner_legacy_game_handlers():
             if getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__name__", "") not in legacy_messages
         ]
         logging.info("SINGLE OWNER LEGACY MESSAGE CUTOVER removed=%s", before - len(messages))
+
+
+# Final challenge/legacy cutover runs only after every canonical installer and
+# every helper definition above is available. Keeping this at the end of the
+# entry module prevents import-time NameError and guarantees the dispatcher is
+# cleaned after all compatibility installers have had their chance to register.
+_rearm_single_owner_challenge_handlers()
+_rearm_single_owner_legacy_game_handlers()
 
 
 def _rearm_canonical_new_game():
