@@ -70,8 +70,7 @@ def install(app):
             if not base: await m.reply("⚠️ بازیکنی برای شروع دور وجود ندارد."); raise CancelHandler()
             app._stable_day_active=True; app._stable_day_ended=False; app._stable_phase="normal"; app._stable_normal_order=list(base); app._stable_extra_seats=set(); app._stable_extra_used=set(); app._stable_challenge_used=set(); app._stable_challenge_locked=set(); app.turn_order=list(base); app.current_turn_index=0; app.challenge_mode=False
             await sre._advance(app); await m.reply("✅ دور شروع شد."); raise CancelHandler()
-    dp.register_message_handler(command,lambda m:resolve(getattr(m,"text",None)) is not None,content_types="text",state="*")
-    reg=getattr(getattr(dp,"message_handlers",None),"handlers",[])
-    for i,item in enumerate(reg):
-        if getattr(item,"handler",None) is command: reg.insert(0,reg.pop(i)); break
+    # Expose the specialized executor as an adapter for the canonical
+    # commands.py dispatcher. Do not register a second broad message handler.
+    app._command_surface_v3_dispatch = command
     return True
