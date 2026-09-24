@@ -122,3 +122,18 @@ def test_scenario_persistence_patch_is_adapter_only():
     assert "ScenarioRepository" in source
     assert "register_callback_query_handler" not in source
     assert "register_message_handler" not in source
+
+
+def test_single_owner_cutover_helpers_are_defined_before_invocation():
+    source = read("player_runtime_entry.py")
+    invoke = source.index("_rearm_single_owner_challenge_handlers()\n_rearm_single_owner_legacy_game_handlers()")
+    challenge_def = source.index("def _rearm_single_owner_challenge_handlers")
+    legacy_def = source.index("def _rearm_single_owner_legacy_game_handlers")
+    assert challenge_def < invoke
+    assert legacy_def < invoke
+
+
+def test_legacy_dispatcher_cutover_only_removes_main1_executors():
+    source = read("player_runtime_entry.py")
+    block = source[source.index("def _rearm_single_owner_legacy_game_handlers"):source.index("def _rearm_canonical_new_game")]
+    assert '__module__", "") == "main1"' in block
