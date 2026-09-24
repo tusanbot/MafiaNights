@@ -1363,12 +1363,15 @@ async def run_command(name: str, message: types.Message, app: Any) -> None:
     if handler:
         await handler(message,app)
         return
-    # Legacy/extended command surface remains available through the same
-    # canonical webhook route. This is deliberately a fallback, not a second
-    # message-handler registration.
-    dispatch = getattr(app, "_command_surface_v2_dispatch", None)
-    if dispatch:
-        await dispatch(message)
+    # Extended command surfaces are adapters behind this single canonical
+    # message entry point. They do not register competing message handlers.
+    dispatch_v3 = getattr(app, "_command_surface_v3_dispatch", None)
+    if dispatch_v3:
+        await dispatch_v3(message)
+        return
+    dispatch_v2 = getattr(app, "_command_surface_v2_dispatch", None)
+    if dispatch_v2:
+        await dispatch_v2(message)
 
 
 def register_commands(app: Any) -> bool:

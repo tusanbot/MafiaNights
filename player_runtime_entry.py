@@ -332,6 +332,34 @@ _rearm_single_owner_challenge_handlers()
 _rearm_single_owner_legacy_game_handlers()
 
 
+def _remove_duplicate_command_surface_handlers():
+    """Keep commands.py as the sole broad text entry point in Production.
+
+    command_surface_v2/v3 remain available as specialized execution adapters,
+    but their broad message handlers must not compete with the canonical
+    commands.handle_text_commands registration.
+    """
+    registry = getattr(getattr(main.dp, "message_handlers", None), "handlers", None)
+    if registry is None:
+        return
+    duplicate = {
+        ("runtime.command_surface_v2", "command"),
+        ("runtime.command_surface_v3", "command"),
+    }
+    before = len(registry)
+    registry[:] = [
+        item for item in registry
+        if (
+            getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__module__", ""),
+            getattr(getattr(item, "handler", None) or getattr(item, "callback", None), "__name__", ""),
+        ) not in duplicate
+    ]
+    logging.info("SINGLE OWNER COMMAND DISPATCH removed=%s canonical=commands.handle_text_commands", before - len(registry))
+
+
+_remove_duplicate_command_surface_handlers()
+
+
 def _rearm_canonical_new_game():
     """Make the final lobby the sole owner of both new-game entry routes."""
     callbacks = getattr(getattr(main.dp, "callback_query_handlers", None), "handlers", [])
