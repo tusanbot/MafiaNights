@@ -35,194 +35,206 @@ ACHIEVEMENTS = [
 
 
 def install(app=None) -> bool:
+    """Ensure the compatibility schema exactly once per database schema version.
+
+    This module used to run a large batch of CREATE/ALTER/UPSERT statements on
+    every Vercel cold start. With multiple webhook/tick workers starting at
+    once, that caused concurrent writes to mafia_achievements and PostgreSQL
+    deadlocks. A database advisory lock plus a durable version marker makes the
+    bootstrap single-writer and turns subsequent starts into a cheap read.
+    """
     repo = DatabaseRepository()
+    lock_key = 72918431
+    schema_version = 2
     try:
         with repo.SessionLocal() as s:
-            # Profile privacy settings.
-            s.execute(text("""
-                create table if not exists public.mafia_profile_settings (
-                    user_id bigint primary key,
-                    visibility text not null default 'public'
-                        check (visibility in ('public','basic','private')),
-                    show_gender boolean not null default true,
-                    show_nickname boolean not null default true,
-                    show_stats boolean not null default true,
-                    show_history boolean not null default false,
-                    show_roles boolean not null default false,
-                    show_group_stats boolean not null default false,
-                    updated_at timestamptz not null default now()
-                )
-            """))
+            got_lock = bool(s.execute(text("select pg_try_advisory_lock(:key)"), {"key": lock_key}).scalar())
+            if not got_lock:
+                logging.info("PROGRESS SCHEMA COMPATIBILITY SKIPPED lock_busy")
+                return True
 
-            # Achievement catalog and player progress.
-            s.execute(text("""
-                create table if not exists public.mafia_achievements (
-                    id text primary key,
-                    name text not null,
-                    description text not null,
-                    metric text not null,
-                    target numeric not null,
-                    reward_points integer not null default 0,
-                    tag_name text,
-                    tag_emoji text,
-                    requires_games integer not null default 0,
-                    is_active boolean not null default true,
-                    created_at timestamptz not null default now()
-                )
-            """))
-            s.execute(text("""
-                create table if not exists public.mafia_player_achievements (
-                    id bigserial primary key,
-                    player_id bigint not null,
-                    achievement_id text not null,
-                    completed_at timestamptz not null default now(),
-                    unique(player_id, achievement_id)
-                )
-            """))
-            s.execute(text("""
-                create table if not exists public.mafia_achievement_rewards (
-                    id bigserial primary key,
-                    player_id bigint not null,
-                    achievement_id text not null,
-                    reward_points integer not null,
-                    created_at timestamptz not null default now(),
-                    unique(player_id, achievement_id)
-                )
-            """))
-            s.execute(text("""
-                create table if not exists public.mafia_player_tags (
-                    id bigserial primary key,
-                    player_id bigint not null,
-                    achievement_id text not null,
-                    name text not null,
-                    emoji text not null,
-                    is_active boolean not null default false,
-                    created_at timestamptz not null default now(),
-                    unique(player_id, achievement_id)
-                )
-            """))
-
-            # Events and their stages use BIGINT IDs in the legacy production DB.
-            s.execute(text("""
-                create table if not exists public.mafia_events (
-                    id bigserial primary key,
-                    name text not null,
-                    description text,
-                    starts_at timestamp,
-                    status text not null default 'active',
-                    grouping_mode text,
-                    created_by bigint,
-                    created_at timestamptz not null default now(),
-                    updated_at timestamptz not null default now()
-                )
-            """))
-            s.execute(text("""
-                create table if not exists public.mafia_event_players (
-                    id bigserial primary key,
-                    event_id bigint not null,
-                    player_id bigint not null,
-                    status text not null default 'registered',
-                    replaced_player_id bigint,
-                    registered_at timestamptz not null default now(),
-                    updated_at timestamptz not null default now(),
-                    unique(event_id, player_id)
-                )
-            """))
-            s.execute(text("""
-                create table if not exists public.mafia_event_stages (
-                    id bigserial primary key,
-                    event_id bigint not null,
-                    name text not null,
-                    stage_type text not null,
-                    stage_order integer not null default 1,
-                    created_at timestamptz not null default now(),
-                    updated_at timestamptz not null default now()
-                )
-            """))
-            s.execute(text("""
-                create table if not exists public.mafia_event_stage_players (
-                    id bigserial primary key,
-                    stage_id bigint not null,
-                    player_id bigint not null,
-                    group_no integer,
-                    score integer,
-                    status text not null default 'active',
-                    updated_at timestamptz not null default now(),
-                    unique(stage_id, player_id)
-                )
-            """))
-
-            # Game incidents use BIGINT game IDs for the legacy production DB.
-            s.execute(text("""
-                create table if not exists public.mafia_game_incidents (
-                    id bigserial primary key,
-                    game_id bigint not null unique,
-                    content jsonb not null default '[]'::jsonb,
-                    version integer not null default 1,
-                    finalized boolean not null default false,
-                    created_by bigint,
-                    created_at timestamptz not null default now(),
-                    updated_at timestamptz not null default now()
-                )
-            """))
-            s.execute(text("""
-                create table if not exists public.mafia_game_incident_history (
-                    id bigserial primary key,
-                    incident_id bigint not null,
-                    version integer not null,
-                    content jsonb not null default '[]'::jsonb,
-                    action text not null check (action in ('create','edit')),
-                    actor_id bigint,
-                    created_at timestamptz not null default now()
-                )
-            """))
-
-            for row in ACHIEVEMENTS:
+            try:
                 s.execute(text("""
-                    insert into public.mafia_achievements
-                        (id,name,description,metric,target,reward_points,tag_name,tag_emoji,requires_games,is_active)
-                    values
-                        (:id,:name,:description,:metric,:target,:reward,:tag_name,:tag_emoji,:requires_games,true)
-                    on conflict (id) do update set
-                        name=excluded.name,
-                        description=excluded.description,
-                        metric=excluded.metric,
-                        target=excluded.target,
-                        reward_points=excluded.reward_points,
-                        tag_name=excluded.tag_name,
-                        tag_emoji=excluded.tag_emoji,
-                        requires_games=excluded.requires_games,
-                        is_active=true
-                """), {
-                    "id": row[0], "name": row[1], "description": row[2], "metric": row[3],
-                    "target": row[4], "reward": row[5], "tag_name": row[6], "tag_emoji": row[7],
-                    "requires_games": row[8],
-                })
+                    create table if not exists public.mafia_runtime_schema_meta (
+                        component text primary key,
+                        version integer not null,
+                        updated_at timestamptz not null default now()
+                    )
+                """))
+                current = s.execute(
+                    text("select version from public.mafia_runtime_schema_meta where component=:component"),
+                    {"component": "progress_schema_compat"},
+                ).scalar()
 
-            # These tables are server-owned. Direct runtime connections use the
-            # database owner/service role, while public API roles get no access.
-            for table in (
-                "mafia_events",
-                "mafia_event_players",
-                "mafia_event_stages",
-                "mafia_event_stage_players",
-                "mafia_profile_settings",
-                "mafia_achievements",
-                "mafia_player_achievements",
-                "mafia_achievement_rewards",
-                "mafia_player_tags",
-                "mafia_game_incidents",
-                "mafia_game_incident_history",
-            ):
-                s.execute(text(f"alter table public.{table} enable row level security"))
+                if current is not None and int(current) >= schema_version:
+                    logging.info("PROGRESS SCHEMA COMPATIBILITY ALREADY ACTIVE version=%s", current)
+                    s.commit()
+                    return True
 
-            roles = set(
-                s.execute(
-                    text("select rolname from pg_roles where rolname in ('anon','authenticated')")
-                ).scalars().all()
-            )
-            if {"anon", "authenticated"}.issubset(roles):
+                # Profile privacy settings.
+                s.execute(text("""
+                    create table if not exists public.mafia_profile_settings (
+                        user_id bigint primary key,
+                        visibility text not null default 'public'
+                            check (visibility in ('public','basic','private')),
+                        show_gender boolean not null default true,
+                        show_nickname boolean not null default true,
+                        show_stats boolean not null default true,
+                        show_history boolean not null default false,
+                        show_roles boolean not null default false,
+                        show_group_stats boolean not null default false,
+                        updated_at timestamptz not null default now()
+                    )
+                """))
+
+                # Achievement catalog and player progress.
+                s.execute(text("""
+                    create table if not exists public.mafia_achievements (
+                        id text primary key,
+                        name text not null,
+                        description text not null,
+                        metric text not null,
+                        target numeric not null,
+                        reward_points integer not null default 0,
+                        tag_name text,
+                        tag_emoji text,
+                        requires_games integer not null default 0,
+                        is_active boolean not null default true,
+                        created_at timestamptz not null default now()
+                    )
+                """))
+                s.execute(text("""
+                    create table if not exists public.mafia_player_achievements (
+                        id bigserial primary key,
+                        player_id bigint not null,
+                        achievement_id text not null,
+                        completed_at timestamptz not null default now(),
+                        unique(player_id, achievement_id)
+                    )
+                """))
+                s.execute(text("""
+                    create table if not exists public.mafia_achievement_rewards (
+                        id bigserial primary key,
+                        player_id bigint not null,
+                        achievement_id text not null,
+                        reward_points integer not null,
+                        created_at timestamptz not null default now(),
+                        unique(player_id, achievement_id)
+                    )
+                """))
+                s.execute(text("""
+                    create table if not exists public.mafia_player_tags (
+                        id bigserial primary key,
+                        player_id bigint not null,
+                        achievement_id text not null,
+                        name text not null,
+                        emoji text not null,
+                        is_active boolean not null default false,
+                        created_at timestamptz not null default now(),
+                        unique(player_id, achievement_id)
+                    )
+                """))
+
+                s.execute(text("""
+                    create table if not exists public.mafia_events (
+                        id bigserial primary key,
+                        name text not null,
+                        description text,
+                        starts_at timestamp,
+                        status text not null default 'active',
+                        grouping_mode text,
+                        created_by bigint,
+                        created_at timestamptz not null default now(),
+                        updated_at timestamptz not null default now()
+                    )
+                """))
+                s.execute(text("""
+                    create table if not exists public.mafia_event_players (
+                        id bigserial primary key,
+                        event_id bigint not null,
+                        player_id bigint not null,
+                        status text not null default 'registered',
+                        replaced_player_id bigint,
+                        registered_at timestamptz not null default now(),
+                        updated_at timestamptz not null default now(),
+                        unique(event_id, player_id)
+                    )
+                """))
+                s.execute(text("""
+                    create table if not exists public.mafia_event_stages (
+                        id bigserial primary key,
+                        event_id bigint not null,
+                        name text not null,
+                        stage_type text not null,
+                        stage_order integer not null default 1,
+                        created_at timestamptz not null default now(),
+                        updated_at timestamptz not null default now()
+                    )
+                """))
+                s.execute(text("""
+                    create table if not exists public.mafia_event_stage_players (
+                        id bigserial primary key,
+                        stage_id bigint not null,
+                        player_id bigint not null,
+                        group_no integer,
+                        score integer,
+                        status text not null default 'active',
+                        updated_at timestamptz not null default now(),
+                        unique(stage_id, player_id)
+                    )
+                """))
+
+                s.execute(text("""
+                    create table if not exists public.mafia_game_incidents (
+                        id bigserial primary key,
+                        game_id bigint not null unique,
+                        content jsonb not null default '[]'::jsonb,
+                        version integer not null default 1,
+                        finalized boolean not null default false,
+                        created_by bigint,
+                        created_at timestamptz not null default now(),
+                        updated_at timestamptz not null default now()
+                    )
+                """))
+                s.execute(text("""
+                    create table if not exists public.mafia_game_incident_history (
+                        id bigserial primary key,
+                        incident_id bigint not null,
+                        version integer not null,
+                        content jsonb not null default '[]'::jsonb,
+                        action text not null check (action in ('create','edit')),
+                        actor_id bigint,
+                        created_at timestamptz not null default now()
+                    )
+                """))
+
+                for row in ACHIEVEMENTS:
+                    s.execute(text("""
+                        insert into public.mafia_achievements
+                            (id,name,description,metric,target,reward_points,tag_name,tag_emoji,requires_games,is_active)
+                        values
+                            (:id,:name,:description,:metric,:target,:reward,:tag_name,:tag_emoji,:requires_games,true)
+                        on conflict (id) do update set
+                            name=excluded.name,
+                            description=excluded.description,
+                            metric=excluded.metric,
+                            target=excluded.target,
+                            reward_points=excluded.reward_points,
+                            tag_name=excluded.tag_name,
+                            tag_emoji=excluded.tag_emoji,
+                            requires_games=excluded.requires_games,
+                            is_active=true
+                    """), {
+                        "id": row[0], "name": row[1], "description": row[2], "metric": row[3],
+                        "target": row[4], "reward": row[5], "tag_name": row[6], "tag_emoji": row[7],
+                        "requires_games": row[8],
+                    })
+
                 for table in (
+                    "mafia_events",
+                    "mafia_event_players",
+                    "mafia_event_stages",
+                    "mafia_event_stage_players",
                     "mafia_profile_settings",
                     "mafia_achievements",
                     "mafia_player_achievements",
@@ -231,16 +243,39 @@ def install(app=None) -> bool:
                     "mafia_game_incidents",
                     "mafia_game_incident_history",
                 ):
-                    s.execute(text(f"revoke all on table public.{table} from anon, authenticated"))
+                    s.execute(text(f"alter table public.{table} enable row level security"))
 
-            # Retire the old 10-challenge catalog entry; the canonical challenge achievement is now 100.
-            s.execute(text("update public.mafia_achievements set is_active=false where id='challenges_10'"))
-            s.execute(text("alter table public.mafia_ratings add column if not exists base_score integer not null default 0"))
+                roles = set(
+                    s.execute(
+                        text("select rolname from pg_roles where rolname in ('anon','authenticated')")
+                    ).scalars().all()
+                )
+                if {"anon", "authenticated"}.issubset(roles):
+                    for table in (
+                        "mafia_profile_settings",
+                        "mafia_achievements",
+                        "mafia_player_achievements",
+                        "mafia_achievement_rewards",
+                        "mafia_player_tags",
+                        "mafia_game_incidents",
+                        "mafia_game_incident_history",
+                    ):
+                        s.execute(text(f"revoke all on table public.{table} from anon, authenticated"))
 
-            s.commit()
+                s.execute(text("update public.mafia_achievements set is_active=false where id='challenges_10'"))
+                s.execute(text("alter table public.mafia_ratings add column if not exists base_score integer not null default 0"))
 
-        logging.info("PROGRESS SCHEMA COMPATIBILITY ACTIVE")
-        return True
+                s.execute(text("""
+                    insert into public.mafia_runtime_schema_meta(component, version)
+                    values (:component, :version)
+                    on conflict (component) do update
+                    set version=excluded.version, updated_at=now()
+                """), {"component": "progress_schema_compat", "version": schema_version})
+                s.commit()
+                logging.info("PROGRESS SCHEMA COMPATIBILITY ACTIVE version=%s", schema_version)
+                return True
+            finally:
+                s.execute(text("select pg_advisory_unlock(:key)"), {"key": lock_key})
     except Exception:
         logging.exception("PROGRESS SCHEMA COMPATIBILITY FAILED")
         try:
