@@ -157,3 +157,13 @@ def test_canonical_command_dispatch_reaches_extended_adapters():
     source = read("commands.py")
     assert "dispatch_v3 = getattr(app, \"_command_surface_v3_dispatch\", None)" in source
     assert "dispatch_v2 = getattr(app, \"_command_surface_v2_dispatch\", None)" in source
+
+
+def test_main1_residual_lambda_callbacks_are_cut_over():
+    source = read("player_runtime_entry.py")
+    block = source[source.index("def _rearm_single_owner_legacy_game_handlers"):source.index("def _remove_duplicate_command_surface_handlers")]
+    for name in ("list_players_pv", "show_substitute_list", "choose_substitute", "challenge_status_pv", "send_roles_panel"):
+        assert f'"{name}"' in block
+    assert 'c.data == "resend_roles"' in block
+    assert 'c.data == "list_players"' in block
+    assert 'getattr(fn, "__name__", "") != "<lambda>"' in block
