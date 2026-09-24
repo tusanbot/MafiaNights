@@ -137,3 +137,23 @@ def test_legacy_dispatcher_cutover_only_removes_main1_executors():
     source = read("player_runtime_entry.py")
     block = source[source.index("def _rearm_single_owner_legacy_game_handlers"):source.index("def _rearm_canonical_new_game")]
     assert '__module__", "") == "main1"' in block
+
+
+def test_command_surface_v3_is_an_adapter_not_a_broad_handler():
+    source = read("runtime/command_surface_v3.py")
+    assert "app._command_surface_v3_dispatch = command" in source
+    assert "dp.register_message_handler(command" not in source
+
+
+def test_production_has_one_broad_text_command_owner():
+    entry = read("player_runtime_entry.py")
+    assert "_remove_duplicate_command_surface_handlers()" in entry
+    block = entry[entry.index("def _remove_duplicate_command_surface_handlers"):entry.index("def _rearm_canonical_new_game")]
+    assert '("runtime.command_surface_v2", "command")' in block
+    assert '("runtime.command_surface_v3", "command")' in block
+
+
+def test_canonical_command_dispatch_reaches_extended_adapters():
+    source = read("commands.py")
+    assert "dispatch_v3 = getattr(app, \"_command_surface_v3_dispatch\", None)" in source
+    assert "dispatch_v2 = getattr(app, \"_command_surface_v2_dispatch\", None)" in source
