@@ -1860,6 +1860,13 @@ async def start_cmd(message: types.Message):
 
 @dp.callback_query_handler(lambda c: c.data == "new_game")
 async def start_game(callback: types.CallbackQuery):
+    # Legacy callback kept for compatibility, but it must never execute the old
+    # lobby creation flow. The production entrypoint exposes the canonical
+    # runtime.lobby_ui_final handler under _canonical_new_game_handler.
+    canonical = globals().get("_canonical_new_game_handler")
+    if canonical is not None and canonical is not start_game:
+        await canonical(callback)
+        return
     # محدودیت به گروه خاص
     if callback.message.chat.id != ALLOWED_GROUP_ID:
         await callback.answer("❌ این ربات فقط در گروه اصلی کار می‌کند.", show_alert=True)
@@ -2676,6 +2683,25 @@ async def speaker_auto(callback: types.CallbackQuery):
         turn_order.remove(current_speaker)
     turn_order.insert(0, current_speaker)
 
+    # Persist head selection through the canonical turn/round authority.
+    # Legacy globals remain a compatibility cache only.
+    try:
+        authority = getattr(main_module := __import__("main1"), "turn_round_authority", None)
+        if authority is not None:
+            authority.persist_position(
+                int(group_chat_id),
+                order=turn_order,
+                index=0,
+                seat=int(current_speaker),
+                extra_state={
+                    "head_seat": int(current_speaker),
+                    "stable_day_active": False,
+                    "stable_day_ended": False,
+                },
+            )
+    except Exception:
+        logging.exception("speaker_auto: failed to persist canonical head selection")
+
     await callback.answer(f"✅ صندلی {current_speaker} به صورت تصادفی سر صحبت شد.")
 
     # نمایش نوبت‌ها (اختیاری، اگر تابع داری)
@@ -2774,6 +2800,24 @@ async def head_set_handler(callback: types.CallbackQuery):
     turn_order = all_seats[start_index:] + all_seats[:start_index]
 
     current_turn_index = 0
+
+    # Persist manual head selection before the user is offered «شروع دور».
+    try:
+        authority = getattr(__import__("main1"), "turn_round_authority", None)
+        if authority is not None:
+            authority.persist_position(
+                int(group_chat_id),
+                order=turn_order,
+                index=0,
+                seat=int(seat),
+                extra_state={
+                    "head_seat": int(seat),
+                    "stable_day_active": False,
+                    "stable_day_ended": False,
+                },
+            )
+    except Exception:
+        logging.exception("head_set_handler: failed to persist canonical head selection")
 
     await callback.answer("✅ سر صحبت انتخاب شد!")
 

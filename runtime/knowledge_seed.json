@@ -1,0 +1,2449 @@
+[
+  {
+    "title": "الکلاسیکو",
+    "content": "سناریوی الکلاسیکو در Mafia Nights با ۱۱ صندلی اجرا می‌شود و نقش‌های داخلی آن شامل مورنو(تفنگدار)، پابلو اسکوبار(پدرخوانده)، دکتر بریجیت، خوان(ماتادور)، بناپارت(اوشن)، شهروند ساده، بلانکو(گودمن)، مارتینز(حرفه‌ای)، چاپلین و چرچیل است. در منابع منتشرشده درباره این سناریو، پابلو اسکوبار رهبر تیم سیاه و صاحب شلیک معرفی شده؛ خوان/ماتادور توانایی بستن قابلیت یک بازیکن سفید را دارد؛ بلانکو توان خریداری یک شهر ساده/چاپلین را دارد؛ چرچیل مستقل با پیش‌بینی خروج بازیکن شرط برد ویژه دارد؛ بریجیت توان نجات دارد؛ مورنو یک اسلحه جنگی و یک مشقی در اختیار دارد؛ بناپارت با کد، بازیکن را برای بیداری بعدی هدف می‌گیرد؛ مارتینز شلیک و تشخیص هویت دارد؛ و چاپلین از بازیکن در برابر برخی تغییرات نقش/خرید محافظت می‌کند. این جزئیات از منبع عمومی آمده‌اند و باید با پیاده‌سازی داخلی بازی تطبیق داده شوند.",
+    "scope": "scenario",
+    "scenario_name": "الکلاسیکو",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "web+internal",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو بالاخره منتشر شد — 2ghaab",
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "مورنو(تفنگدار)",
+        "پابلو اسکوبار(پدرخوانده)",
+        "دکتر بریجیت",
+        "خوان(ماتادور)",
+        "بناپارت(اوشن)",
+        "شهروند ساده",
+        "بلانکو(گودمن)",
+        "مارتینز(حرفه‌ای)",
+        "چاپلین",
+        "چرچیل",
+        "شهروند ساده"
+      ],
+      "config": {
+        "sides": {
+          "چرچیل": "مستقل",
+          "چاپلین": "شهروند",
+          "دکتر بریجیت": "شهروند",
+          "شهروند ساده": "شهروند",
+          "بلانکو(گودمن)": "مافیا",
+          "بناپارت(اوشن)": "شهروند",
+          "خوان(ماتادور)": "مافیا",
+          "مورنو(تفنگدار)": "شهروند",
+          "مارتینز(حرفه‌ای)": "شهروند",
+          "پابلو اسکوبار(پدرخوانده)": "مافیا"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 11,
+      "min_players": 11,
+      "review_note": "External role descriptions are reference material, not a replacement for Mafia Nights rules.",
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "بازپرس",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 10 تا 10\n\nنقش‌ها: [\"شهروند ساده\", \"بازپرس\", \"شیاد\", \"روئین تن\", \"محقق\", \"ناتو\", \"پزشک\", \"کارآگاه\", \"رئیس مافیا\", \"شهروند ساده\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"شیاد\": \"مافیا\", \"محقق\": \"شهروند\", \"ناتو\": \"مافیا\", \"پزشک\": \"شهروند\", \"بازپرس\": \"شهروند\", \"کارآگاه\": \"شهروند\", \"روئین تن\": \"شهروند\", \"رئیس مافیا\": \"مافیا\", \"شهروند ساده\": \"شهروند\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"free\", \"challenge_limit\": null}",
+    "scope": "scenario",
+    "scenario_name": "بازپرس",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "شهروند ساده",
+        "بازپرس",
+        "شیاد",
+        "روئین تن",
+        "محقق",
+        "ناتو",
+        "پزشک",
+        "کارآگاه",
+        "رئیس مافیا",
+        "شهروند ساده"
+      ],
+      "config": {
+        "sides": {
+          "شیاد": "مافیا",
+          "محقق": "شهروند",
+          "ناتو": "مافیا",
+          "پزشک": "شهروند",
+          "بازپرس": "شهروند",
+          "کارآگاه": "شهروند",
+          "روئین تن": "شهروند",
+          "رئیس مافیا": "مافیا",
+          "شهروند ساده": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "free",
+        "challenge_limit": null
+      },
+      "max_players": 10,
+      "min_players": 10,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "پدرخوانده-جک",
+    "content": "پدرخوانده-جک در Mafia Nights با ۱۱ صندلی و نقش‌های کنستانتین، شهر ساده، پدرخوانده، لئون، دکتر واتسون، ماتادور، جک گنجیشکه، گودمن و همشهری اجرا می‌شود. ساید هر نقش از تنظیم داخلی سناریو خوانده می‌شود. این سناریو یک نسخه سفارشی از خانواده سناریوهای پدرخوانده است؛ بنابراین توضیحات عمومی نقش‌های مشابه را نباید بدون تطبیق با منطق داخلی ربات به‌عنوان قانون قطعی پاسخ داد.",
+    "scope": "scenario",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "کنستانتین",
+        "شهر ساده",
+        "شهر ساده",
+        "پدرخوانده",
+        "لئون",
+        "دکتر واتسون",
+        "ماتادور",
+        "جک گنجیشکه",
+        "گودمن",
+        "همشهری",
+        "شهر ساده"
+      ],
+      "config": {
+        "sides": {
+          "لئون": "شهروند",
+          "گودمن": "مافیا",
+          "همشهری": "شهروند",
+          "ماتادور": "مافیا",
+          "شهر ساده": "شهروند",
+          "پدرخوانده": "مافیا",
+          "کنستانتین": "شهروند",
+          "جک گنجیشکه": "مستقل",
+          "دکتر واتسون": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 11,
+      "min_players": 11,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "پدرخوانده-نوسترا",
+    "content": "پدرخوانده-نوسترا در Mafia Nights با ۱۱ صندلی و نقش‌های کنستانتین، شهر ساده، پدرخوانده، لئون، دکتر واتسون، ماتادور، نوستراداموس، گودمن، همشهری کین و شهر ساده اجرا می‌شود. نوستراداموس در تنظیم داخلی این سناریو مستقل است. برای پاسخ‌های ربات، قوانین داخلی سناریو بر منابع عمومی مشابه اولویت دارد.",
+    "scope": "scenario",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "کنستانتین",
+        "شهر ساده",
+        "شهر ساده",
+        "پدرخوانده",
+        "لئون",
+        "دکتر واتسون",
+        "ماتادور",
+        "نوستراداموس",
+        "گودمن",
+        "همشهری کین",
+        "شهر ساده"
+      ],
+      "config": {
+        "sides": {
+          "لئون": "شهروند",
+          "گودمن": "مافیا",
+          "ماتادور": "مافیا",
+          "شهر ساده": "شهروند",
+          "پدرخوانده": "مافیا",
+          "کنستانتین": "شهروند",
+          "همشهری کین": "شهروند",
+          "دکتر واتسون": "شهروند",
+          "نوستراداموس": "مستقل"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 11,
+      "min_players": 11,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "پدرخوانده-شرلوک",
+    "content": "پدرخوانده-شرلوک در Mafia Nights با ۱۱ صندلی و نقش‌های کنستانتین، شهر ساده، پدرخوانده، لئون، دکتر واتسون، ماتادور، شرلوک، گودمن، همشهری کین و شهر ساده اجرا می‌شود. شرلوک در تنظیم داخلی این سناریو مستقل است. برای پاسخ‌های ربات، قوانین داخلی سناریو بر منابع عمومی مشابه اولویت دارد.",
+    "scope": "scenario",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "کنستانتین",
+        "شهر ساده",
+        "شهر ساده",
+        "پدرخوانده",
+        "لئون",
+        "دکتر واتسون",
+        "ماتادور",
+        "شرلوک",
+        "گودمن",
+        "همشهری کین",
+        "شهر ساده"
+      ],
+      "config": {
+        "sides": {
+          "لئون": "شهروند",
+          "شرلوک": "مستقل",
+          "گودمن": "مافیا",
+          "ماتادور": "مافیا",
+          "شهر ساده": "شهروند",
+          "پدرخوانده": "مافیا",
+          "کنستانتین": "شهروند",
+          "همشهری کین": "شهروند",
+          "دکتر واتسون": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 11,
+      "min_players": 11,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "روسی 6",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 6 تا 6\n\nنقش‌ها: [\"شهروند\", \"شهروند\", \"مافیا\", \"شهروند\", \"مافیا\", \"شهروند\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"مافیا\": \"مافیا\", \"شهروند\": \"شهروند\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"free\", \"challenge_limit\": null}",
+    "scope": "scenario",
+    "scenario_name": "روسی 6",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "شهروند",
+        "شهروند",
+        "مافیا",
+        "شهروند",
+        "مافیا",
+        "شهروند"
+      ],
+      "config": {
+        "sides": {
+          "مافیا": "مافیا",
+          "شهروند": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "free",
+        "challenge_limit": null
+      },
+      "max_players": 6,
+      "min_players": 6,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "زودیاک",
+    "content": "سناریوی زودیاک در این ربات با ۱۲ صندلی و نقش‌های ثبت‌شده در جدول سناریو اجرا می‌شود: شعبده باز، تفنگدار، شهر ساده، اوشن، محافظ، حرفه ای، آل کاپون، بمب گذار، دکتر، کاراگاه، شهر ساده و زودیاک. سایدها از تنظیم داخلی سناریو خوانده می‌شوند و برای پاسخ‌های ربات، تنظیم داخلی Mafia Nights مرجع اول است. منابع وب برای تکمیل توضیح نقش‌ها و قوانین عمومی استفاده می‌شوند و در صورت تعارض، پیاده‌سازی داخلی اولویت دارد. منابع بیرونی توضیح می‌دهند که زودیاک یک نقش مستقل است و در نسخه‌های رایج این سناریو با شهر و مافیا رقابت می‌کند؛ همچنین شعبده‌باز توانایی شبانه را می‌بندد، بمب‌گذار بمب می‌گذارد، پزشک نجات می‌دهد، کارآگاه استعلام می‌گیرد، حرفه‌ای شلیک دارد، تفنگدار اسلحه می‌دهد و اوشن هم‌شهری‌ها را بیدار می‌کند. جزئیات دقیق این اقدامات باید با قوانین همین ربات تطبیق داده شود.",
+    "scope": "scenario",
+    "scenario_name": "زودیاک",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "web+internal",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/zodiac/",
+    "source_title": "سناریو زودیاک — RoundGangs",
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "شعبده باز",
+        "تفنگدار",
+        "شهر ساده",
+        "اوشن",
+        "محافظ",
+        "حرفه ای",
+        "آل کاپون",
+        "بمب گذار",
+        "دکتر",
+        "کاراگاه",
+        "شهر ساده",
+        "زودیاک"
+      ],
+      "config": {
+        "sides": {
+          "اوشن": "شهروند",
+          "دکتر": "شهروند",
+          "محافظ": "شهروند",
+          "زودیاک": "مستقل",
+          "حرفه ای": "شهروند",
+          "تفنگدار": "شهروند",
+          "کاراگاه": "شهروند",
+          "آل کاپون": "مافیا",
+          "بمب گذار": "مافیا",
+          "شهر ساده": "شهروند",
+          "شعبده باز": "مافیا"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 12,
+      "min_players": 12,
+      "review_note": "Internal Mafia Nights configuration is authoritative; web source is supplementary.",
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "سناریو تستی 2",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 2 تا 2\n\nنقش‌ها: [\"مافیا\", \"شهروند\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"مافیا\": \"مافیا\", \"شهروند\": \"شهروند\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"limited\", \"challenge_limit\": 1}",
+    "scope": "scenario",
+    "scenario_name": "سناریو تستی 2",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "مافیا",
+        "شهروند"
+      ],
+      "config": {
+        "sides": {
+          "مافیا": "مافیا",
+          "شهروند": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 2,
+      "min_players": 2,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "قمار باز",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 11 تا 11\n\nنقش‌ها: [\"ماسون\", \"آهنگر\", \"قمار باز\", \"تفنگدار\", \"کابوی\", \"معشوقه\", \"شاهکش\", \"روان شناس\", \"عنکبوت\", \"تروریست\", \"عینک ساز\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"آهنگر\": \"شهروند\", \"شاهکش\": \"مافیا\", \"ماسون\": \"شهروند\", \"کابوی\": \"شهروند\", \"عنکبوت\": \"شهروند\", \"معشوقه\": \"مافیا\", \"تروریست\": \"مافیا\", \"تفنگدار\": \"شهروند\", \"عینک ساز\": \"شهروند\", \"قمار باز\": \"مافیا\", \"روان شناس\": \"شهروند\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"limited\", \"challenge_limit\": 1}",
+    "scope": "scenario",
+    "scenario_name": "قمار باز",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "ماسون",
+        "آهنگر",
+        "قمار باز",
+        "تفنگدار",
+        "کابوی",
+        "معشوقه",
+        "شاهکش",
+        "روان شناس",
+        "عنکبوت",
+        "تروریست",
+        "عینک ساز"
+      ],
+      "config": {
+        "sides": {
+          "آهنگر": "شهروند",
+          "شاهکش": "مافیا",
+          "ماسون": "شهروند",
+          "کابوی": "شهروند",
+          "عنکبوت": "شهروند",
+          "معشوقه": "مافیا",
+          "تروریست": "مافیا",
+          "تفنگدار": "شهروند",
+          "عینک ساز": "شهروند",
+          "قمار باز": "مافیا",
+          "روان شناس": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 11,
+      "min_players": 11,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "کاپو",
+    "content": "سناریوی کاپو در نسخه فعلی Mafia Nights با ۱۰ صندلی ثبت شده است و نقش‌های آن عبارت‌اند از کاراگاه، شهر ساده، جلاد، وارث، مظنون، دن مافیا، عطار، زره ساز، جادوگر و شهر ساده. سایدها از تنظیم داخلی سناریو خوانده می‌شوند. منابع عمومی کاپو را سناریویی شهر/مافیا با نقش‌های تخصصی معرفی می‌کنند: دن مافیا رهبر و فرمانده شلیک است، جلاد با حدس نقش حذف می‌کند، جادوگر توانایی یا استعلام را مختل/معکوس می‌کند، زره‌ساز نجات می‌دهد، عطار زهر و پادزهر دارد، کارآگاه استعلام می‌گیرد و وارث می‌تواند توانایی نقش هدف را به ارث ببرد. این توضیحات وبی هستند و قبل از استفاده به‌عنوان قانون قطعی باید با منطق داخلی Mafia Nights تطبیق داده شوند.",
+    "scope": "scenario",
+    "scenario_name": "کاپو",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "web+internal",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/capo/",
+    "source_title": "کاپو — RoundGangs",
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "کاراگاه",
+        "شهر ساده",
+        "جلاد",
+        "وارث",
+        "مظنون",
+        "دن مافیا",
+        "عطار",
+        "زره ساز",
+        "جادوگر",
+        "شهر ساده"
+      ],
+      "config": {
+        "sides": {
+          "جلاد": "مافیا",
+          "عطار": "شهروند",
+          "وارث": "شهروند",
+          "مظنون": "شهروند",
+          "جادوگر": "مافیا",
+          "زره ساز": "شهروند",
+          "کاراگاه": "شهروند",
+          "دن مافیا": "مافیا",
+          "شهر ساده": "شهروند"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "free",
+        "challenge_limit": null
+      },
+      "max_players": 10,
+      "min_players": 10,
+      "review_note": "Internal Mafia Nights configuration is authoritative; web source is supplementary.",
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "کلاسیک 12",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 12 تا 12\n\nنقش‌ها: [\"ماسون\", \"کابوی\", \"رئیس مافیا\", \"دکتر\", \"خرابکار\", \"اسنایپر\", \"ساقی\", \"جاسوس\", \"کشیش\", \"تفنگدار\", \"ناتاشا\", \"روئین تن\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"دکتر\": \"شهروند\", \"ساقی\": \"شهروند\", \"کشیش\": \"شهروند\", \"جاسوس\": \"مافیا\", \"ماسون\": \"شهروند\", \"کابوی\": \"شهروند\", \"ناتاشا\": \"مافیا\", \"اسنایپر\": \"شهروند\", \"تفنگدار\": \"شهروند\", \"خرابکار\": \"مافیا\", \"روئین تن\": \"شهروند\", \"رئیس مافیا\": \"مافیا\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"limited\", \"challenge_limit\": 1}",
+    "scope": "scenario",
+    "scenario_name": "کلاسیک 12",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "ماسون",
+        "کابوی",
+        "رئیس مافیا",
+        "دکتر",
+        "خرابکار",
+        "اسنایپر",
+        "ساقی",
+        "جاسوس",
+        "کشیش",
+        "تفنگدار",
+        "ناتاشا",
+        "روئین تن"
+      ],
+      "config": {
+        "sides": {
+          "دکتر": "شهروند",
+          "ساقی": "شهروند",
+          "کشیش": "شهروند",
+          "جاسوس": "مافیا",
+          "ماسون": "شهروند",
+          "کابوی": "شهروند",
+          "ناتاشا": "مافیا",
+          "اسنایپر": "شهروند",
+          "تفنگدار": "شهروند",
+          "خرابکار": "مافیا",
+          "روئین تن": "شهروند",
+          "رئیس مافیا": "مافیا"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 12,
+      "min_players": 12,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "کلاسیک 13",
+    "content": "اطلاعات ساختاری استخراج‌شده از سناریوی فعال Mafia Nights.\n\nتعداد بازیکن: 13 تا 13\n\nنقش‌ها: [\"ماسون\", \"کابوی\", \"رئیس مافیا\", \"نوفیس\", \"دکتر\", \"خرابکار\", \"اسنایپر\", \"ساقی\", \"جاسوس\", \"کشیش\", \"تفنگدار\", \"ناتاشا\", \"روئین تن\"]\n\nسایدها و تنظیمات فعلی: {\"sides\": {\"دکتر\": \"شهروند\", \"ساقی\": \"شهروند\", \"کشیش\": \"شهروند\", \"جاسوس\": \"مافیا\", \"ماسون\": \"شهروند\", \"نوفیس\": \"مستقل\", \"کابوی\": \"شهروند\", \"ناتاشا\": \"مافیا\", \"اسنایپر\": \"شهروند\", \"تفنگدار\": \"شهروند\", \"خرابکار\": \"مافیا\", \"روئین تن\": \"شهروند\", \"رئیس مافیا\": \"مافیا\"}, \"legacy_source\": \"scenarios.json\", \"challenge_mode\": \"limited\", \"challenge_limit\": 1}",
+    "scope": "scenario",
+    "scenario_name": "کلاسیک 13",
+    "role_name": null,
+    "status": "verified",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": null,
+    "confidence": "confirmed",
+    "metadata": {
+      "roles": [
+        "ماسون",
+        "کابوی",
+        "رئیس مافیا",
+        "نوفیس",
+        "دکتر",
+        "خرابکار",
+        "اسنایپر",
+        "ساقی",
+        "جاسوس",
+        "کشیش",
+        "تفنگدار",
+        "ناتاشا",
+        "روئین تن"
+      ],
+      "config": {
+        "sides": {
+          "دکتر": "شهروند",
+          "ساقی": "شهروند",
+          "کشیش": "شهروند",
+          "جاسوس": "مافیا",
+          "ماسون": "شهروند",
+          "نوفیس": "مستقل",
+          "کابوی": "شهروند",
+          "ناتاشا": "مافیا",
+          "اسنایپر": "شهروند",
+          "تفنگدار": "شهروند",
+          "خرابکار": "مافیا",
+          "روئین تن": "شهروند",
+          "رئیس مافیا": "مافیا"
+        },
+        "legacy_source": "scenarios.json",
+        "challenge_mode": "limited",
+        "challenge_limit": 1
+      },
+      "max_players": 13,
+      "min_players": 13,
+      "source_table": "mafia_scenarios"
+    }
+  },
+  {
+    "title": "مارتینز(حرفه‌ای)",
+    "content": "مارتینز می‌تواند به یک عضو سیاه شلیک کند؛ همچنین یک بار توانایی تشخیص هویت و سلاخی دارد و در برخی شرایط این توانایی حتی در برابر ماتادور قابل استفاده است.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "مارتینز(حرفه‌ای)",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو - 2ghaab",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "مورنو(تفنگدار)",
+    "content": "مورنو یک تفنگ جنگی و یک تفنگ مشقی دارد و در شب می‌تواند آن‌ها را توزیع کند؛ قواعد بازگشت تفنگ جنگی به مورنو به استفاده یا عدم استفاده گیرنده وابسته است.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "مورنو(تفنگدار)",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو - 2ghaab",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "چرچیل",
+    "content": "چرچیل مستقل است و با پیش‌بینی خروج یک بازیکن و تحقق شرط خود، وضعیت ویژه‌ای پیدا می‌کند؛ شلیک مستقیم ندارد اما طبق منبع می‌تواند شناسایی و سلاخی یا رأی‌گیری علیه هدف انجام دهد.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "چرچیل",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو - 2ghaab",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "الکلاسیکو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "پابلو اسکوبار(پدرخوانده)",
+    "content": "پابلو اسکوبار رهبر تیم سیاه و صاحب شلیک است؛ در منبع سناریوی الکلاسیکو تا پایان چالش نامیرا معرفی شده و امکان سلاخیِ مبتنی بر تشخیص هویت نیز دارد.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "پابلو اسکوبار(پدرخوانده)",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو - 2ghaab",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "الکلاسیکو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "دکتر بریجیت",
+    "content": "دکتر بریجیت توانایی نجات دارد و در منبع الکلاسیکو امکان چندبار خودنجاتی با محدودیت شب‌های متوالی توضیح داده شده است.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "دکتر بریجیت",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو - 2ghaab",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "چاپلین",
+    "content": "چاپلین در شب اول یک بازیکن را انتخاب می‌کند تا در برابر خرید بلانکو یا تغییر DNA از او محافظت شود.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "چاپلین",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو - 2ghaab",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "خوان(ماتادور)",
+    "content": "خوان می‌تواند قابلیت یک بازیکن سفید را از کار بیندازد و در دو شب متوالی نمی‌تواند یک هدف را انتخاب کند.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "خوان(ماتادور)",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو - 2ghaab",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "الکلاسیکو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شهروند ساده",
+    "content": "شهروند ساده قابلیت شبانه پایه ندارد؛ در نسخه الکلاسیکو برخی کارت‌های ویژه روزانه می‌توانند روی روند بازی او اثر بگذارند.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "شهروند ساده",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو - 2ghaab",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "بناپارت(اوشن)",
+    "content": "بناپارت هر شب یک بازیکن را با کد مشخص می‌کند تا گرداننده او را بیدار کند؛ انتخاب برخی نقش‌ها پیامد مرگ برای بناپارت دارد.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "بناپارت(اوشن)",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو - 2ghaab",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "الکلاسیکو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "بلانکو(گودمن)",
+    "content": "بلانکو پس از خروج یکی از اعضای مافیا یا شهروند ساده می‌تواند مطابق قوانین سناریو اقدام به خرید یک شهروند ساده یا چاپلین کند؛ در شرایط خاص توانایی شلیک/سلاخی نیز دارد.",
+    "scope": "role",
+    "scenario_name": "الکلاسیکو",
+    "role_name": "بلانکو(گودمن)",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://www.youtube.com/watch?v=oBvWfd7BVC8",
+    "source_title": "سناریو الکلاسیکو - 2ghaab",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "الکلاسیکو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "بازپرس",
+    "content": "بازپرس می‌تواند دو بازیکن را برای دفاعیه انتخاب کند. اگر هر دو زنده باشند روند دفاعیه و در صورت ادامه، رأی‌گیری اجباری بین همان دو نفر انجام می‌شود. تعداد دفعات استفاده نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "بازپرس",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://gorgine.com/scenarios/detective/",
+    "source_title": "آموزش سناریو بازپرس - گرگینه",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "پزشک",
+    "content": "پزشک شبانه یک بازیکن را نجات می‌دهد و در قواعد عمومی سناریو امکان خودنجاتی محدود دارد.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "پزشک",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://gorgine.com/scenarios/detective/",
+    "source_title": "آموزش سناریو بازپرس - گرگینه",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شیاد",
+    "content": "شیاد هر شب یک نفر را انتخاب می‌کند؛ اگر هدف کارآگاه باشد، استعلامی که کارآگاه دریافت می‌کند منفی خواهد بود. در قواعد عمومی این سناریو تکرار هدف مجاز است.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "شیاد",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://gorgine.com/scenarios/detective/",
+    "source_title": "آموزش سناریو بازپرس - گرگینه",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "بازپرس",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "محقق",
+    "content": "محقق هر شب می‌تواند خود را به یک بازیکن گره بزند؛ اگر محقق از بازی خارج شود و فرد متصل‌شده رئیس مافیا نباشد، فرد متصل نیز خارج می‌شود.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "محقق",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://gorgine.com/scenarios/detective/",
+    "source_title": "آموزش سناریو بازپرس - گرگینه",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "روئین تن",
+    "content": "روئین‌تن در شب با شلیک کشته نمی‌شود و در روز با رأی می‌تواند خارج شود؛ در قواعد عمومی، سوداگری مافیا با او امکان‌پذیر است.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "روئین تن",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://gorgine.com/scenarios/detective/",
+    "source_title": "آموزش سناریو بازپرس - گرگینه",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شهروند ساده",
+    "content": "شهروند ساده قابلیت شبانه ویژه ندارد و با تحلیل، دفاع و رأی روز برای شناسایی تیم مافیا بازی می‌کند.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "شهروند ساده",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://whitesho.com/NewTvScenario/سناریو-بازپرس-بازی-مافیا",
+    "source_title": "سناریو بازپرس - وایت‌شو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "رئیس مافیا",
+    "content": "رئیس مافیا رهبر تیم سیاه و صاحب شلیک است؛ استعلام او برای کارآگاه منفی است. در بازپرس می‌تواند به‌جای شلیک، سازوکار سوداگری را اجرا کند و در صورت شرایط لازم یک شهروند ساده یا روئین‌تن را به تیم مافیا اضافه کند.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "رئیس مافیا",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://gorgine.com/scenarios/detective/",
+    "source_title": "آموزش سناریو بازپرس - گرگینه",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "بازپرس",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "کارآگاه",
+    "content": "کارآگاه هر شب استعلام می‌گیرد؛ رئیس مافیا و شهروندان در حالت عادی منفی خوانده می‌شوند، اما شیاد می‌تواند استعلام کارآگاه را گمراه کند.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "کارآگاه",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://gorgine.com/scenarios/detective/",
+    "source_title": "آموزش سناریو بازپرس - گرگینه",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "بازپرس",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "ناتو",
+    "content": "ناتو یک بار در طول بازی می‌تواند نقش یک شهروند نقش‌دار را درست حدس بزند و او را حذف کند؛ در آن شب شلیک عادی مافیا انجام نمی‌شود.",
+    "scope": "role",
+    "scenario_name": "بازپرس",
+    "role_name": "ناتو",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://gorgine.com/scenarios/detective/",
+    "source_title": "آموزش سناریو بازپرس - گرگینه",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "بازپرس",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "ماتادور",
+    "content": "ماتادور مافیایی است و هر شب می‌تواند توانایی شبانه یک بازیکن را مختل کند؛ انتخاب یک هدف در شب‌های متوالی محدودیت دارد.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "ماتادور",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://mungeh.ca/fa/mafia-event-fa-july10th-2026/",
+    "source_title": "پدرخوانده + جک گنجیشکه - Mungeh",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-جک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "دکتر واتسون",
+    "content": "دکتر واتسون نقش پزشک شهر است و شبانه می‌تواند یک بازیکن را در برابر شلیک نجات دهد؛ محدودیت خودنجاتی نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "دکتر واتسون",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://mungeh.ca/fa/mafia-event-fa-jun12th-2026/",
+    "source_title": "پدرخوانده + جک گنجیشکه - Mungeh",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-جک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "کنستانتین",
+    "content": "کنستانتین شهروند ویژه است و در قواعد عمومی یک بار می‌تواند بازیکن مرده را به بازی برگرداند؛ برخی روش‌های حذف مانند سلاخی ممکن است قابل بازگشت نباشند.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "کنستانتین",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://mungeh.ca/fa/mafia-event-fa-jun12th-2026/",
+    "source_title": "پدرخوانده + جک گنجیشکه - Mungeh",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-جک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "همشهری",
+    "content": "همشهری/همشهری کین نقش اطلاعاتی شهر است و در نسخه‌های رایج با یک استعلام می‌تواند مافیا را آشکار کند؛ قوانین دقیق نام و توانایی در این نسخه سفارشی باید از Mafia Nights پیروی کند.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "همشهری",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://mungeh.ca/fa/mafia-event-fa-jun12th-2026/",
+    "source_title": "پدرخوانده + جک گنجیشکه - Mungeh",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-جک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "گودمن",
+    "content": "گودمن/ساول گودمن در قواعد عمومی پس از خروج یکی از هم‌تیمی‌ها می‌تواند یک شهروند ساده را به مافیای ساده تبدیل کند.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "گودمن",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://mungeh.ca/fa/mafia-event-fa-aug1st-2026/",
+    "source_title": "پدرخوانده + جک گنجیشکه - Mungeh",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-جک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شهر ساده",
+    "content": "شهروند ساده در شب قابلیت ویژه ندارد و در روز با تحلیل و رأی برای شناسایی مافیا و نقش مستقل تلاش می‌کند.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "شهر ساده",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://mungeh.ca/fa/mafia-event-fa-jun12th-2026/",
+    "source_title": "پدرخوانده + جک گنجیشکه - Mungeh",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-جک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "پدرخوانده",
+    "content": "پدرخوانده رهبر تیم مافیاست و در نسخه‌های رایج شلیک شبانه و سلاخیِ مبتنی بر تشخیص نقش دارد؛ جلیقه/مصونیت و محدودیت‌های دقیق وابسته به نسخه سناریو است.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "پدرخوانده",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://mungeh.ca/fa/mafia-event-fa-jun12th-2026/",
+    "source_title": "پدرخوانده + جک گنجیشکه - Mungeh",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-جک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "جک گنجیشکه",
+    "content": "جک گنجیشکه نقش مستقل این نسخه است و هدف مستقل دارد؛ شرط برد و تعاملات دقیق آن باید از منطق داخلی سناریوی Mafia Nights گرفته شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "جک گنجیشکه",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://mungeh.ca/fa/mafia-event-fa-jun12th-2026/",
+    "source_title": "پدرخوانده + جک گنجیشکه - Mungeh",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "پدرخوانده-جک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "لئون",
+    "content": "لئون حرفه‌ای شهروند مسلح است؛ در نسخه عمومی دو شلیک دارد و اولین شلیک مافیا معمولاً روی جلیقه او اثر نمی‌کند، اما سلاخی پدرخوانده می‌تواند او را حذف کند.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-جک",
+    "role_name": "لئون",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://mungeh.ca/fa/mafia-event-fa-jun12th-2026/",
+    "source_title": "پدرخوانده + جک گنجیشکه - Mungeh",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-جک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "ماتادور",
+    "content": "ماتادور مافیاست و هر شب می‌تواند توانایی یک بازیکن را برای مدتی از کار بیندازد.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "ماتادور",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-نوسترا",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "دکتر واتسون",
+    "content": "دکتر واتسون پزشک شهر است و برای نجات از شلیک شبانه استفاده می‌شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "دکتر واتسون",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-نوسترا",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "کنستانتین",
+    "content": "کنستانتین یک بار می‌تواند یکی از افراد خارج‌شده را به بازی برگرداند؛ محدودیت‌های بازگشت به نوع حذف وابسته است.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "کنستانتین",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-نوسترا",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "گودمن",
+    "content": "ساول گودمن پس از خروج یکی از هم‌تیمی‌ها می‌تواند یک شهروند ساده را به مافیای ساده تبدیل کند.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "گودمن",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-نوسترا",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شهر ساده",
+    "content": "شهروند ساده قابلیت شبانه ویژه ندارد و با تحلیل و رأی برای حذف مافیا بازی می‌کند.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "شهر ساده",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-نوسترا",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "پدرخوانده",
+    "content": "پدرخوانده رهبر تیم مافیاست و در سناریوهای پدرخوانده صاحب شلیک و سلاخی مبتنی بر تشخیص نقش است.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "پدرخوانده",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-نوسترا",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "نوستراداموس",
+    "content": "نوستراداموس مستقل است؛ در قواعد عمومی شب اول سه بازیکن را استعلام می‌کند و تعداد مافیاهای میان آن‌ها را می‌فهمد، سپس ساید خود را انتخاب می‌کند. شرط برد دقیق در Mafia Nights باید از منطق داخلی سناریو گرفته شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "نوستراداموس",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "پدرخوانده-نوسترا",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "همشهری کین",
+    "content": "همشهری کین می‌تواند استعلام مافیا بگیرد و در صورت درست بودن، نتیجه در روز اعلام می‌شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "همشهری کین",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-نوسترا",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "لئون",
+    "content": "لئون حرفه‌ای شهروند مسلح است و در قواعد عمومی سناریو شلیک دارد؛ اشتباه در شلیک می‌تواند باعث خروج او شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-نوسترا",
+    "role_name": "لئون",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-نوسترا",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شرلوک",
+    "content": "شرلوک در Mafia Nights یک نقش مستقل تعریف شده است. اطلاعات عمومی سناریوی پدرخوانده استاندارد درباره این نقش متفاوت است؛ بنابراین در این نسخه شرط برد و قابلیت دقیق باید از منطق داخلی ربات خوانده شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "شرلوک",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://github.com/tusanbot/MafiaNights/blob/main/scenarios.json",
+    "source_title": "Mafia Nights scenarios.json",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "پدرخوانده-شرلوک",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "ماتادور",
+    "content": "ماتادور مافیاست و هر شب می‌تواند توانایی یک بازیکن را برای مدتی از کار بیندازد؛ انتخاب هدف متوالی محدودیت دارد.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "ماتادور",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-شرلوک",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "دکتر واتسون",
+    "content": "دکتر واتسون پزشک شهر است و برای نجات از شلیک شبانه استفاده می‌شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "دکتر واتسون",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-شرلوک",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "کنستانتین",
+    "content": "کنستانتین یک بار می‌تواند یکی از افراد خارج‌شده را به بازی برگرداند؛ محدودیت‌های بازگشت به نوع حذف وابسته است.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "کنستانتین",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-شرلوک",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "گودمن",
+    "content": "ساول گودمن پس از خروج یکی از هم‌تیمی‌ها می‌تواند یک شهروند ساده را به مافیای ساده تبدیل کند.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "گودمن",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-شرلوک",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شهر ساده",
+    "content": "شهروند ساده قابلیت شبانه ویژه ندارد و با تحلیل و رأی برای حذف تیم مافیا بازی می‌کند.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "شهر ساده",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-شرلوک",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "پدرخوانده",
+    "content": "پدرخوانده رهبر مافیاست و در سناریوهای پدرخوانده صاحب شلیک شبانه و سلاخی مبتنی بر تشخیص نقش است.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "پدرخوانده",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "پدرخوانده-شرلوک",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "همشهری کین",
+    "content": "همشهری کین می‌تواند استعلام مافیا بگیرد و در صورت درست بودن، نتیجه در روز اعلام می‌شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "همشهری کین",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-شرلوک",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "لئون",
+    "content": "لئون حرفه‌ای شهروند مسلح است؛ در سناریو پدرخوانده شلیک مسلحانه دارد و اشتباه در هدف‌گیری می‌تواند موجب خروج خودش شود.",
+    "scope": "role",
+    "scenario_name": "پدرخوانده-شرلوک",
+    "role_name": "لئون",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/453745",
+    "source_title": "آموزش مافیا سناریو پدرخوانده - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "پدرخوانده-شرلوک",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "مافیا",
+    "content": "در مافیای روسی نقش مافیا ساده است و در این نسخه فقط دو ساید شهروند و مافیا وجود دارد؛ تعداد مافیا بر اساس ترکیب سناریو تعیین می‌شود.",
+    "scope": "role",
+    "scenario_name": "روسی 6",
+    "role_name": "مافیا",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "روسی 6",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شهروند",
+    "content": "در مافیای روسی شهروند ساده است و قابلیت نقش‌دار ندارد؛ بازی بر پایه فکت‌گیری و رأی روز انجام می‌شود و در برخی روش‌ها مافیا یکدیگر را نمی‌شناسند.",
+    "scope": "role",
+    "scenario_name": "روسی 6",
+    "role_name": "شهروند",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "روسی 6",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "بمب گذار",
+    "content": "بمب‌گذار مافیایی است و یک بار در بازی می‌تواند روی یک بازیکن بمب بگذارد و رمز خنثی‌سازی را به گرداننده اعلام کند؛ در نسخه‌های عمومی زودیاک بازیکن هدف پیش از رأی‌گیری برای خنثی‌سازی تلاش می‌کند.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "بمب گذار",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/452575",
+    "source_title": "آموزش بازی مافیا زودیاک - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "زودیاک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "تفنگدار",
+    "content": "تفنگدار شهروند است و در نسخه عمومی زودیاک می‌تواند تفنگ جنگی یا مشقی را در اختیار بازیکن دیگری قرار دهد؛ گیرنده نوع تفنگ را نمی‌داند و استفاده از آن به قواعد همان سناریو وابسته است.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "تفنگدار",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/452575",
+    "source_title": "آموزش بازی مافیا زودیاک - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شهر ساده",
+    "content": "شهروند ساده در زودیاک قابلیت شبانه ندارد و وظیفه اصلی او تحلیل گفت‌وگو و رأی روز برای شناسایی مافیا و زودیاک است.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "شهر ساده",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/452575",
+    "source_title": "آموزش بازی مافیا زودیاک - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "آل کاپون",
+    "content": "آل‌کاپون رئیس تیم مافیاست و شلیک شبانه در اختیار اوست؛ استعلام او برای کارآگاه منفی خوانده می‌شود. در Mafia Nights هر تفاوتی با این قاعده عمومی باید از منطق سناریوی داخلی پیروی کند.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "آل کاپون",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/452575",
+    "source_title": "آموزش بازی مافیا زودیاک - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "زودیاک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شعبده باز",
+    "content": "شعبده‌باز مافیایی است و هر شب می‌تواند قابلیت یک بازیکن را برای ۲۴ ساعت از او بگیرد؛ دو شب پیاپی نمی‌تواند یک نفر را هدف بگیرد و هدف در آن شب امکان استفاده از قابلیت خود را ندارد.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "شعبده باز",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/452575",
+    "source_title": "آموزش بازی مافیا زودیاک - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "زودیاک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "زودیاک",
+    "content": "زودیاک نقش مستقل و قاتل سناریو است؛ در قواعد رایج شب‌های زوج شلیک می‌کند، در برابر شلیک شبانه مصون است و تعامل ویژه‌ای با محافظ دارد. شرط برد دقیق باید از منطق داخلی Mafia Nights خوانده شود.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "زودیاک",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://gorgine.com/scenarios/zodiac/",
+    "source_title": "آموزش کامل سناریو زودیاک - گرگینه",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "زودیاک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "کاراگاه",
+    "content": "کارآگاه شهروند است و هر شب می‌تواند استعلام یک بازیکن را بگیرد؛ آل‌کاپون در نسخه رایج زودیاک برای کارآگاه منفی خوانده می‌شود.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "کاراگاه",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/452575",
+    "source_title": "آموزش بازی مافیا زودیاک - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "اوشن",
+    "content": "اوشن شهروند است و می‌تواند در دو نوبت، بازیکنانی را برای گفت‌وگوی محرمانه بیدار کند؛ اگر هدف انتخاب‌شده عضو مافیا یا زودیاک باشد، در قواعد رایج پیامد منفی برای اوشن دارد.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "اوشن",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/452575",
+    "source_title": "آموزش بازی مافیا زودیاک - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "محافظ",
+    "content": "محافظ شهروند است و می‌تواند در برابر بمب‌گذار از بازیکن هدف محافظت کند؛ در قواعد رایج، محافظ می‌تواند با حدس رمز خنثی‌سازی مانع حذف هدف شود و تعامل او با زودیاک نیز ویژه است.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "محافظ",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://gorgine.com/scenarios/zodiac/",
+    "source_title": "آموزش کامل سناریو زودیاک - گرگینه",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "حرفه ای",
+    "content": "حرفه‌ای شهروند است و در نسخه عمومی دو شلیک در اختیار دارد؛ شلیک اشتباه به شهروند می‌تواند موجب خروج خود او شود و جزئیات فایربک/اثر شلیک به قوانین نسخه سناریو وابسته است.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "حرفه ای",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "دکتر",
+    "content": "دکتر شهروند است و برای نجات بازیکنان در برابر شلیک شبانه استفاده می‌شود. تعداد نجات، امکان خودنجاتی و محدودیت تکرار هدف در نسخه‌های مختلف متفاوت است و باید از قوانین داخلی Mafia Nights تبعیت کند.",
+    "scope": "role",
+    "scenario_name": "زودیاک",
+    "role_name": "دکتر",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://vigiato.net/p/452575",
+    "source_title": "آموزش بازی مافیا زودیاک - ویجیاتو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "زودیاک",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "مافیا",
+    "content": "مافیا در این سناریوی تستی نقش پایه تیم سیاه است و قابلیت ویژه‌ای در داده‌های عمومی سناریو ثبت نشده است.",
+    "scope": "role",
+    "scenario_name": "سناریو تستی 2",
+    "role_name": "مافیا",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://github.com/tusanbot/MafiaNights/blob/main/scenarios.json",
+    "source_title": "Mafia Nights scenarios.json",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "سناریو تستی 2",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شهروند",
+    "content": "شهروند در این سناریوی تستی نقش پایه تیم شهر است و قابلیت ویژه‌ای در داده‌های عمومی سناریو ثبت نشده است.",
+    "scope": "role",
+    "scenario_name": "سناریو تستی 2",
+    "role_name": "شهروند",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://github.com/tusanbot/MafiaNights/blob/main/scenarios.json",
+    "source_title": "Mafia Nights scenarios.json",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "سناریو تستی 2",
+      "review_note": "قوانین داخلی Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "تروریست",
+    "content": "تروریست در سناریوی قمارباز عضو تیم مافیاست و در سناریوهای کلاسیک پیشرفته معمولاً هنگام حذف روزانه امکان همراه‌کردن یک بازیکن را دارد؛ قانون دقیق این نسخه باید داخلی تأیید شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "تروریست",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "قمار باز",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "معشوقه",
+    "content": "معشوقه در سناریوی قمارباز عضو تیم مافیاست؛ جزئیات توانایی این نقش نسخه‌محور است و باید از منطق داخلی Mafia Nights خوانده شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "معشوقه",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "قمار باز",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "عینک ساز",
+    "content": "عینک‌ساز یکی از نقش‌های شهروندی سناریوی قمارباز است؛ منبع عمومی موجود ساید او را شهروند ثبت می‌کند، اما جزئیات توانایی نسخه‌های مختلف باید از قوانین همان نسخه خوانده شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "عینک ساز",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "آهنگر",
+    "content": "آهنگر در سناریوی قمارباز شهروند است؛ جزئیات قابلیت آهنگر در منبع عمومی این سناریو به‌طور کامل تشریح نشده و نباید بدون منطق داخلی ربات حدس زده شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "آهنگر",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "روان شناس",
+    "content": "روان‌شناس در منابع عمومی سناریوی قمارباز به اندازه نصف تعداد مافیاها تیر دارد و استفاده/اثر تیر او با دیسلایک یا قواعد واکنش به هدف مرتبط است.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "روان شناس",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "تفنگدار",
+    "content": "تفنگدار در سناریوی قمارباز شهروند است و نقش او در خانواده سناریوهای وسترن با مکانیک تفنگ شناخته می‌شود؛ جزئیات تیر باید از نسخه داخلی خوانده شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "تفنگدار",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "کابوی",
+    "content": "کابوی در سناریوی قمارباز شهروند است؛ جزئیات اکشن‌های او بسته به قوانین نسخه سناریو متفاوت است و باید از منطق داخلی ربات استفاده شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "کابوی",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "عنکبوت",
+    "content": "عنکبوت در سناریوی قمارباز شهروند است؛ جزئیات توانایی این نقش در منبع عمومی بررسی‌شده کامل نیست و پاسخ قطعی باید به قوانین داخلی Mafia Nights محدود شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "عنکبوت",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "قمار باز",
+    "content": "قمارباز در سناریوی قمارباز عضو تیم مافیاست؛ جزئیات شرط‌ها و قابلیت‌های این نقش در منبع عمومی بررسی‌شده کامل نیست و نباید بدون تطبیق داخلی حدس زده شود.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "قمار باز",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "قمار باز",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "ماسون",
+    "content": "ماسون در سناریوی قمارباز شهروند است و نقش او در منابع عمومی به‌عنوان عضو تیم شهر ثبت شده؛ جزئیات تعاملات ماسونی نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "ماسون",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "قمار باز",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شاهکش",
+    "content": "شاهکش در سناریوی قمارباز عضو تیم مافیاست؛ در خانواده سناریوهای مشابه، حدس درست نقش هدف می‌تواند حذف ویژه ایجاد کند، اما قانون دقیق این نسخه باید داخلی باشد.",
+    "scope": "role",
+    "scenario_name": "قمار باز",
+    "role_name": "شاهکش",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "قمار باز",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "جلاد",
+    "content": "جلاد مافیاست و در قواعد عمومی کاپو می‌تواند نقش یک شهروند را حدس بزند؛ حدس درست باعث حذف هدف حتی در برابر برخی نجات‌ها می‌شود و این اقدام جایگزین شلیک معرفی شده است.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "جلاد",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/capo/",
+    "source_title": "کاپو - RoundGangs",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کاپو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "زره ساز",
+    "content": "زره‌ساز شهروند است و در قواعد عمومی کاپو شبانه برای یک بازیکن زره می‌سازد تا در برابر شلیک مافیا نجات یابد؛ معمولاً خودنجاتی محدود دارد و جادوگر می‌تواند اثر آن را مختل کند.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "زره ساز",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/capo/",
+    "source_title": "کاپو - RoundGangs",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "مظنون",
+    "content": "مظنون شهروندی است که در برخی قواعد کاپو استعلام مثبت دریافت می‌کند؛ هنگام خروج، ساید واقعی او طبق قواعد گرداننده مشخص می‌شود.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "مظنون",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://whitesho.com/MafiaCapo/سناریو-کاپو-بازی-مافیا",
+    "source_title": "سناریو کاپو - وایت‌شو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "دن مافیا",
+    "content": "دن مافیا رهبر تیم مافیاست و فرمان شلیک شبانه را می‌دهد؛ در منابع عمومی استعلام او برای کارآگاه منفی است و در برخی نسخه‌ها امکان جذب شهروند ساده یا مظنون و پادزهر نیز دارد.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "دن مافیا",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/capo/",
+    "source_title": "کاپو - RoundGangs",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کاپو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "وارث",
+    "content": "وارث شهروند است و در شب معارفه یک بازیکن را به‌عنوان منبع توانایی انتخاب می‌کند؛ در قواعد رایج تا زنده بودن هدف، وارث از برخی آثار حذف مصون است و در ادامه ممکن است توانایی هدف را به ارث ببرد.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "وارث",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/capo/",
+    "source_title": "کاپو - RoundGangs",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "شهر ساده",
+    "content": "شهروند ساده قابلیت شبانه ویژه‌ای ندارد و با بحث، تحلیل و رأی روز برای حذف مافیا بازی می‌کند.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "شهر ساده",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/capo/",
+    "source_title": "کاپو - RoundGangs",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "جادوگر",
+    "content": "جادوگر مافیاست و با انتخاب یک شهروند می‌تواند توانایی او را مختل یا وارونه کند؛ نمونه‌های رایج شامل بی‌اثر شدن نجات زره‌ساز یا منفی شدن استعلام کارآگاه است.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "جادوگر",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://whitesho.com/MafiaCapo/سناریو-کاپو-بازی-مافیا",
+    "source_title": "سناریو کاپو - وایت‌شو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کاپو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "کاراگاه",
+    "content": "کارآگاه شهروند است و هر شب استعلام ساید می‌گیرد؛ دن مافیا در قواعد رایج برای او منفی خوانده می‌شود و جادوگر می‌تواند نتیجه یا اثر استعلام را مختل کند.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "کاراگاه",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://roundgangs.com/fa/games/mafia/scenarios/capo/",
+    "source_title": "کاپو - RoundGangs",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "عطار",
+    "content": "عطار شهروند است و در قواعد عمومی یک زهر و یک پادزهر دارد؛ می‌تواند بازیکنی را مسموم کند و سازوکار استفاده از پادزهر طبق قوانین همان نسخه انجام می‌شود.",
+    "scope": "role",
+    "scenario_name": "کاپو",
+    "role_name": "عطار",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://whitesho.com/MafiaCapo/سناریو-کاپو-بازی-مافیا",
+    "source_title": "سناریو کاپو - وایت‌شو",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کاپو",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "جاسوس",
+    "content": "جاسوس در سناریوی Mafia Nights ساید مافیا دارد؛ نقش‌های جاسوسی در نسخه‌های مختلف برای جمع‌آوری اطلاعات یا نفوذ استفاده می‌شوند و توانایی دقیق باید از منطق داخلی خوانده شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "جاسوس",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "خرابکار",
+    "content": "خرابکار مافیایی است و در سناریوهای کلاسیک نقش او معمولاً خنثی‌کردن یا برگرداندن شلیک تفنگدار به سمت صاحب تیر است؛ اثر دقیق با ساقی و سایر نقش‌ها نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "خرابکار",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "تفنگدار",
+    "content": "تفنگدار شهروند مسلح است؛ در سناریوهای کلاسیک پیشرفته تفنگ جنگی و مشقی دارد و جزئیات تعداد و توزیع تیر به نسخه بستگی دارد.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "تفنگدار",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "اسنایپر",
+    "content": "اسنایپر شهروند مسلح است و در سناریوهای کلاسیک پیشرفته معمولاً گلوله محدود دارد و در صورت حدس اشتباه ممکن است فایربک شود؛ تعداد تیر و شرط بیدارشدن نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "اسنایپر",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "کشیش",
+    "content": "کشیش شهروند است و در قواعد کلاسیک پیشرفته می‌تواند بازیکن سایلنت‌شده توسط ناتاشا را شناسایی و از سایلنت خارج کند؛ انتخاب اشتباه ممکن است اثر روزانه دیگری داشته باشد.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "کشیش",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/post/مراحل-و-نکات-بازی-مافیا/",
+    "source_title": "مراحل و نکات بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "روئین تن",
+    "content": "روئین‌تن شهروندی مقاوم است؛ در برخی سناریوهای کلاسیک در برابر شلیک زره دارد، ولی وضعیت زره در روز و شب به نسخه سناریو وابسته است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "روئین تن",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "ناتاشا",
+    "content": "ناتاشا مافیایی و نقش ساکت‌کننده است؛ معمولاً هر شب یک بازیکن را برای روز بعد سایلنت می‌کند و در برخی قواعد حق رأی او نیز تحت تأثیر قرار می‌گیرد.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "ناتاشا",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "ساقی",
+    "content": "ساقی شهروند است و می‌تواند توانایی شبانه هدف را مختل یا معکوس کند؛ اثر دقیق روی نقش‌های مختلف نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "ساقی",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/post/مراحل-و-نکات-بازی-مافیا/",
+    "source_title": "مراحل و نکات بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "رئیس مافیا",
+    "content": "رئیس مافیا رهبر تیم مافیاست و در سناریوهای کلاسیک پیشرفته فرمان شلیک و مدیریت تیم را بر عهده دارد؛ جزئیات استعلام و شلیک نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "رئیس مافیا",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "کابوی",
+    "content": "کابوی شهروند است و در خانواده سناریوهای وسترن/کلاسیک پیشرفته نقش اکشن‌محور دارد؛ جزئیات دوئل و شلیک باید از قانون نسخه داخلی گرفته شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "کابوی",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "ماسون",
+    "content": "ماسون شهروند است و معمولاً با مکانیک شناسایی یا شبکه شهروندی همراه است؛ قوانین دقیق ارتباط ماسون‌ها نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "ماسون",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "دکتر",
+    "content": "دکتر شهروند است و شبانه برای نجات بازیکن از شلیک مافیا اقدام می‌کند؛ محدودیت خودنجاتی و تکرار هدف نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 12",
+    "role_name": "دکتر",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 12",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "جاسوس",
+    "content": "جاسوس در سناریوی Mafia Nights ساید مافیا دارد؛ توانایی دقیق این نقش باید از منطق داخلی خوانده شود و نباید از نام نقش نتیجه‌گیری شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "جاسوس",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "خرابکار",
+    "content": "خرابکار مافیایی است و در سناریوهای کلاسیک نقش او معمولاً خنثی‌کردن یا برگرداندن شلیک تفنگدار به سمت صاحب تیر است؛ اثر دقیق نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "خرابکار",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "تفنگدار",
+    "content": "تفنگدار شهروند مسلح است؛ در سناریوهای کلاسیک پیشرفته تفنگ جنگی و مشقی دارد و جزئیات تعداد و توزیع تیر به نسخه بستگی دارد.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "تفنگدار",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "اسنایپر",
+    "content": "اسنایپر شهروند مسلح است و در سناریوهای کلاسیک پیشرفته معمولاً گلوله محدود دارد و در صورت حدس اشتباه ممکن است فایربک شود؛ تعداد تیر و شرط بیدارشدن نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "اسنایپر",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "کشیش",
+    "content": "کشیش شهروند است و در قواعد کلاسیک پیشرفته می‌تواند بازیکن سایلنت‌شده توسط ناتاشا را شناسایی و از سایلنت خارج کند؛ انتخاب اشتباه ممکن است اثر روزانه دیگری داشته باشد.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "کشیش",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/post/مراحل-و-نکات-بازی-مافیا/",
+    "source_title": "مراحل و نکات بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "روئین تن",
+    "content": "روئین‌تن شهروندی مقاوم است؛ در برخی سناریوهای کلاسیک در برابر شلیک زره دارد، ولی وضعیت زره در روز و شب به نسخه سناریو وابسته است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "روئین تن",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "ناتاشا",
+    "content": "ناتاشا مافیایی و نقش ساکت‌کننده است؛ معمولاً هر شب یک بازیکن را برای روز بعد سایلنت می‌کند و در برخی قواعد حق رأی او نیز تحت تأثیر قرار می‌گیرد.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "ناتاشا",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "ساقی",
+    "content": "ساقی شهروند است و می‌تواند توانایی شبانه هدف را مختل یا معکوس کند؛ اثر دقیق روی نقش‌های مختلف نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "ساقی",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/post/مراحل-و-نکات-بازی-مافیا/",
+    "source_title": "مراحل و نکات بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "نوفیس",
+    "content": "نوفیس در سناریوی «کلاسیک 13» ساید مستقل دارد. در داده‌های داخلی فعلی Mafia Nights، نام و ساید این نقش ثبت شده اما توانایی اختصاصی آن تعریف مستندی ندارد؛ بنابراین دستیار نباید برای قابلیت نوفیس حدس بزند و باید آن را «نامشخص در قوانین فعلی ربات» اعلام کند.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "نوفیس",
+    "status": "published",
+    "source_type": "internal",
+    "source_url": null,
+    "source_title": "Mafia Nights scenarios.json",
+    "confidence": "confirmed",
+    "metadata": {
+      "side": "مستقل",
+      "scenario": "کلاسیک 13"
+    }
+  },
+  {
+    "title": "رئیس مافیا",
+    "content": "رئیس مافیا رهبر تیم مافیاست و در سناریوهای کلاسیک پیشرفته فرمان شلیک و مدیریت تیم را بر عهده دارد؛ جزئیات استعلام و شلیک نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "رئیس مافیا",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "مافیا",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "کابوی",
+    "content": "کابوی شهروند است و در خانواده سناریوهای وسترن/کلاسیک پیشرفته نقش اکشن‌محور دارد؛ جزئیات دوئل و شلیک باید از قانون نسخه داخلی گرفته شود.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "کابوی",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "ماسون",
+    "content": "ماسون شهروند است و معمولاً با مکانیک شناسایی یا شبکه شهروندی همراه است؛ قوانین دقیق ارتباط ماسون‌ها نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "ماسون",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  },
+  {
+    "title": "دکتر",
+    "content": "دکتر شهروند است و شبانه برای نجات بازیکن از شلیک مافیا اقدام می‌کند؛ محدودیت خودنجاتی و تکرار هدف نسخه‌محور است.",
+    "scope": "role",
+    "scenario_name": "کلاسیک 13",
+    "role_name": "دکتر",
+    "status": "published",
+    "source_type": "web",
+    "source_url": "https://danoma.ir/blog/سناریوهای-بازی-مافیا/",
+    "source_title": "انواع سناریوهای بازی مافیا - دانوما",
+    "confidence": "medium",
+    "metadata": {
+      "side": "شهروند",
+      "scenario": "کلاسیک 13",
+      "review_note": "قوانین نسخه Mafia Nights بر این توضیح عمومی اولویت دارد.",
+      "external_knowledge": true
+    }
+  }
+]

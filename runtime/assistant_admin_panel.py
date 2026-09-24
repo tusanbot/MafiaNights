@@ -1,0 +1,651 @@
+"""Private administration panel for the Mafia Nights knowledge assistant."""
+from __future__ import annotations
+
+import html
+import os
+import logging
+from typing import Any
+
+from aiogram import types
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import text
+
+from repositories.knowledge_repository import KnowledgeRepository
+
+
+class AssistantAdminStates(StatesGroup):
+    waiting_title = State()
+    waiting_content = State()
+    waiting_scenario = State()
+    waiting_role = State()
+    waiting_source = State()
+    waiting_group_key = State()
+
+
+class AssistantAdminPanel:
+    def __init__(self, app: Any):
+        self.app = app
+
+    def _repo(self):
+        KnowledgeRepository.ensure_schema()
+        repo=KnowledgeRepository()
+        with repo.SessionLocal() as session:
+            session.execute(text("""
+                create extension if not exists pgcrypto
+            """))
+            session.execute(text("""
+                create table if not exists public.mafia_ai_settings (
+                    group_id bigint primary key,
+                    provider text not null default 'gemini',
+                    model text,
+                    api_key_ciphertext bytea,
+                    web_search_enabled boolean not null default true,
+                    enabled boolean not null default false,
+                    updated_at timestamptz not null default now(),
+                    private_enabled boolean not null default false,
+                    private_provider text not null default 'gemini',
+                    private_model text,
+                    private_api_key_ciphertext bytea,
+                    private_web_search_enabled boolean not null default true,
+                    private_updated_at timestamptz
+                )
+            """))
+            session.execute(text("""
+                alter table public.mafia_ai_settings
+                  add column if not exists private_enabled boolean not null default false,
+                  add column if not exists private_provider text not null default 'gemini',
+                  add column if not exists private_model text,
+                  add column if not exists private_api_key_ciphertext bytea,
+                  add column if not exists private_web_search_enabled boolean not null default true,
+                  add column if not exists private_updated_at timestamptz
+            """))
+            session.execute(text("""create table if not exists public.mafia_ai_user_preferences(
+                user_id bigint primary key, group_id bigint not null, updated_at timestamptz not null default now()
+            )"""))
+            session.commit()
+        return repo
+    def _selected_group_id(self,user_id:int)->int|None:
+        with self._repo().SessionLocal() as session:
+            row=session.execute(text("select group_id from public.mafia_ai_user_preferences where user_id=:uid limit 1"),{"uid":int(user_id)}).mappings().first()
+        return int(row["group_id"]) if row else None
+    def _set_selected_group(self,user_id:int,group_id:int)->None:
+        with self._repo().SessionLocal() as session:
+            session.execute(text("""insert into public.mafia_ai_user_preferences(user_id,group_id,updated_at)
+                values(:uid,:gid,now()) on conflict(user_id) do update set group_id=:gid,updated_at=now()"""),{"uid":int(user_id),"gid":int(group_id)})
+            session.commit()
+    def _ensure_group_row(self,group_id:int)->None:
+        if not group_id:return
+        with self._repo().SessionLocal() as session:
+            session.execute(text("""insert into public.mafia_ai_settings(
+                group_id,enabled,private_enabled,web_search_enabled,private_web_search_enabled,updated_at)
+                values(:gid,false,false,true,true,now()) on conflict(group_id) do nothing"""),{"gid":int(group_id)})
+            session.commit()
+    async def _admin_groups(self,user_id:int)->list[int]:
+        raw=os.getenv("AI_PRIMARY_GROUP_ID") or os.getenv("ALLOWED_GROUP_ID") or ""
+        if str(raw).strip().lstrip("-").isdigit():self._ensure_group_row(int(raw))
+        with self._repo().SessionLocal() as session:
+            rows=session.execute(text("select group_id from public.mafia_ai_settings order by group_id")).mappings().all()
+        groups=[]
+        for row in rows:
+            gid=int(row["group_id"])
+            try:
+                member=await self.app.bot.get_chat_member(gid,int(user_id))
+                if str(getattr(member,"status","")) in {"creator","administrator"}:groups.append(gid)
+            except Exception:continue
+        return groups
+    async def _authorized(self,user_id:int,group_id:int|None=None)->bool:
+        gid=group_id if group_id is not None else self._selected_group_id(user_id)
+        if not gid:return False
+        try:
+            member=await self.app.bot.get_chat_member(int(gid),int(user_id))
+            return str(getattr(member,"status","")) in {"creator","administrator"}
+        except Exception:
+            logging.exception("assistant admin: group-admin authorization check failed");return False
+    async def _guard(self,message_or_callback:Any)->bool:
+        uid=int(message_or_callback.from_user.id);gid=self._selected_group_id(uid)
+        if await self._authorized(uid,gid):return True
+        target=getattr(message_or_callback,"message",message_or_callback)
+        await target.answer("⛔ ابتدا گروه موردنظر را در پنل دستیار انتخاب کنید.");return False
+
+    @staticmethod
+    def _menu() -> InlineKeyboardMarkup:
+        kb = InlineKeyboardMarkup(row_width=2)
+        kb.add(
+            InlineKeyboardButton("📚 پایگاه دانش", callback_data="aip:kb"),
+            InlineKeyboardButton("➕ افزودن اطلاعات", callback_data="aip:add"),
+            InlineKeyboardButton("🤖 تنظیمات AI", callback_data="aip:ai"),
+            InlineKeyboardButton("🔑 کلید AI گروه", callback_data="aip:groupkey"),
+            InlineKeyboardButton("📊 وضعیت", callback_data="aip:status"),
+            InlineKeyboardButton("❓ راهنمای افزودن مطلب", callback_data="aip:guide"),
+        )
+        return kb
+
+    @staticmethod
+    def _back() -> InlineKeyboardMarkup:
+        kb = InlineKeyboardMarkup(row_width=1)
+        kb.add(InlineKeyboardButton("⬅️ پنل دستیار", callback_data="aip:menu"))
+        return kb
+
+    async def open(self,message:types.Message):
+        uid=int(message.from_user.id)
+        if message.chat.type in {"group","supergroup"}:
+            try:
+                member=await self.app.bot.get_chat_member(message.chat.id,uid)
+                if str(getattr(member,"status","")) not in {"creator","administrator"}:
+                    await message.reply("⛔ فقط مدیر/گرداننده گروه می‌تواند گروه را برای دستیار ثبت کند.");return
+            except Exception:
+                await message.reply("❌ بررسی دسترسی مدیر گروه انجام نشد.");return
+            self._ensure_group_row(int(message.chat.id));self._set_selected_group(uid,int(message.chat.id))
+            await message.reply("✅ این گروه برای دستیار ثبت شد. حالا «/ai_panel» را در پیوی ربات باز کنید.");return
+        if message.chat.type!="private":return
+        groups=await self._admin_groups(uid);selected=self._selected_group_id(uid)
+        if selected not in groups:selected=None
+        if selected is None and len(groups)==1:selected=groups[0];self._set_selected_group(uid,selected)
+        if selected is None:
+            if not groups:
+                await message.answer("🤖 <b>پنل دستیار</b>\n\nهنوز گروه فعالی برای این حساب ثبت نشده است. در هر گروهی که مدیر آن هستید، یک‌بار <code>/ai_panel</code> را ارسال کنید تا گروه ثبت شود.",parse_mode="HTML");return
+            kb=InlineKeyboardMarkup(row_width=1)
+            for gid in groups:kb.add(InlineKeyboardButton(f"👥 گروه {gid}",callback_data=f"aip:select:{gid}"))
+            await message.answer("👥 <b>انتخاب گروه دستیار</b>\n\nگروهی را که می‌خواهید مدیریت کنید انتخاب کنید:",reply_markup=kb,parse_mode="HTML");return
+        await message.answer(f"🤖 <b>پنل مدیریت دستیار Mafia Nights</b>\n\nگروه انتخاب‌شده: <code>{selected}</code>\n\nیک بخش را انتخاب کنید.",reply_markup=self._menu(),parse_mode="HTML")
+
+    async def select_group(self,callback:types.CallbackQuery):
+        try:gid=int(str(callback.data).split(":")[2])
+        except Exception:await callback.answer("شناسه گروه نامعتبر است.",show_alert=True);return
+        uid=int(callback.from_user.id);groups=await self._admin_groups(uid)
+        if gid not in groups:await callback.answer("⛔ شما مدیر این گروه نیستید.",show_alert=True);return
+        self._set_selected_group(uid,gid);await callback.answer("✅ گروه انتخاب شد.")
+        await callback.message.edit_text(f"🤖 <b>پنل مدیریت دستیار Mafia Nights</b>\n\nگروه انتخاب‌شده: <code>{gid}</code>\n\nیک بخش را انتخاب کنید:",reply_markup=self._menu(),parse_mode="HTML")
+    async def menu(self,callback:types.CallbackQuery):
+        if not await self._guard(callback):await callback.answer();return
+        await callback.message.edit_text("🤖 <b>پنل مدیریت دستیار Mafia Nights</b>\n\nیک بخش را انتخاب کنید:",reply_markup=self._menu(),parse_mode="HTML");await callback.answer()
+
+    async def kb(self, callback: types.CallbackQuery):
+        if not await self._guard(callback):
+            await callback.answer()
+            return
+        repo = self._repo()
+        with repo.SessionLocal() as session:
+            rows = session.execute(text("""
+                select id,title,scope,status,scenario_name,role_name
+                from public.mafia_knowledge_documents
+                where is_active=true
+                order by updated_at desc limit 12
+            """)).mappings().all()
+        lines = ["📚 <b>پایگاه دانش</b>", "", f"تعداد نمایش‌داده‌شده: <b>{len(rows)}</b>", ""]
+        kb = InlineKeyboardMarkup(row_width=1)
+        for r in rows:
+            scope = {"scenario":"سناریو","role":"نقش","tutorial":"آموزش","faq":"FAQ","global":"عمومی"}.get(str(r["scope"]), str(r["scope"]))
+            lines.append(f"• <code>{r['id']}</code> — {html.escape(str(r['title']))} — {scope} — {r['status']}")
+            kb.add(InlineKeyboardButton(
+                f"📄 {str(r['title'])[:35]}",
+                callback_data=f"aip:doc:{int(r['id'])}",
+            ))
+        kb.row(InlineKeyboardButton("➕ افزودن اطلاعات", callback_data="aip:add"))
+        kb.row(InlineKeyboardButton("⬅️ پنل دستیار", callback_data="aip:menu"))
+        await callback.message.edit_text("\n".join(lines), reply_markup=kb, parse_mode="HTML")
+        await callback.answer()
+
+    async def doc(self, callback: types.CallbackQuery):
+        if not await self._guard(callback):
+            await callback.answer()
+            return
+        try:
+            doc_id = int(str(callback.data).split(":")[2])
+        except Exception:
+            await callback.answer("شناسه نامعتبر.", show_alert=True); return
+        repo = self._repo()
+        with repo.SessionLocal() as session:
+            row = session.execute(text("""
+                select id,title,content,scope,status,scenario_name,role_name,
+                       source_type,source_url,source_title,confidence,is_active
+                from public.mafia_knowledge_documents where id=:id
+            """), {"id": doc_id}).mappings().first()
+        if not row:
+            await callback.answer("مطلب پیدا نشد.", show_alert=True); return
+        content = str(row["content"] or "")
+        if len(content) > 1800:
+            content = content[:1800] + "…"
+        body = (
+            f"📄 <b>{html.escape(str(row['title']))}</b>\n\n"
+            f"نوع: <b>{html.escape(str(row['scope']))}</b>\n"
+            f"وضعیت: <b>{html.escape(str(row['status']))}</b>\n"
+            f"سناریو: <b>{html.escape(str(row['scenario_name'] or '—'))}</b>\n"
+            f"نقش: <b>{html.escape(str(row['role_name'] or '—'))}</b>\n"
+            f"منبع: <b>{html.escape(str(row['source_title'] or row['source_type'] or '—'))}</b>\n\n"
+            f"{html.escape(content)}"
+        )
+        kb = InlineKeyboardMarkup(row_width=2)
+        if str(row["status"]) not in {"published","verified"}:
+            kb.add(InlineKeyboardButton("✅ انتشار", callback_data=f"aip:publish:{doc_id}"))
+        kb.add(InlineKeyboardButton("🗑 غیرفعال‌کردن", callback_data=f"aip:disable:{doc_id}"))
+        kb.add(InlineKeyboardButton("⬅️ پایگاه دانش", callback_data="aip:kb"))
+        await callback.message.edit_text(body, reply_markup=kb, parse_mode="HTML")
+        await callback.answer()
+
+    async def publish(self, callback: types.CallbackQuery):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        doc_id = int(str(callback.data).split(":")[2])
+        with self._repo().SessionLocal() as session:
+            session.execute(text("update public.mafia_knowledge_documents set status='published',updated_at=now() where id=:id"), {"id":doc_id})
+            session.commit()
+        await callback.answer("✅ مطلب منتشر شد.")
+        await self.doc(callback)
+
+    async def disable(self, callback: types.CallbackQuery):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        doc_id = int(str(callback.data).split(":")[2])
+        with self._repo().SessionLocal() as session:
+            session.execute(text("update public.mafia_knowledge_documents set is_active=false,updated_at=now() where id=:id"), {"id":doc_id})
+            session.commit()
+        await callback.answer("🗑 مطلب غیرفعال شد.")
+        await self.kb(callback)
+
+    async def guide(self, callback: types.CallbackQuery):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        kb = InlineKeyboardMarkup(row_width=1)
+        kb.add(InlineKeyboardButton("➕ شروع افزودن مطلب", callback_data="aip:add"))
+        kb.add(InlineKeyboardButton("⬅️ پنل دستیار", callback_data="aip:menu"))
+        await callback.message.edit_text(
+            "❓ <b>راهنمای افزودن مطلب</b>\n\n"
+            "• <b>عمومی:</b> اطلاعات و قوانین مشترک\n"
+            "• <b>سناریو:</b> مطلب مخصوص یک سناریو\n"
+            "• <b>نقش:</b> مطلب مربوط به یک نقش\n"
+            "• <b>آموزش:</b> راهنمای انجام یک کار\n"
+            "• <b>FAQ:</b> پرسش و پاسخ پرتکرار\n\n"
+            "مراحل: ۱) عنوان ۲) متن کامل ۳) سناریو/نقش در صورت نیاز ۴) منبع.\n"
+            "اگر منبع ندارید فقط «ندارد» بنویسید.\n"
+            "مطلب ابتدا پیش‌نویس است و برای استفاده باید منتشر شود.",
+            reply_markup=kb, parse_mode="HTML"
+        )
+        await callback.answer()
+
+    async def add_start(self, callback: types.CallbackQuery, state: FSMContext):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        await state.finish()
+        await state.update_data(scope="global")
+        kb = InlineKeyboardMarkup(row_width=2)
+        for value,label in (("global","عمومی"),("scenario","سناریو"),("role","نقش"),("tutorial","آموزش"),("faq","FAQ")):
+            kb.add(InlineKeyboardButton(label, callback_data=f"aip:scope:{value}"))
+        kb.add(InlineKeyboardButton("❌ لغو", callback_data="aip:menu"))
+        await callback.message.edit_text("➕ <b>افزودن اطلاعات</b>\n\nنوع مطلب را انتخاب کنید:", reply_markup=kb, parse_mode="HTML")
+        await callback.answer()
+
+    async def scope(self, callback: types.CallbackQuery, state: FSMContext):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        value = str(callback.data).split(":")[2]
+        await state.update_data(scope=value)
+        await AssistantAdminStates.waiting_title.set()
+        await callback.message.edit_text("✏️ عنوان مطلب را ارسال کنید.\n\nبرای لغو: /cancel")
+        await callback.answer()
+
+    async def title(self, message: types.Message, state: FSMContext):
+        await state.update_data(title=(message.text or "").strip())
+        await AssistantAdminStates.waiting_content.set()
+        await message.answer("📝 متن کامل مطلب را ارسال کنید.")
+
+    async def content(self, message: types.Message, state: FSMContext):
+        await state.update_data(content=(message.text or "").strip())
+        data = await state.get_data()
+        if data.get("scope") in {"scenario","role"}:
+            await AssistantAdminStates.waiting_scenario.set()
+            await message.answer("🎭 نام سناریو را ارسال کنید.")
+        else:
+            await AssistantAdminStates.waiting_source.set()
+            await message.answer("🔗 آدرس منبع را ارسال کنید؛ اگر منبع داخلی است «ندارد» بنویسید.")
+
+    async def scenario(self, message: types.Message, state: FSMContext):
+        await state.update_data(scenario=(message.text or "").strip())
+        data = await state.get_data()
+        if data.get("scope") == "role":
+            await AssistantAdminStates.waiting_role.set()
+            await message.answer("🎭 نام نقش را ارسال کنید.")
+        else:
+            await AssistantAdminStates.waiting_source.set()
+            await message.answer("🔗 آدرس منبع را ارسال کنید؛ اگر منبع داخلی است «ندارد» بنویسید.")
+
+    async def role(self, message: types.Message, state: FSMContext):
+        await state.update_data(role=(message.text or "").strip())
+        await AssistantAdminStates.waiting_source.set()
+        await message.answer("🔗 آدرس منبع را ارسال کنید؛ اگر منبع داخلی است «ندارد» بنویسید.")
+
+    async def source(self, message: types.Message, state: FSMContext):
+        data = await state.get_data()
+        url = (message.text or "").strip()
+        if url in {"", "ندارد", "-", "none"}:
+            url = None
+        scope = str(data.get("scope") or "global")
+        try:
+            doc_id = self._repo().add_document(
+                title=str(data.get("title") or "بدون عنوان"),
+                content=str(data.get("content") or ""),
+                scope=scope,
+                scenario_name=data.get("scenario") or None,
+                role_name=data.get("role") or None,
+                status="draft",
+                source_type="web" if url else "internal",
+                source_url=url,
+                confidence="unverified",
+            )
+            await state.finish()
+            await message.answer(
+                f"✅ مطلب با شناسه <code>{doc_id}</code> به‌صورت پیش‌نویس ثبت شد.\n"
+                "برای استفاده در پاسخ‌های داخلی، آن را از بخش پایگاه دانش منتشر کنید.",
+                reply_markup=self._menu(), parse_mode="HTML",
+            )
+        except Exception:
+            logging.exception("assistant admin: add knowledge failed")
+            await state.finish()
+            await message.answer("❌ ثبت مطلب انجام نشد.", reply_markup=self._menu())
+
+    def _settings_row(self,user_id:int):
+        with self._repo().SessionLocal() as session:
+            return session.execute(text("""
+                select enabled,provider,model,web_search_enabled,
+                       private_enabled,private_provider,private_model,
+                       private_web_search_enabled,
+                       (api_key_ciphertext is not null) as has_group_key
+                from public.mafia_ai_settings where group_id=:gid
+            """), {"gid": self._selected_group_id(user_id)}).mappings().first()
+
+    async def status(self, callback):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        row = self._settings_row(callback.from_user.id)
+        if not row:
+            body = "📊 <b>وضعیت دستیار</b>\n\nهنوز تنظیماتی ثبت نشده است."
+        else:
+            body = (
+                "📊 <b>وضعیت دستیار</b>\n\n"
+                f"🤖 AI گروه: <b>{'فعال' if row['enabled'] else 'غیرفعال'}</b>\n"
+                f"🧠 سرویس: <b>Gemini</b>\n"
+                f"🧠 مدل گروه: <code>{html.escape(str(row['model'] or 'gemini-2.5-flash'))}</code>\n"
+                f"🔑 کلید گروه: <b>{'ثبت شده' if row['has_group_key'] else 'ثبت نشده'}</b>\n"
+                f"🔐 AI پیوی: <b>{'فعال' if row['private_enabled'] else 'غیرفعال'}</b>\n"
+                f"🧠 مدل پیوی: <code>{html.escape(str(row['private_model'] or 'پیش‌فرض'))}</code>\n"
+                f"🔑 کلید مشترک گروه: <b>{'ثبت شده و رمزنگاری‌شده' if row['has_group_key'] else 'ثبت نشده'}</b>"
+            )
+        await callback.message.edit_text(body, reply_markup=self._back(), parse_mode="HTML")
+        await callback.answer()
+
+    async def ai(self, callback):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        row = self._settings_row(callback.from_user.id)
+        enabled = bool(row and row["enabled"])
+        kb = InlineKeyboardMarkup(row_width=1)
+        kb.add(InlineKeyboardButton(f"🤖 AI گروه: {'روشن' if enabled else 'خاموش'}", callback_data="aip:toggle_group"))
+        kb.add(InlineKeyboardButton("⬅️ پنل دستیار", callback_data="aip:menu"))
+        await callback.message.edit_text("🤖 <b>تنظیمات AI گروه</b>\n\nکلید Gemini گروه از بخش «🔑 کلید AI گروه» مدیریت می‌شود.", reply_markup=kb, parse_mode="HTML")
+        await callback.answer()
+
+    async def toggle_group(self, callback):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        repo=self._repo()
+        with repo.SessionLocal() as session:
+            session.execute(text("""
+                insert into public.mafia_ai_settings(group_id,enabled,web_search_enabled,updated_at)
+                values(:gid,true,true,now())
+                on conflict(group_id) do update set enabled=not public.mafia_ai_settings.enabled,updated_at=now()
+            """), {"gid": self._selected_group_id(callback.from_user.id)})
+            session.commit()
+        await callback.answer("وضعیت AI گروه تغییر کرد.")
+        await self.ai(callback)
+
+    async def group_key(self, callback: types.CallbackQuery, state: FSMContext):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        await AssistantAdminStates.waiting_group_key.set()
+        kb = InlineKeyboardMarkup(row_width=1)
+        kb.add(InlineKeyboardButton("⬅️ بازگشت", callback_data="aip:pv"))
+        await callback.message.edit_text(
+            "🔑 <b>کلید Gemini گروه</b>\n\n"
+            "کلید Gemini گروه را ارسال کنید. این کلید به‌صورت رمزنگاری‌شده ذخیره می‌شود "
+            "و برای دستیار گروه و دستیار پیوی اعضای مجاز استفاده خواهد شد.",
+            reply_markup=kb, parse_mode="HTML",
+        )
+        await callback.answer()
+
+    async def save_group_key(self, message: types.Message, state: FSMContext):
+        if message.chat.type != "private" or not await self._authorized(message.from_user.id):
+            await state.finish(); return
+
+        key = (message.text or "").strip()
+        gid = self._selected_group_id(message.from_user.id)
+        # DATABASE_URL is kept as the backwards-compatible fallback, but a
+        # dedicated secret is preferable because DB credentials and ciphertext
+        # encryption should not be coupled.
+        secret = os.getenv("MAFIA_AI_ENCRYPTION_SECRET") or os.getenv("DATABASE_URL") or ""
+        if not key or not gid or not secret:
+            await state.finish()
+            await message.answer("❌ کلید، گروه انتخاب‌شده یا تنظیمات رمزنگاری ناقص است.", reply_markup=self._menu())
+            return
+
+        provider = "gemini"
+        model = "gemini-2.5-flash"
+
+        try:
+            try:
+                await message.delete()
+            except Exception:
+                pass
+
+            repo = self._repo()
+            with repo.SessionLocal() as session:
+                # Keep this migration-safe: older production databases may have
+                # the table but not the encryption extension/columns yet.
+                session.execute(text("create extension if not exists pgcrypto"))
+                session.execute(text("""
+                    create table if not exists public.mafia_ai_settings (
+                        group_id bigint primary key,
+                        provider text not null default 'gemini',
+                        model text,
+                        api_key_ciphertext bytea,
+                        web_search_enabled boolean not null default true,
+                        enabled boolean not null default false,
+                        updated_at timestamptz not null default now(),
+                        private_enabled boolean not null default false,
+                        private_provider text not null default 'gemini',
+                        private_model text,
+                        private_api_key_ciphertext bytea,
+                        private_web_search_enabled boolean not null default true,
+                        private_updated_at timestamptz
+                    )
+                """))
+                session.execute(text("""
+                    alter table public.mafia_ai_settings
+                      add column if not exists api_key_ciphertext bytea,
+                      add column if not exists private_enabled boolean not null default false,
+                      add column if not exists private_provider text not null default 'gemini',
+                      add column if not exists private_model text,
+                      add column if not exists private_api_key_ciphertext bytea,
+                      add column if not exists private_web_search_enabled boolean not null default true,
+                      add column if not exists private_updated_at timestamptz
+                """))
+
+                # Explicit text casts avoid PostgreSQL choosing an unexpected
+                # pgcrypto overload with SQLAlchemy's inferred bind types.
+                encrypted = session.execute(text("""
+                    select pgp_sym_encrypt(
+                        cast(:key as text),
+                        cast(:secret as text)
+                    )
+                """), {"key": key, "secret": secret}).scalar_one()
+
+                session.execute(text("""
+                    insert into public.mafia_ai_settings
+                      (group_id,provider,model,enabled,web_search_enabled,
+                       api_key_ciphertext,private_enabled,private_provider,
+                       private_model,private_web_search_enabled,updated_at,private_updated_at)
+                    values
+                      (:gid,:provider,:model,true,true,:cipher,true,:provider,
+                       :model,true,now(),now())
+                    on conflict(group_id) do update set
+                      provider=excluded.provider,
+                      model=excluded.model,
+                      enabled=true,
+                      web_search_enabled=true,
+                      api_key_ciphertext=excluded.api_key_ciphertext,
+                      private_enabled=true,
+                      private_provider=excluded.private_provider,
+                      private_model=excluded.private_model,
+                      private_web_search_enabled=true,
+                      updated_at=now(),
+                      private_updated_at=now()
+                """), {
+                    "gid": gid,
+                    "provider": provider,
+                    "model": model,
+                    "cipher": encrypted,
+                })
+                session.commit()
+
+            await state.finish()
+            await message.answer(
+                "✅ کلید Gemini گروه ثبت شد؛ دستیار گروه و پیوی اعضای گروه فعال شدند.",
+                reply_markup=self._menu(),
+            )
+        except Exception as exc:
+            logging.exception("assistant admin: group key save failed for group %s", gid)
+            await state.finish()
+            # Do not expose the secret/key. Give a useful operational category
+            # so the next failure is diagnosable without leaking credentials.
+            detail = type(exc).__name__
+            await message.answer(
+                f"❌ ثبت کلید انجام نشد. خطای پایگاه‌داده: <code>{html.escape(detail)}</code>",
+                reply_markup=self._menu(),
+                parse_mode="HTML",
+            )
+
+    async def pv(self, callback):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        row = self._settings_row(callback.from_user.id)
+        enabled = bool(row and row["private_enabled"])
+        has_key = bool(row and row["has_group_key"])
+        kb = InlineKeyboardMarkup(row_width=1)
+        kb.add(InlineKeyboardButton("🔑 کلید مشترک گروه", callback_data="aip:groupkey"))
+        kb.add(InlineKeyboardButton(f"🔐 AI پیوی: {'روشن' if enabled else 'خاموش'}", callback_data="aip:pvtoggle"))
+        kb.add(InlineKeyboardButton("⬅️ پنل دستیار", callback_data="aip:menu"))
+        await callback.message.edit_text(
+            "🔐 <b>دستیار درخواست‌های پیوی</b>\n\n"
+            f"کلید مشترک گروه: <b>{'ثبت شده' if has_key else 'ثبت نشده'}</b>\n"
+            f"وضعیت: <b>{'فعال' if enabled else 'غیرفعال'}</b>\n\n"
+            "کلید در دیتابیس رمزنگاری می‌شود و متن پیام کلید بعد از ثبت حذف خواهد شد.",
+            reply_markup=kb, parse_mode="HTML",
+        )
+        await callback.answer()
+
+    async def pv_toggle(self, callback):
+        if not await self._guard(callback):
+            await callback.answer(); return
+        with self._repo().SessionLocal() as session:
+            session.execute(text("""
+                insert into public.mafia_ai_settings(group_id,private_enabled,private_web_search_enabled,updated_at)
+                values(:gid,true,true,now())
+                on conflict(group_id) do update set private_enabled=not public.mafia_ai_settings.private_enabled,updated_at=now()
+            """), {"gid": self._selected_group_id(callback.from_user.id)})
+            session.commit()
+        await callback.answer("وضعیت AI پیوی تغییر کرد.")
+        await self.pv(callback)
+
+    def register(self):
+        dp = self.app.dp
+
+        # Register the entry-point before generic text-command surfaces. The
+        # production bot has several command routers and some consume messages
+        # with CancelHandler; the assistant panel must own /ai_panel deterministically.
+        dp.register_message_handler(
+            self.open,
+            lambda m: str(getattr(m, "text", "") or "").strip().split("@", 1)[0].casefold() in {"/ai_panel", "/پنل_دستیار"},
+            state="*",
+            content_types=types.ContentTypes.TEXT,
+        )
+        try:
+            handlers = getattr(dp.message_handlers, "handlers", [])
+            for item in list(handlers):
+                callback = getattr(item, "callback", None) or getattr(item, "handler", None)
+                if callback is self.open:
+                    handlers.remove(item)
+                    handlers.insert(0, item)
+                    break
+        except Exception:
+            logging.exception("assistant admin: failed to prioritize panel handler")
+
+        # Register FSM input handlers and then move the whole assistant FSM block
+        # ahead of generic text/player-id handlers. Otherwise a group-key message
+        # can be consumed by the game's player-id parser before the FSM handler.
+        assistant_message_handlers = [
+            (self.title, AssistantAdminStates.waiting_title),
+            (self.content, AssistantAdminStates.waiting_content),
+            (self.scenario, AssistantAdminStates.waiting_scenario),
+            (self.role, AssistantAdminStates.waiting_role),
+            (self.source, AssistantAdminStates.waiting_source),
+            (self.save_group_key, AssistantAdminStates.waiting_group_key),
+        ]
+        for fn, st in assistant_message_handlers:
+            dp.register_message_handler(fn, state=st)
+
+        try:
+            handlers = getattr(dp.message_handlers, "handlers", [])
+            assistant_callbacks = {self.title, self.content, self.scenario, self.role, self.source, self.save_group_key, self.open}
+            mine, rest = [], []
+            for item in list(handlers):
+                cb = getattr(item, "callback", None) or getattr(item, "handler", None)
+                if cb in assistant_callbacks:
+                    mine.append(item)
+                else:
+                    rest.append(item)
+            if mine:
+                handlers[:] = mine + rest
+        except Exception:
+            logging.exception("assistant admin: failed to prioritize FSM message handlers")
+
+        for action, fn in {
+            "select": self.select_group, "menu": self.menu, "kb": self.kb, "doc": self.doc,
+            "publish": self.publish, "disable": self.disable,
+            "add": self.add_start, "guide": self.guide, "scope": self.scope,
+            "status": self.status, "ai": self.ai, "toggle_group": self.toggle_group,
+            "pv": self.pv, "groupkey": self.group_key,
+            "pvtoggle": self.pv_toggle,
+        }.items():
+            dp.register_callback_query_handler(
+                fn, lambda c, a=action: str(c.data or "").startswith(f"aip:{a}"), state="*"
+            )
+
+        # Put all assistant callbacks ahead of generic/legacy callback routers.
+        try:
+            handlers = getattr(dp.callback_query_handlers, "handlers", [])
+            names = {
+                "select_group", "menu", "kb", "doc", "publish", "disable",
+                "add_start", "guide", "scope", "status", "ai", "toggle_group",
+                "pv", "group_key", "pv_toggle",
+            }
+            mine, rest = [], []
+            for item in list(handlers):
+                cb = getattr(item, "callback", None) or getattr(item, "handler", None)
+                owner = getattr(cb, "__self__", None)
+                name = getattr(cb, "__name__", "")
+                if owner is self and name in names:
+                    mine.append(item)
+                else:
+                    rest.append(item)
+            if mine:
+                handlers[:] = mine + rest
+        except Exception:
+            logging.exception("assistant admin: failed to prioritize callback handlers")
+
+
+
+def install(app: Any):
+    panel = AssistantAdminPanel(app)
+    panel.register()
+    return panel
