@@ -1,9 +1,14 @@
 import os
 import socket
+import threading
 from urllib.parse import urlparse
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+
+_ENGINE_CACHE = {}
+_ENGINE_LOCK = threading.Lock()
 
 
 class DatabaseRepository:
@@ -58,5 +63,11 @@ class DatabaseRepository:
             "connect_args": connect_args,
         }
 
-        self.engine = create_engine(database_url, **engine_kwargs)
+        cache_key = database_url
+        with _ENGINE_LOCK:
+            engine = _ENGINE_CACHE.get(cache_key)
+            if engine is None:
+                engine = create_engine(database_url, **engine_kwargs)
+                _ENGINE_CACHE[cache_key] = engine
+        self.engine = engine
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
